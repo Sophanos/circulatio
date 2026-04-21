@@ -118,7 +118,3 @@ It treats your body as symbolic intelligence, your conflicts as meaningful tensi
 
 If you want an AI that optimizes your day, look elsewhere.  
 If you want a companion that remembers what you forget and sees what you cannot yet hold alone, you are in the right place.
-
-## License
-
-MIT
