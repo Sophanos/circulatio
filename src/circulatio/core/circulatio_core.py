@@ -16,6 +16,7 @@ from ..domain.types import (
     AnalysisPacketResult,
     CirculationSummaryInput,
     CirculationSummaryResult,
+    CoachMoveKind,
     DepthReadinessAssessment,
     InterpretationResult,
     LivingMythReviewInput,
@@ -68,6 +69,7 @@ from .interpretation_mapping import (
 )
 from .method_state_policy import (
     derive_runtime_method_state_policy,
+    get_active_goal_tension_items,
     merge_method_gate_with_policy,
     reconcile_depth_readiness_with_policy,
 )
@@ -367,6 +369,130 @@ class CirculatioCore:
         return result
 
     async def generate_circulation_summary(
+        self, input_data: CirculationSummaryInput
+    ) -> CirculationSummaryResult:
+        summary_id = create_id("circulation_summary")
+        recurring_symbols = input_data["hermesMemoryContext"]["recurringSymbols"][:8]
+        active_candidates = [
+            candidate
+            for candidate in input_data["hermesMemoryContext"]["activeComplexCandidates"]
+            if candidate["status"] != "disconfirmed"
+        ][:5]
+        life_links = []
+        snapshot = input_data.get("lifeContextSnapshot")
+        if snapshot:
+            life_links = build_life_context_links(
+                input_data={
+                    **input_data,
+                    "lifeContextSnapshot": snapshot,
+                },
+                material_id=summary_id,
+                evidence_ledger=EvidenceLedger(timestamp=now_iso()),
+            )
+        runtime_policy = derive_runtime_method_state_policy(input_data.get("methodContextSnapshot"))
+        method_gate = merge_method_gate_with_policy(None, runtime_policy)
+        depth_readiness = reconcile_depth_readiness_with_policy(None, runtime_policy)
+        selected_move = self._coach_selected_move(input_data.get("methodContextSnapshot"))
+        selected_move_kind = str(selected_move.get("kind") or "").strip()
+        llm_alive_today: dict[str, object] | None = None
+        if self._llm is not None:
+            try:
+                llm_alive_today = await self._llm.generate_alive_today(input_data)
+            except Exception:
+                LOGGER.warning(
+                    "Circulatio alive-today LLM path failed; using bounded fallback.",
+                    exc_info=True,
+                )
+                llm_alive_today = None
+
+        practice_candidate = (
+            build_practice_from_llm(llm_alive_today.get("practiceRecommendation"))
+            if llm_alive_today
+            else None
+        )
+        resource_invitation = self._resource_invitation_from_value(
+            llm_alive_today.get("resourceInvitation") if llm_alive_today else None
+        ) or self._resource_invitation_from_value(selected_move.get("resourceInvitation"))
+        practice = self._practice_engine.reconcile_llm_practice(
+            practice=practice_candidate,
+            method_gate=method_gate,
+            depth_readiness=depth_readiness,
+            safety=self._clear_safety_disposition(),
+            consent_preferences=input_data.get("methodContextSnapshot", {}).get(
+                "consentPreferences", []
+            ),
+            goal_tensions=self._practice_goal_tensions(input_data.get("methodContextSnapshot")),
+            body_states=self._practice_body_states(input_data.get("methodContextSnapshot")),
+            practice_hints=input_data.get("practiceHints"),
+            method_context=input_data.get("methodContextSnapshot"),
+            runtime_policy=runtime_policy,
+            fallback_reason="llm_missing_practice_fallback_to_journaling",
+        )
+        active_themes = (
+            [str(item) for item in llm_alive_today.get("activeThemes", [])]
+            if llm_alive_today
+            else []
+        )
+        response = (
+            str(llm_alive_today.get("userFacingResponse", "")).strip() if llm_alive_today else ""
+        )
+        if not response:
+            response = self._alive_today_fallback_response(
+                selected_move=selected_move,
+                resource_invitation=resource_invitation,
+                method_context=input_data.get("methodContextSnapshot"),
+            )
+        result: CirculationSummaryResult = {
+            "summaryId": summary_id,
+            "windowStart": input_data["windowStart"],
+            "windowEnd": input_data["windowEnd"],
+            "recurringSymbols": recurring_symbols,
+            "activeThemes": active_themes,
+            "activeComplexCandidates": active_candidates,
+            "notableLifeContextLinks": life_links,
+            "practiceSuggestion": practice,
+            "userFacingResponse": response,
+        }
+        selected_loop_key = str(
+            (llm_alive_today or {}).get("selectedCoachLoopKey")
+            or selected_move.get("loopKey")
+            or ""
+        ).strip()
+        if selected_loop_key:
+            result["selectedCoachLoopKey"] = selected_loop_key
+        coach_move_kind = str(
+            (llm_alive_today or {}).get("coachMoveKind")
+            or selected_move.get("kind")
+            or ""
+        ).strip()
+        if coach_move_kind:
+            result["coachMoveKind"] = cast(CoachMoveKind, coach_move_kind)
+        follow_up_question = (
+            str(llm_alive_today.get("followUpQuestion", "")).strip() if llm_alive_today else ""
+        )
+        if not follow_up_question:
+            follow_up_question = self._alive_today_fallback_question(selected_move=selected_move)
+        if follow_up_question:
+            result["followUpQuestion"] = follow_up_question
+        suggested_action = (
+            str(llm_alive_today.get("suggestedAction", "")).strip() if llm_alive_today else ""
+        )
+        if not suggested_action and resource_invitation is not None:
+            suggested_action = str(resource_invitation["resource"].get("title") or "").strip()
+        if suggested_action:
+            result["suggestedAction"] = suggested_action
+        if resource_invitation is not None:
+            result["resourceInvitation"] = resource_invitation
+        withheld_reason = (
+            str(llm_alive_today.get("withheldReason", "")).strip() if llm_alive_today else ""
+        )
+        if not withheld_reason and not selected_move_kind:
+            withheld_reason = "coach_state_no_eligible_move"
+        if withheld_reason:
+            result["withheldReason"] = withheld_reason
+        return result
+
+    async def generate_weekly_review_summary(
         self, input_data: CirculationSummaryInput
     ) -> CirculationSummaryResult:
         summary_id = create_id("circulation_summary")
@@ -885,6 +1011,10 @@ class CirculatioCore:
         consent_preferences = normalized_input.get("methodContextSnapshot", {}).get(
             "consentPreferences", []
         )
+        selected_move = self._coach_selected_move(normalized_input.get("methodContextSnapshot"))
+        selected_resource_invitation = self._resource_invitation_from_value(
+            selected_move.get("resourceInvitation")
+        )
         runtime_policy = derive_runtime_method_state_policy(
             normalized_input.get("methodContextSnapshot")
         )
@@ -912,6 +1042,11 @@ class CirculatioCore:
                 "userFacingResponse": (
                     "Depth work is paused for now. A short grounding step is available, "
                     "and you can ignore it without guilt."
+                ),
+                **(
+                    {"resourceInvitation": selected_resource_invitation}
+                    if selected_resource_invitation is not None
+                    else {}
                 ),
                 "llmHealth": {
                     "status": "fallback",
@@ -976,7 +1111,7 @@ class CirculatioCore:
             response = (
                 "A bounded practice is available if you want it. You can skip it without guilt."
             )
-        return {
+        result: PracticeRecommendationResult = {
             "practiceRecommendation": practice,
             "userFacingResponse": response,
             "llmHealth": {
@@ -987,6 +1122,12 @@ class CirculatioCore:
                 "source": "llm" if llm_output else "fallback",
             },
         }
+        resource_invitation = self._resource_invitation_from_value(
+            llm_output.get("resourceInvitation") if llm_output else None
+        ) or selected_resource_invitation
+        if resource_invitation is not None:
+            result["resourceInvitation"] = resource_invitation
+        return result
 
     async def generate_rhythmic_brief(
         self,
@@ -994,17 +1135,24 @@ class CirculatioCore:
     ) -> RhythmicBriefResult:
         synthetic = self._synthetic_brief_material_input(input_data)
         safety = self._safety_gate.assess(synthetic)
-        brief_type = str(input_data.get("seed", {}).get("briefType") or "daily")
+        seed = cast(dict[str, object], input_data.get("seed", {}))
+        brief_type = str(seed.get("briefType") or "daily")
+        resource_invitation = self._resource_invitation_from_value(
+            seed.get("resourceInvitation")
+        )
         runtime_policy = derive_runtime_method_state_policy(input_data.get("methodContextSnapshot"))
         if (
             runtime_policy.get("depthLevel") == "grounding_only"
-            and brief_type != "practice_followup"
+            and brief_type not in {"practice_followup", "resource_invitation"}
         ):
             return {
                 "withheld": True,
                 "withheldReason": "method_state_policy_blocks_symbolic_brief",
             }
-        if not safety["depthWorkAllowed"] and brief_type != "practice_followup":
+        if not safety["depthWorkAllowed"] and brief_type not in {
+            "practice_followup",
+            "resource_invitation",
+        }:
             return {
                 "withheld": True,
                 "withheldReason": "safety_gate_blocks_symbolic_brief",
@@ -1036,26 +1184,59 @@ class CirculatioCore:
             suggested_action = str(llm_output.get("suggestedAction", "")).strip()
             if suggested_action:
                 result["suggestedAction"] = suggested_action
+            llm_resource_invitation = self._resource_invitation_from_value(
+                llm_output.get("resourceInvitation")
+            )
+            if llm_resource_invitation is not None:
+                result["resourceInvitation"] = llm_resource_invitation
+            elif resource_invitation is not None:
+                result["resourceInvitation"] = resource_invitation
             return result
-        if brief_type == "practice_followup":
-            seed = input_data["seed"]
+        if brief_type in {"practice_followup", "resource_invitation"}:
             return {
-                "title": str(seed.get("titleHint") or "Practice follow-up"),
+                "title": str(
+                    seed.get("titleHint")
+                    or (
+                        "Resource invitation"
+                        if brief_type == "resource_invitation"
+                        else "Practice follow-up"
+                    )
+                ),
                 "summary": str(
                     seed.get("summaryHint")
-                    or "A prior practice may be ready for a gentle follow-up."
+                    or (
+                        "A grounded support resource is available if you want it."
+                        if brief_type == "resource_invitation"
+                        else "A prior practice may be ready for a gentle follow-up."
+                    )
                 ),
                 "suggestedAction": str(
                     seed.get("suggestedActionHint")
-                    or "You can note what happened, or simply leave it for later."
+                    or (
+                        "You can try the resource, or simply leave it for later."
+                        if brief_type == "resource_invitation"
+                        else "You can note what happened, or simply leave it for later."
+                    )
                 ),
                 "userFacingResponse": (
-                    "A prior practice may be ready for a light check-in. "
+                    (
+                        "A grounded resource is available if you want it. "
+                        "You can ignore this without guilt."
+                    )
+                    if brief_type == "resource_invitation"
+                    else "A prior practice may be ready for a light check-in. "
                     "You can ignore this without guilt."
+                ),
+                **(
+                    {"resourceInvitation": resource_invitation}
+                    if resource_invitation is not None
+                    else {}
                 ),
                 "llmHealth": {
                     "status": "fallback",
-                    "reason": "practice_followup_fallback",
+                    "reason": "resource_invitation_fallback"
+                    if brief_type == "resource_invitation"
+                    else "practice_followup_fallback",
                     "source": "fallback",
                 },
             }
@@ -1103,9 +1284,7 @@ class CirculatioCore:
         return {"status": "clear", "flags": ["none"], "depthWorkAllowed": True}
 
     def _practice_goal_tensions(self, method_context: object | None) -> list[dict[str, object]]:
-        if not isinstance(method_context, dict):
-            return []
-        return [item for item in method_context.get("goalTensions", []) if isinstance(item, dict)]
+        return get_active_goal_tension_items(cast(MethodContextSnapshot | None, method_context))
 
     def _practice_body_states(self, method_context: object | None) -> list[dict[str, object]]:
         if not isinstance(method_context, dict):
@@ -1113,6 +1292,69 @@ class CirculatioCore:
         return [
             item for item in method_context.get("recentBodyStates", []) if isinstance(item, dict)
         ]
+
+    def _coach_selected_move(self, method_context: object | None) -> dict[str, object]:
+        if not isinstance(method_context, dict):
+            return {}
+        coach_state = method_context.get("coachState")
+        if not isinstance(coach_state, dict):
+            return {}
+        selected_move = coach_state.get("selectedMove")
+        return dict(selected_move) if isinstance(selected_move, dict) else {}
+
+    def _resource_invitation_from_value(self, value: object) -> dict[str, object] | None:
+        if not isinstance(value, dict):
+            return None
+        resource = value.get("resource")
+        if not isinstance(resource, dict):
+            return None
+        if not str(resource.get("id") or "").strip():
+            return None
+        return dict(value)
+
+    def _alive_today_fallback_response(
+        self,
+        *,
+        selected_move: dict[str, object],
+        resource_invitation: dict[str, object] | None,
+        method_context: MethodContextSnapshot | None,
+    ) -> str:
+        if resource_invitation is not None:
+            title = str(resource_invitation.get("resource", {}).get("title") or "").strip()
+            if title:
+                return (
+                    f"{title} is available as a gentler next step. "
+                    "You can leave it alone if now is not the moment."
+                )
+            return (
+                "A grounded resource is available as a gentler next step. "
+                "You can leave it alone if now is not the moment."
+            )
+        summary_hint = str(selected_move.get("summaryHint") or "").strip()
+        if summary_hint:
+            return summary_hint
+        if isinstance(method_context, dict) and method_context.get("recentBodyStates"):
+            return "A recent body signal is being held without forcing meaning."
+        return (
+            "Nothing needs to be forced right now. "
+            "Circulatio is holding the live threads lightly."
+        )
+
+    def _alive_today_fallback_question(self, *, selected_move: dict[str, object]) -> str:
+        if not selected_move:
+            return ""
+        if str(selected_move.get("kind") or "").strip() == "offer_resource":
+            return ""
+        prompt_frame = selected_move.get("promptFrame")
+        if not isinstance(prompt_frame, dict):
+            return ""
+        ask_about = str(prompt_frame.get("askAbout") or "").strip()
+        if ask_about:
+            return ask_about[:1].upper() + ask_about[1:] + "?"
+        title = str(selected_move.get("titleHint") or "").strip()
+        if title:
+            return f"What feels most alive around {title.lower()}?"
+        return ""
 
     def _synthetic_practice_material_input(
         self, input_data: PracticeRecommendationInput

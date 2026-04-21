@@ -30,6 +30,9 @@ Hosts render:
 
 Circulatio should remain backend-first, consent-bound, LLM-first, and evidence-bound.
 
+Current backend implication:
+- Coach-facing runtime surfaces can now emit typed `resourceInvitation` payloads from `coachState`, but those invitations stay curated, provenance-bound, and host-rendered. They are not arbitrary media lookup or recommendation flows.
+
 ## Roadmap Placement
 
 **Current runtime status (April 2026):** The core backend/runtime through the living-myth layer is now implemented. The current embedded Hermes fit also includes read-mostly journey pages, label-addressable lightweight journey containers, explicit `/circulation journey ...` QA commands, and a repo-owned external Hermes-host smoke harness. This document remains a later presentation/runtime track layered on top of those symbolic and consent-bound workflow surfaces.
@@ -361,6 +364,11 @@ Trigger:
 - repeated skipped practices
 - charged material
 - grounding is more appropriate than depth work
+
+Contract note:
+- resource invitations should be emitted as typed summaries with capture metadata
+- hosts decide whether to render them as cards, links, audio, or later voice/breath containers
+- the catalog must stay curated and local/configured, not search-derived
 
 ### Association Circle Invitation
 Trigger:

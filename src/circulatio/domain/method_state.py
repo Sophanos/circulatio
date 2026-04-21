@@ -66,6 +66,9 @@ class MethodStateAnchorRefs(TypedDict, total=False):
     reviewId: NotRequired[Id]
     goalId: NotRequired[Id]
     journeyId: NotRequired[Id]
+    coachLoopKey: NotRequired[str]
+    coachMoveId: NotRequired[Id]
+    resourceInvitationId: NotRequired[Id]
 
 
 class MethodStateEvidenceSpan(TypedDict, total=False):

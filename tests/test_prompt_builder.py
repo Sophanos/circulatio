@@ -7,7 +7,11 @@ import unittest
 
 sys.path.insert(0, os.path.abspath("src"))
 
-from circulatio.llm.prompt_builder import build_interpretation_messages, build_practice_messages
+from circulatio.llm.prompt_builder import (
+    build_alive_today_messages,
+    build_interpretation_messages,
+    build_practice_messages,
+)
 
 _MEMORY_CONTEXT = {
     "recurringSymbols": [],
@@ -139,6 +143,34 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertIn('"practiceHints"', first)
         self.assertNotIn('"adaptationHints"', first)
+
+    def test_alive_today_prompt_includes_coach_state(self) -> None:
+        messages = build_alive_today_messages(
+            {
+                "userId": "user_1",
+                "windowStart": "2026-04-20T00:00:00Z",
+                "windowEnd": "2026-04-21T00:00:00Z",
+                "explicitQuestion": "What is alive today?",
+                "hermesMemoryContext": _MEMORY_CONTEXT,
+                "methodContextSnapshot": {
+                    "windowStart": "2026-04-20T00:00:00Z",
+                    "windowEnd": "2026-04-21T00:00:00Z",
+                    "coachState": {
+                        "surface": "alive_today",
+                        "selectedMove": {
+                            "kind": "ask_body_checkin",
+                            "loopKey": "coach:soma:body_1",
+                        },
+                    },
+                },
+            }
+        )
+        payload = json.loads(messages[1]["content"])
+        self.assertEqual(payload["methodContextSnapshot"]["coachState"]["surface"], "alive_today")
+        self.assertEqual(
+            payload["methodContextSnapshot"]["coachState"]["selectedMove"]["kind"],
+            "ask_body_checkin",
+        )
 
 
 if __name__ == "__main__":

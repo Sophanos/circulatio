@@ -142,7 +142,7 @@ class CirculatioCoreTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_weekly_review_uses_llm_path(self) -> None:
+    def test_alive_today_uses_llm_path(self) -> None:
         async def run() -> None:
             repo = InMemoryGraphMemoryRepository()
             llm = FakeCirculatioLlm()
@@ -165,9 +165,9 @@ class CirculatioCoreTests(unittest.TestCase):
                     },
                 }
             )
-            self.assertTrue(result["userFacingResponse"].startswith("LLM weekly review:"))
-            self.assertEqual(result["activeThemes"], ["llm-theme"])
-            self.assertEqual(len(llm.review_calls), 1)
+            self.assertTrue(result["userFacingResponse"].startswith("LLM alive today:"))
+            self.assertEqual(result["activeThemes"], ["llm-alive"])
+            self.assertEqual(len(llm.alive_today_calls), 1)
 
         asyncio.run(run())
 
@@ -204,7 +204,8 @@ class CirculatioCoreTests(unittest.TestCase):
                             }
                         ],
                         "methodState": {
-                            "containment": {"groundingNeed": "clear_for_depth"}
+                            "grounding": {"recommendation": "clear_for_depth"},
+                            "containment": {"status": "steady"},
                         },
                         "source": "circulatio-backend",
                     },
@@ -491,7 +492,8 @@ class CirculatioCoreTests(unittest.TestCase):
                         "consciousAttitude": {"id": "att_1", "stanceSummary": "Stay with it."},
                         "consentPreferences": [{"scope": "active_imagination", "status": "allow"}],
                         "methodState": {
-                            "containment": {"groundingNeed": "clear_for_depth"}
+                            "grounding": {"recommendation": "clear_for_depth"},
+                            "containment": {"status": "steady"},
                         },
                         "source": "circulatio-backend",
                     },

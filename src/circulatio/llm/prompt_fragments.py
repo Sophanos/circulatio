@@ -13,10 +13,11 @@ INTERPRETATION_STYLE_POLICY = (
 INTERPRETATION_METHOD_POLICY = (
     "Use the provided method context, including any methodState and clarificationState "
     "summaries, to derive readiness, method gating, amplification prompts, dream-series "
-    "suggestions, and practice structure inside the JSON response. If witnessState is "
-    "present, treat it as the backend's current behavior contract for tone, pacing, blocked "
-    "moves, and phrasing boundaries. Prefer LLM judgment over local heuristics, but stay "
-    "within safety and evidence boundaries."
+    "suggestions, and practice structure inside the JSON response. If coachState is present, "
+    "treat it as the backend's primary behavior contract for live loop selection, pacing, "
+    "blocked moves, resource invitations, and phrasing boundaries. witnessState remains "
+    "compatibility guidance when coachState is absent. Prefer LLM judgment over local "
+    "heuristics, but stay within safety and evidence boundaries."
 )
 INTERPRETATION_RESPONSE_POLICY = (
     "When the user wants to go deeper, the userFacingResponse should invite associative work "
@@ -102,6 +103,23 @@ WEEKLY_REVIEW_STYLE_POLICY = (
 WEEKLY_REVIEW_SIGNAL_POLICY = (
     "Treat longitudinal signals as co-occurrence material, not proof or causality."
 )
+ALIVE_TODAY_STYLE_POLICY = (
+    "Choose one live thread only. Keep the response brief, grounded, and easy to refuse."
+)
+COACH_STATE_POLICY = (
+    "coachState is the current operating contract. selectedMove, activeLoops, withheldMoves, "
+    "and globalConstraints define what may be asked now. Do not invent a second live thread."
+)
+RESOURCE_INVITATION_POLICY = (
+    "If coachState or the seed carries a resourceInvitation, treat it as a curated support "
+    "option, not as symbolic interpretation or medical advice. Allow 'not now' without "
+    "escalation."
+)
+COACH_CAPTURE_POLICY = (
+    "When coachState.selectedMove is present, ask at most one question. Do not turn track_only "
+    "or hold_silence into a new ask. If projection language is blocked, keep relational wording "
+    "scene-first and concrete."
+)
 
 LIFE_CONTEXT_GOAL = "Summarize only the individuation-relevant context Hermes already stores."
 LIFE_CONTEXT_SOURCE_POLICY = "Use bounded summaries, not raw telemetry dumps."
@@ -111,7 +129,8 @@ LIFE_CONTEXT_CHANGE_LIMIT = 5
 
 PRACTICE_STYLE_POLICY = (
     "Keep the witness language gentle, bounded, and easy to skip. If methodContextSnapshot."
-    "witnessState is present, honor its tone, pacing, and avoided phrasing."
+    "coachState is present, honor its selectedMove, withheld moves, and do-not-ask reasons "
+    "first. witnessState remains secondary compatibility guidance."
 )
 PRACTICE_DYNAMICS_POLICY = (
     "Return one bounded practice recommendation. The content must remain LLM-shaped rather "
@@ -129,7 +148,8 @@ PRACTICE_PACING_POLICY = (
 
 RHYTHMIC_BRIEF_STYLE_POLICY = (
     "Brief, witness-like, non-pressuring, and easy to ignore. If methodContextSnapshot."
-    "witnessState is present, honor its tone, pacing, and avoided phrasing."
+    "coachState is present, honor its selectedMove, blocked moves, and resource invitations "
+    "first. witnessState remains secondary compatibility guidance."
 )
 RHYTHMIC_BRIEF_POLICY = (
     "Surface one pattern without over-interpreting it. Prefer one suggested action or an "
@@ -239,6 +259,15 @@ def weekly_review_instruction_block() -> dict[str, str]:
     }
 
 
+def alive_today_instruction_block() -> dict[str, str]:
+    return {
+        "style": ALIVE_TODAY_STYLE_POLICY,
+        "coachStatePolicy": COACH_STATE_POLICY,
+        "resourcePolicy": RESOURCE_INVITATION_POLICY,
+        "capturePolicy": COACH_CAPTURE_POLICY,
+    }
+
+
 def life_context_instruction_block() -> dict[str, object]:
     return {
         "goal": LIFE_CONTEXT_GOAL,
@@ -308,8 +337,11 @@ __all__ = [
     "ANALYSIS_PACKET_POLICY",
     "ANALYSIS_PACKET_PROVENANCE_POLICY",
     "ANALYSIS_PACKET_STYLE_POLICY",
+    "ALIVE_TODAY_STYLE_POLICY",
     "CLARIFICATION_INTENT_POLICY",
     "CLARIFICATION_ROUTING_POLICY",
+    "COACH_CAPTURE_POLICY",
+    "COACH_STATE_POLICY",
     "INTERPRETATION_APPROVAL_BOUNDARY",
     "INTERPRETATION_CONSENT_POLICY",
     "INTERPRETATION_EVIDENCE_POLICY",
@@ -338,6 +370,7 @@ __all__ = [
     "PRACTICE_PACING_POLICY",
     "PRACTICE_STYLE_POLICY",
     "PROJECTION_HANDLING_POLICY",
+    "RESOURCE_INVITATION_POLICY",
     "RHYTHMIC_BRIEF_CONSENT_POLICY",
     "RHYTHMIC_BRIEF_POLICY",
     "RHYTHMIC_BRIEF_STYLE_POLICY",
@@ -351,6 +384,7 @@ __all__ = [
     "WEEKLY_REVIEW_STYLE_POLICY",
     "WITNESS_METHOD_POLICY",
     "analysis_packet_instruction_block",
+    "alive_today_instruction_block",
     "interpretation_instruction_block",
     "life_context_instruction_block",
     "living_myth_instruction_block",

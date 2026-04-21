@@ -81,6 +81,7 @@ Circulatio is a **durable backend** with a Hermes plugin bridge. Hermes owns rou
 - **Memory kernel** — typed, privacy-classed, provenance-bound
 - **Graph engine** — derived symbol-to-symbol projections, no external graph DB
 - **Context derivation** — native life-context built from your own records
+- **Coach operating contract** — derived `coachState` attached to enriched method context, shared by `alive_today`, rhythmic briefs, journey pages, practice, and reply routing
 - **LLM-first interpretation** — structured depth output with safety backstops
 - **Approval flows** — symbolic writes are proposals until you accept them
 - **Proactive runtime** — `alive_today`, rhythmic briefs, journey pages, and weekly reviews
@@ -99,7 +100,7 @@ You → Hermes (routing, rhythm, gateway)
 
 The embedded Hermes/backend runtime now substantially covers the implemented backend surface through Phases 1–9. The primary deferred track is **Phase 7 standalone distribution**.
 
-- **Implemented:** hold-first capture, memory kernel, derived graph projections, native context derivation, LLM-first interpretation, soma/goal/culture layers, proactive rhythms, journey containers, threshold review, living myth review, bounded analysis packets, and approval-gated symbolic writes.
+- **Implemented:** hold-first capture, memory kernel, derived graph projections, native context derivation, the derived `coachState` runtime contract, LLM-first interpretation, soma/goal/culture layers, proactive rhythms, journey containers, threshold review, living myth review, bounded analysis packets, curated resource invitations, and approval-gated symbolic writes.
 - **Builder tooling:** an offline Evolution OS now lives in `tools/self_evolution/`, covering prompt fragments, the Hermes skill, and tool descriptions with eval fixtures in `tests/evals/circulatio_method/`, candidate-bundle evaluation in `scripts/evaluate_circulatio_method.py`, and manual review-package staging in `scripts/evolve_circulatio_method.py`.
 - **Best next user-facing work:** refine discovery/journey presentation quality, deepen practice and rhythm polish, and keep tightening method quality before widening the surface area.
 - **Deferred:** standalone local packaging, broader presentation surfaces, reflective/pareto candidate generation, and a more polished product shell outside the Hermes embedding.

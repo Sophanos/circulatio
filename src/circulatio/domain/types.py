@@ -9,7 +9,11 @@ if TYPE_CHECKING:
         ClarificationIntentType,
         ExpectedAnswerKind,
     )
-    from .method_state import MethodStateCaptureTargetKind
+    from .method_state import (
+        MethodStateAnchorRefs,
+        MethodStateCaptureTargetKind,
+        MethodStateResponseSource,
+    )
 
 ISODateString = str
 Id = str
@@ -86,6 +90,62 @@ PracticeType = Literal[
     "amplification_journaling",
     "none",
 ]
+CoachSurface = Literal[
+    "generic",
+    "alive_today",
+    "weekly_review",
+    "journey_page",
+    "rhythmic_brief",
+    "practice_followup",
+    "method_state_response",
+    "analysis_packet",
+]
+CoachLoopKind = Literal[
+    "soma",
+    "goal_guidance",
+    "relational_scene",
+    "practice_integration",
+    "journey_reentry",
+    "resource_support",
+]
+CoachLoopStatus = Literal[
+    "eligible",
+    "waiting_for_user",
+    "cooling_down",
+    "withheld",
+    "track_only",
+]
+CoachMoveKind = Literal[
+    "ask_body_checkin",
+    "ask_goal_tension",
+    "ask_relational_scene",
+    "ask_practice_followup",
+    "offer_resource",
+    "offer_practice",
+    "hold_silence",
+    "track_without_prompt",
+    "return_to_journey",
+]
+CoachAnswerMode = Literal["free_text", "choice_then_free_text", "skip_only"]
+CoachSkipBehavior = Literal["hold_silence", "track_only", "cooldown"]
+EmbodiedResourceType = Literal[
+    "audio",
+    "video",
+    "text",
+    "breath_container",
+    "voice_script",
+    "interactive_card",
+]
+EmbodiedResourceModality = Literal[
+    "grounding",
+    "breath",
+    "body_scan",
+    "somatic_tracking",
+    "journaling",
+    "association",
+    "movement",
+]
+ActivationBand = Literal["low", "moderate", "high", "overwhelming"]
 PsychologicalFunction = Literal["thinking", "feeling", "sensation", "intuition"]
 TypologyRole = Literal["dominant", "auxiliary", "tertiary", "inferior", "compensation_link"]
 TypologySignalCategory = Literal[
@@ -1269,6 +1329,125 @@ class WitnessStateSummary(TypedDict, total=False):
     updatedAt: Required[ISODateString]
 
 
+class CoachPromptFrame(TypedDict, total=False):
+    stance: Required[str]
+    askAbout: Required[str]
+    avoid: Required[list[str]]
+    choices: NotRequired[list[str]]
+    focus: NotRequired[str]
+
+
+class CoachCaptureContract(TypedDict, total=False):
+    source: Required[MethodStateResponseSource]
+    anchorRefs: Required[MethodStateAnchorRefs]
+    expectedTargets: Required[list[MethodStateCaptureTargetKind]]
+    maxQuestions: Required[int]
+    answerMode: Required[CoachAnswerMode]
+    skipBehavior: Required[CoachSkipBehavior]
+
+
+class EmbodiedResourceSummary(TypedDict, total=False):
+    id: Required[Id]
+    title: Required[str]
+    provider: Required[str]
+    url: Required[str]
+    resourceType: Required[EmbodiedResourceType]
+    durationMinutes: NotRequired[int]
+    modality: Required[EmbodiedResourceModality]
+    activationBand: Required[ActivationBand]
+    contraindications: Required[list[str]]
+    tags: Required[list[str]]
+    followUpQuestion: NotRequired[str]
+    curationSource: Required[str]
+    reviewedAt: Required[ISODateString]
+    sourceRecordRefs: NotRequired[list[MethodStateSourceRef]]
+    evidenceIds: NotRequired[list[Id]]
+
+
+class ResourceInvitationSummary(TypedDict, total=False):
+    id: Required[Id]
+    resource: Required[EmbodiedResourceSummary]
+    triggerLoopKey: Required[str]
+    reason: Required[str]
+    activationRationale: Required[str]
+    capture: Required[CoachCaptureContract]
+    presentationPolicy: Required[dict[str, object]]
+    createdAt: Required[ISODateString]
+    expiresAt: NotRequired[ISODateString]
+
+
+class CoachLoopSummary(TypedDict, total=False):
+    loopKey: Required[str]
+    kind: Required[CoachLoopKind]
+    status: Required[CoachLoopStatus]
+    priority: Required[int]
+    titleHint: Required[str]
+    summaryHint: Required[str]
+    promptFrame: Required[CoachPromptFrame]
+    moveKind: Required[CoachMoveKind]
+    capture: Required[CoachCaptureContract]
+    relatedMaterialIds: Required[list[Id]]
+    relatedGoalIds: Required[list[Id]]
+    relatedJourneyIds: Required[list[Id]]
+    relatedPracticeSessionIds: Required[list[Id]]
+    relatedSymbolIds: Required[list[Id]]
+    relatedBodyStateIds: Required[list[Id]]
+    relatedRelationalSceneIds: Required[list[Id]]
+    relatedResourceIds: NotRequired[list[Id]]
+    evidenceIds: Required[list[Id]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    blockedMoves: Required[list[str]]
+    consentScopes: Required[list[str]]
+    cooldownUntil: NotRequired[ISODateString]
+    reasons: Required[list[str]]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+
+
+class CoachMoveContract(TypedDict, total=False):
+    moveId: Required[Id]
+    loopKey: Required[str]
+    kind: Required[CoachMoveKind]
+    titleHint: Required[str]
+    summaryHint: Required[str]
+    promptFrame: Required[CoachPromptFrame]
+    capture: Required[CoachCaptureContract]
+    blockedMoves: Required[list[str]]
+    reasons: Required[list[str]]
+    relatedResourceIds: NotRequired[list[Id]]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+
+
+class CoachWithheldMoveSummary(TypedDict, total=False):
+    loopKey: Required[str]
+    kind: Required[CoachLoopKind]
+    moveKind: Required[CoachMoveKind]
+    reason: Required[str]
+    blockedMoves: Required[list[str]]
+    consentScopes: Required[list[str]]
+
+
+class CoachGlobalConstraints(TypedDict, total=False):
+    depthLevel: Required[Literal["grounding_only", "gentle", "standard"]]
+    blockedMoves: Required[list[str]]
+    maxQuestionsPerTurn: Required[int]
+    doNotAskReasons: Required[list[str]]
+
+
+class CoachStateSummary(TypedDict, total=False):
+    generatedAt: Required[ISODateString]
+    surface: Required[CoachSurface]
+    runtimePolicyVersion: Required[str]
+    witness: Required[WitnessStateSummary]
+    activeLoops: Required[list[CoachLoopSummary]]
+    selectedMove: NotRequired[CoachMoveContract]
+    withheldMoves: Required[list[CoachWithheldMoveSummary]]
+    globalConstraints: Required[CoachGlobalConstraints]
+    cooldownKeys: Required[list[str]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    evidenceIds: Required[list[Id]]
+    reasons: Required[list[str]]
+
+
 class ClarificationPlan(TypedDict, total=False):
     questionText: Required[str]
     questionKey: NotRequired[str]
@@ -1340,6 +1519,7 @@ class MethodContextSnapshot(TypedDict, total=False):
     individuationContext: NotRequired[IndividuationContextSummary]
     livingMythContext: NotRequired[LivingMythContextSummary]
     witnessState: NotRequired[WitnessStateSummary]
+    coachState: NotRequired[CoachStateSummary]
     source: Required[Literal["circulatio-backend"]]
 
 
@@ -1530,6 +1710,7 @@ class PracticePlan(TypedDict, total=False):
     target: NotRequired[str]
     targetedTensionId: NotRequired[Id]
     targetedBodyStateId: NotRequired[Id]
+    targetedRelationalSceneId: NotRequired[Id]
     reason: Required[str]
     contraindicationsChecked: Required[list[SafetyFlag]]
     durationMinutes: Required[int]
@@ -1541,6 +1722,8 @@ class PracticePlan(TypedDict, total=False):
     script: NotRequired[list[PracticeScriptStep]]
     followUpPrompt: NotRequired[str]
     adaptationNotes: NotRequired[list[str]]
+    coachLoopKey: NotRequired[str]
+    resourceInvitationId: NotRequired[Id]
 
 
 class PersonalSymbolWritePayload(TypedDict, total=False):
@@ -2343,6 +2526,11 @@ class LivingMythReviewInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    activeGoalTension: NotRequired[ActiveGoalTensionSummary]
+    practiceLoop: NotRequired[PracticeLoopSummary]
+    latestSymbolicWellbeing: NotRequired[SymbolicWellbeingSnapshotSummary]
+    activeJourneys: NotRequired[list[JourneySummary]]
+    witnessState: NotRequired[WitnessStateSummary]
     explicitQuestion: NotRequired[str]
     safetyContext: NotRequired[SafetyContext]
     recentMaterialSummaries: NotRequired[list[MaterialSummary]]
@@ -2390,6 +2578,11 @@ class AnalysisPacketInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    activeGoalTension: NotRequired[ActiveGoalTensionSummary]
+    practiceLoop: NotRequired[PracticeLoopSummary]
+    latestSymbolicWellbeing: NotRequired[SymbolicWellbeingSnapshotSummary]
+    activeJourneys: NotRequired[list[JourneySummary]]
+    witnessState: NotRequired[WitnessStateSummary]
     explicitQuestion: NotRequired[str]
     safetyContext: NotRequired[SafetyContext]
     packetFocus: NotRequired[AnalysisPacketFocus]
@@ -2422,6 +2615,7 @@ class PracticeRecommendationResult(TypedDict, total=False):
     practiceRecommendation: Required[PracticePlan]
     userFacingResponse: Required[str]
     llmHealth: NotRequired[DepthEngineHealth]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
 
 
 class RhythmicBriefInput(TypedDict, total=False):
@@ -2442,6 +2636,7 @@ class RhythmicBriefResult(TypedDict, total=False):
     summary: Required[str]
     suggestedAction: NotRequired[str]
     userFacingResponse: Required[str]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
     llmHealth: NotRequired[DepthEngineHealth]
     withheld: NotRequired[bool]
     withheldReason: NotRequired[str]
@@ -2457,3 +2652,9 @@ class CirculationSummaryResult(TypedDict):
     notableLifeContextLinks: list[LifeContextLink]
     practiceSuggestion: PracticePlan
     userFacingResponse: str
+    selectedCoachLoopKey: NotRequired[str]
+    coachMoveKind: NotRequired[CoachMoveKind]
+    followUpQuestion: NotRequired[str]
+    suggestedAction: NotRequired[str]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+    withheldReason: NotRequired[str]

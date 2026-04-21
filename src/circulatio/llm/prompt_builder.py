@@ -20,6 +20,7 @@ from ..domain.types import (
 )
 from . import prompt_fragments
 from .json_schema import (
+    ALIVE_TODAY_OUTPUT_SCHEMA,
     ANALYSIS_PACKET_OUTPUT_SCHEMA,
     INTERPRETATION_OUTPUT_SCHEMA,
     LIFE_CONTEXT_OUTPUT_SCHEMA,
@@ -37,6 +38,8 @@ class PromptFragmentsProvider(Protocol):
     def interpretation_instruction_block(self) -> dict[str, str]: ...
 
     def weekly_review_instruction_block(self) -> dict[str, str]: ...
+
+    def alive_today_instruction_block(self) -> dict[str, str]: ...
 
     def life_context_instruction_block(self) -> dict[str, object]: ...
 
@@ -138,6 +141,40 @@ def build_weekly_review_messages(
     user = json.dumps(payload, indent=2, sort_keys=True, default=str)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
+
+
+def build_alive_today_messages(
+    input_data: CirculationSummaryInput,
+    *,
+    fragments: PromptFragmentsProvider | None = None,
+) -> list[dict[str, str]]:
+    active_fragments = _fragments(fragments)
+    payload = {
+        "windowStart": input_data["windowStart"],
+        "windowEnd": input_data["windowEnd"],
+        "explicitQuestion": input_data.get("explicitQuestion"),
+        "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
+        "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "symbolicMemory": {
+            "recurringSymbols": input_data["hermesMemoryContext"]["recurringSymbols"][:6],
+            "activeComplexCandidates": input_data["hermesMemoryContext"]["activeComplexCandidates"][
+                :4
+            ],
+            "recentMaterialSummaries": input_data["hermesMemoryContext"]["recentMaterialSummaries"][
+                :6
+            ],
+            "practiceOutcomes": input_data["hermesMemoryContext"]["practiceOutcomes"][:4],
+        },
+        "instructions": active_fragments.alive_today_instruction_block(),
+    }
+    system = (
+        "You write Circulatio alive-today summaries. Return JSON only. "
+        "Choose one live thread, ask at most one grounded next question, and prefer quiet holding "
+        "over backlog dumping. Return JSON matching this schema:\n"
+        f"{schema_text(ALIVE_TODAY_OUTPUT_SCHEMA)}"
+    )
+    user = json.dumps(payload, indent=2, sort_keys=True, default=str)
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
 def build_life_context_messages(
@@ -289,6 +326,11 @@ def build_living_myth_review_messages(
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "activeGoalTension": input_data.get("activeGoalTension"),
+        "practiceLoop": input_data.get("practiceLoop"),
+        "latestSymbolicWellbeing": input_data.get("latestSymbolicWellbeing"),
+        "activeJourneys": list(input_data.get("activeJourneys", [])),
+        "witnessState": input_data.get("witnessState"),
         "safetyContext": input_data.get("safetyContext"),
         "recentMaterialSummaries": list(input_data.get("recentMaterialSummaries", [])),
         "symbolicMemory": {
@@ -357,6 +399,11 @@ def build_analysis_packet_messages(
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "activeGoalTension": input_data.get("activeGoalTension"),
+        "practiceLoop": input_data.get("practiceLoop"),
+        "latestSymbolicWellbeing": input_data.get("latestSymbolicWellbeing"),
+        "activeJourneys": list(input_data.get("activeJourneys", [])),
+        "witnessState": input_data.get("witnessState"),
         "safetyContext": input_data.get("safetyContext"),
         "currentDreamSeries": list(input_data.get("currentDreamSeries", [])),
         "activeThresholdProcesses": list(input_data.get("activeThresholdProcesses", [])),

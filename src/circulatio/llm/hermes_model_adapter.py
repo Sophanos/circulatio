@@ -21,6 +21,7 @@ from ..domain.types import (
     ThresholdReviewInput,
 )
 from .contracts import (
+    LlmAliveTodayOutput,
     LlmAnalysisPacketOutput,
     LlmInterpretationOutput,
     LlmLivingMythReviewOutput,
@@ -38,6 +39,7 @@ from .json_schema import (
 )
 from .ports import CirculatioLlmPort, CirculatioMethodStateLlmPort
 from .prompt_builder import (
+    build_alive_today_messages,
     build_analysis_packet_messages,
     build_interpretation_messages,
     build_life_context_messages,
@@ -160,6 +162,43 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
             result["practiceRecommendation"] = practice_recommendation
         return result
 
+    async def generate_alive_today(
+        self,
+        input_data: CirculationSummaryInput,
+    ) -> LlmAliveTodayOutput:
+        payload = await self._call_json(
+            build_alive_today_messages(input_data),
+            max_tokens=self._max_review_tokens,
+        )
+        result: LlmAliveTodayOutput = {
+            "userFacingResponse": str(payload.get("userFacingResponse", "")).strip(),
+        }
+        active_themes = self._list_of_scalars(payload.get("activeThemes"))
+        if active_themes:
+            result["activeThemes"] = active_themes
+        selected_loop_key = str(payload.get("selectedCoachLoopKey", "")).strip()
+        if selected_loop_key:
+            result["selectedCoachLoopKey"] = selected_loop_key
+        coach_move_kind = str(payload.get("coachMoveKind", "")).strip()
+        if coach_move_kind:
+            result["coachMoveKind"] = coach_move_kind
+        follow_up_question = str(payload.get("followUpQuestion", "")).strip()
+        if follow_up_question:
+            result["followUpQuestion"] = follow_up_question
+        suggested_action = str(payload.get("suggestedAction", "")).strip()
+        if suggested_action:
+            result["suggestedAction"] = suggested_action
+        practice_recommendation = self._dict_value(payload.get("practiceRecommendation"))
+        if self._is_practice_candidate(practice_recommendation):
+            result["practiceRecommendation"] = practice_recommendation
+        resource_invitation = self._dict_value(payload.get("resourceInvitation"))
+        if resource_invitation:
+            result["resourceInvitation"] = resource_invitation
+        withheld_reason = str(payload.get("withheldReason", "")).strip()
+        if withheld_reason:
+            result["withheldReason"] = withheld_reason
+        return result
+
     async def generate_practice(
         self,
         input_data: PracticeRecommendationInput,
@@ -186,6 +225,9 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
             result["followUpPrompt"] = follow_up_prompt
         if adaptation_notes:
             result["adaptationNotes"] = adaptation_notes
+        resource_invitation = self._dict_value(payload.get("resourceInvitation"))
+        if resource_invitation:
+            result["resourceInvitation"] = resource_invitation
         return result
 
     async def generate_rhythmic_brief(
@@ -207,6 +249,9 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
         supporting_refs = self._list_of_scalars(payload.get("supportingRefs"))
         if supporting_refs:
             result["supportingRefs"] = supporting_refs
+        resource_invitation = self._dict_value(payload.get("resourceInvitation"))
+        if resource_invitation:
+            result["resourceInvitation"] = resource_invitation
         return result
 
     async def generate_threshold_review(

@@ -666,6 +666,34 @@ Update `ContextSnapshotSource` in `domain/records.py`:
 
 ---
 
+## Coach OS Flow
+
+The current runtime now has a single derived coach operating contract rather than separate surface-specific pacing logic.
+
+Canonical flow:
+```text
+records
+→ MethodContextSnapshot
+→ MethodStateSummary
+→ runtime method-state policy
+→ coachState
+→ surface-selected move
+→ anchored reply through process_method_state_response()
+```
+
+Implementation notes:
+- `CoachEngine` is a pure core service. It derives `witnessState` and `coachState` from typed summaries, runtime policy, consent/cooldown context, recent practices, journeys, and active briefs.
+- `coachState` is attached during `CirculatioService._enrich_method_context_snapshot()`. It is derived every time and is not a new canonical storage family.
+- `witnessState` remains as a compatibility summary for older prompt consumers, but both `witnessState` and `coachState.witness` now come from the same engine.
+- `ResourceEngine` is a second pure core service that selects only from a curated local catalog. Resource invitations are typed, provenance-bound summaries, not arbitrary links or search results.
+- `alive_today`, rhythmic briefs, journey pages, practice generation, weekly review inputs, threshold/living-myth/analysis packet inputs, and method-state response routing now all consume the same enriched method context contract.
+- Deterministic logic stays limited to safety, consent, pacing, cadence, cooldowns, provenance, and routing. Symbolic interpretation and user-facing language remain LLM-shaped or host-rendered.
+
+Operational implication:
+- If a surface bypasses `_enrich_method_context_snapshot()`, it bypasses `coachState`. Future surface work should treat enrichment as mandatory for any coach-facing flow.
+
+---
+
 ## Open Engineering Tasks
 
 ### 1. Practice Delivery

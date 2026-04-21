@@ -65,6 +65,22 @@ WEEKLY_REVIEW_OUTPUT_SCHEMA = {
     "required": ["userFacingResponse"],
 }
 
+ALIVE_TODAY_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "userFacingResponse": {"type": "string"},
+        "activeThemes": {"type": "array"},
+        "selectedCoachLoopKey": {"type": "string"},
+        "coachMoveKind": {"type": "string"},
+        "followUpQuestion": {"type": "string"},
+        "suggestedAction": {"type": "string"},
+        "practiceRecommendation": {"type": "object"},
+        "resourceInvitation": {"type": "object"},
+        "withheldReason": {"type": "string"},
+    },
+    "required": ["userFacingResponse"],
+}
+
 PRACTICE_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -72,6 +88,7 @@ PRACTICE_OUTPUT_SCHEMA = {
         "userFacingResponse": {"type": "string"},
         "followUpPrompt": {"type": "string"},
         "adaptationNotes": {"type": "array"},
+        "resourceInvitation": {"type": "object"},
     },
     "required": ["practiceRecommendation", "userFacingResponse"],
 }
@@ -84,6 +101,7 @@ RHYTHMIC_BRIEF_OUTPUT_SCHEMA = {
         "suggestedAction": {"type": "string"},
         "userFacingResponse": {"type": "string"},
         "supportingRefs": {"type": "array"},
+        "resourceInvitation": {"type": "object"},
     },
     "required": ["title", "summary", "userFacingResponse"],
 }

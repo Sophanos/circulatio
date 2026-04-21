@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import Literal, NotRequired, Required, TypedDict
 
-from .types import Id, ISODateString
+from .types import (
+    CoachCaptureContract,
+    CoachLoopKind,
+    CoachMoveKind,
+    Id,
+    ISODateString,
+    ResourceInvitationSummary,
+)
 
 ProactiveBriefType = Literal[
     "daily",
@@ -34,6 +41,12 @@ class RhythmicBriefSeed(TypedDict, total=False):
     relatedPracticeSessionIds: Required[list[Id]]
     evidenceIds: Required[list[Id]]
     reason: Required[str]
+    coachLoopKey: NotRequired[str]
+    coachLoopKind: NotRequired[CoachLoopKind]
+    coachMoveKind: NotRequired[CoachMoveKind]
+    capture: NotRequired[CoachCaptureContract]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+    relatedResourceIds: NotRequired[list[Id]]
 
 
 class ProactiveBriefRecord(TypedDict, total=False):
@@ -53,6 +66,12 @@ class ProactiveBriefRecord(TypedDict, total=False):
     relatedSymbolIds: Required[list[Id]]
     relatedPracticeSessionIds: Required[list[Id]]
     evidenceIds: Required[list[Id]]
+    coachLoopKey: NotRequired[str]
+    coachLoopKind: NotRequired[CoachLoopKind]
+    coachMoveKind: NotRequired[CoachMoveKind]
+    capture: NotRequired[CoachCaptureContract]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+    relatedResourceIds: NotRequired[list[Id]]
     createdAt: Required[ISODateString]
     shownAt: NotRequired[ISODateString]
     actedOnAt: NotRequired[ISODateString]
@@ -77,6 +96,12 @@ class ProactiveBriefUpdate(TypedDict, total=False):
     relatedSymbolIds: list[Id]
     relatedPracticeSessionIds: list[Id]
     evidenceIds: list[Id]
+    coachLoopKey: str
+    coachLoopKind: CoachLoopKind
+    coachMoveKind: CoachMoveKind
+    capture: CoachCaptureContract
+    resourceInvitation: ResourceInvitationSummary
+    relatedResourceIds: list[Id]
     shownAt: ISODateString
     actedOnAt: ISODateString
     dismissedAt: ISODateString

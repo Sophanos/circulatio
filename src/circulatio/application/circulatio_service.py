@@ -8,9 +8,11 @@ from typing import Literal, cast
 from ..adapters.context_adapter import BuildContextInput, BuildPracticeContextInput, ContextAdapter
 from ..core.adaptation_engine import AdaptationEngine
 from ..core.circulatio_core import CirculatioCore
+from ..core.coach_engine import CoachEngine
 from ..core.method_state_policy import derive_runtime_method_state_policy
 from ..core.practice_engine import PracticeEngine
 from ..core.proactive_engine import ProactiveEngine
+from ..core.resource_engine import ResourceEngine
 from ..domain.adaptation import AdaptationSignalEvent
 from ..domain.amplifications import AmplificationPromptRecord, PersonalAmplificationRecord
 from ..domain.clarifications import (
@@ -53,6 +55,10 @@ from ..domain.types import (
     AmplificationSourceSummary,
     CirculationSummaryInput,
     CirculationSummaryResult,
+    CoachCaptureContract,
+    CoachLoopKind,
+    CoachMoveKind,
+    CoachStateSummary,
     EvidenceItem,
     FeedbackValue,
     Id,
@@ -67,6 +73,7 @@ from ..domain.types import (
     PracticeInteractionFeedback,
     PracticeOutcomeWritePayload,
     PracticePlan,
+    ResourceInvitationSummary,
     RhythmicBriefInput,
     SafetyContext,
     SessionContext,
@@ -166,6 +173,8 @@ class CirculatioService:
         adaptation_engine: AdaptationEngine | None = None,
         practice_engine: PracticeEngine | None = None,
         proactive_engine: ProactiveEngine | None = None,
+        coach_engine: CoachEngine | None = None,
+        resource_engine: ResourceEngine | None = None,
         method_state_llm: CirculatioMethodStateLlmPort | None = None,
         trusted_amplification_sources: list[AmplificationSourceSummary] | None = None,
     ) -> None:
@@ -175,6 +184,8 @@ class CirculatioService:
         self._adaptation_engine = adaptation_engine or AdaptationEngine()
         self._practice_engine = practice_engine or PracticeEngine()
         self._proactive_engine = proactive_engine or ProactiveEngine()
+        self._coach_engine = coach_engine or CoachEngine()
+        self._resource_engine = resource_engine or ResourceEngine()
         self._method_state_llm = method_state_llm
         self._trusted_amplification_sources = deepcopy(trusted_amplification_sources or [])
 
@@ -486,10 +497,24 @@ class CirculatioService:
         if target == "answer_only":
             routing_status = "unrouted"
         elif routing_payload is None:
-            routing_status = "needs_review"
-            validation_errors.append(
-                "Structured answerPayload is required for this clarification target."
+            rerouted = await self._route_clarification_answer_from_text(
+                user_id=input_data["userId"],
+                prompt=prompt,
+                answer=stored_answer,
+                capture_target=target,
             )
+            if rerouted is None:
+                routing_status = "needs_review"
+                validation_errors.append(
+                    "Structured answerPayload is required for this clarification target."
+                )
+            else:
+                created_record_refs, routed_record, reroute_errors = rerouted
+                if created_record_refs:
+                    routing_status = "routed"
+                else:
+                    routing_status = "needs_review"
+                    validation_errors.extend(reroute_errors)
         else:
             try:
                 created_record_refs, routed_record = await self._route_clarification_answer(
@@ -789,6 +814,7 @@ class CirculatioService:
             snapshot,
             window_start=window_start,
             window_end=window_end,
+            surface="generic",
         )
 
     def _enrich_method_context_snapshot(
@@ -797,6 +823,13 @@ class CirculatioService:
         *,
         window_start: str | None = None,
         window_end: str | None = None,
+        surface: str = "generic",
+        existing_briefs: list[ProactiveBriefRecord] | None = None,
+        recent_practices: list[PracticeSessionRecord] | None = None,
+        journeys: list[JourneyRecord] | None = None,
+        dashboard: DashboardSummary | None = None,
+        adaptation_profile: UserAdaptationProfileSummary | None = None,
+        safety_context: SafetyContext | None = None,
     ) -> MethodContextSnapshot:
         enriched: MethodContextSnapshot = deepcopy(snapshot) if snapshot is not None else {}
         if window_start and not enriched.get("windowStart"):
@@ -804,12 +837,152 @@ class CirculatioService:
         if window_end and not enriched.get("windowEnd"):
             enriched["windowEnd"] = window_end
         enriched.setdefault("source", "circulatio-backend")
+        if adaptation_profile is not None and not isinstance(
+            enriched.get("adaptationProfile"), dict
+        ):
+            enriched["adaptationProfile"] = deepcopy(adaptation_profile)
         runtime_policy = derive_runtime_method_state_policy(enriched)
-        enriched["witnessState"] = self._build_witness_state_summary(
-            method_context=enriched,
-            runtime_policy=runtime_policy,
-        )
+        try:
+            enriched["witnessState"] = self._build_witness_state_summary(
+                method_context=enriched,
+                runtime_policy=runtime_policy,
+            )
+            coach_state = self._coach_engine.build_coach_state(
+                method_context=enriched,
+                runtime_policy=runtime_policy,
+                surface=cast(
+                    Literal[
+                        "generic",
+                        "alive_today",
+                        "weekly_review",
+                        "journey_page",
+                        "rhythmic_brief",
+                        "practice_followup",
+                        "method_state_response",
+                        "analysis_packet",
+                    ],
+                    surface,
+                ),
+                existing_briefs=existing_briefs or [],
+                recent_practices=recent_practices or [],
+                journeys=journeys or [],
+                dashboard=dashboard,
+                adaptation_profile=adaptation_profile,
+                now=str(enriched.get("windowEnd") or window_end or now_iso()),
+            )
+            enriched["coachState"] = self._attach_resource_invitations_to_coach_state(
+                coach_state=coach_state,
+                runtime_policy=runtime_policy,
+                safety_context=safety_context,
+                now=str(enriched.get("windowEnd") or window_end or now_iso()),
+            )
+        except Exception:
+            enriched["witnessState"] = self._build_witness_state_summary(
+                method_context=enriched,
+                runtime_policy=runtime_policy,
+            )
+            enriched["coachState"] = {
+                "generatedAt": str(enriched.get("windowEnd") or window_end or now_iso()),
+                "surface": cast(
+                    Literal[
+                        "generic",
+                        "alive_today",
+                        "weekly_review",
+                        "journey_page",
+                        "rhythmic_brief",
+                        "practice_followup",
+                        "method_state_response",
+                        "analysis_packet",
+                    ],
+                    surface,
+                ),
+                "runtimePolicyVersion": "coach_state_v1",
+                "witness": deepcopy(enriched["witnessState"]),
+                "activeLoops": [],
+                "withheldMoves": [
+                    {
+                        "loopKey": "coach:derivation_failed",
+                        "kind": "resource_support",
+                        "moveKind": "hold_silence",
+                        "reason": "coach_state_derivation_failed",
+                        "blockedMoves": [],
+                        "consentScopes": [],
+                    }
+                ],
+                "globalConstraints": {
+                    "depthLevel": "gentle",
+                    "blockedMoves": [],
+                    "maxQuestionsPerTurn": 1,
+                    "doNotAskReasons": ["coach_state_derivation_failed"],
+                },
+                "cooldownKeys": [],
+                "sourceRecordRefs": [],
+                "evidenceIds": [],
+                "reasons": ["coach_state_derivation_failed"],
+            }
         return enriched
+
+    def _sync_longitudinal_input_fields(self, payload: dict[str, object]) -> dict[str, object]:
+        synced = deepcopy(payload)
+        method_context = synced.get("methodContextSnapshot")
+        if not isinstance(method_context, dict):
+            return synced
+        method_state = (
+            method_context.get("methodState")
+            if isinstance(method_context.get("methodState"), dict)
+            else {}
+        )
+        living_myth_context = (
+            method_context.get("livingMythContext")
+            if isinstance(method_context.get("livingMythContext"), dict)
+            else {}
+        )
+        active_goal_tension = (
+            deepcopy(method_state.get("activeGoalTension"))
+            if isinstance(method_state.get("activeGoalTension"), dict)
+            else None
+        )
+        if active_goal_tension is not None:
+            synced["activeGoalTension"] = active_goal_tension
+        else:
+            synced.pop("activeGoalTension", None)
+        practice_loop = (
+            deepcopy(method_state.get("practiceLoop"))
+            if isinstance(method_state.get("practiceLoop"), dict)
+            else None
+        )
+        if practice_loop is not None:
+            synced["practiceLoop"] = practice_loop
+        else:
+            synced.pop("practiceLoop", None)
+        symbolic_wellbeing = (
+            deepcopy(living_myth_context.get("latestSymbolicWellbeing"))
+            if isinstance(living_myth_context.get("latestSymbolicWellbeing"), dict)
+            else None
+        )
+        if symbolic_wellbeing is not None:
+            synced["latestSymbolicWellbeing"] = symbolic_wellbeing
+        else:
+            synced.pop("latestSymbolicWellbeing", None)
+        active_journeys = [
+            deepcopy(item)
+            for item in method_context.get("activeJourneys", [])
+            if isinstance(item, dict)
+        ]
+        if active_journeys:
+            synced["activeJourneys"] = active_journeys
+        else:
+            synced.pop("activeJourneys", None)
+        witness_state = (
+            deepcopy(method_context.get("witnessState"))
+            if isinstance(method_context.get("witnessState"), dict)
+            else None
+        )
+        if witness_state is not None:
+            synced["witnessState"] = witness_state
+        else:
+            synced.pop("witnessState", None)
+        return synced
 
     def _build_witness_state_summary(
         self,
@@ -817,151 +990,141 @@ class CirculatioService:
         method_context: MethodContextSnapshot,
         runtime_policy: dict[str, object],
     ) -> WitnessStateSummary:
-        method_state = (
-            method_context.get("methodState")
-            if isinstance(method_context.get("methodState"), dict)
-            else {}
+        return self._coach_engine.build_witness_state(
+            method_context=method_context,
+            runtime_policy=runtime_policy,
         )
-        questioning_preference = (
-            method_state.get("questioningPreference")
-            if isinstance(method_state.get("questioningPreference"), dict)
-            else {}
+
+    def _attach_resource_invitations_to_coach_state(
+        self,
+        *,
+        coach_state: CoachStateSummary,
+        runtime_policy: dict[str, object],
+        safety_context: SafetyContext | None,
+        now: str,
+    ) -> CoachStateSummary:
+        enriched = cast(CoachStateSummary, deepcopy(coach_state))
+        loops = []
+        for loop in enriched.get("activeLoops", []):
+            loop_copy = cast(dict[str, object], deepcopy(loop))
+            if str(loop_copy.get("moveKind") or "").strip() == "offer_resource":
+                invitation = self._resource_engine.select_resource_for_loop(
+                    loop=cast(dict[str, object], loop_copy),
+                    coach_state=enriched,
+                    runtime_policy=runtime_policy,
+                    safety_context=cast(dict[str, object] | None, deepcopy(safety_context)),
+                    now=now,
+                )
+                if invitation is not None:
+                    loop_copy["resourceInvitation"] = deepcopy(invitation)
+                    loop_copy["relatedResourceIds"] = [invitation["resource"]["id"]]
+                    capture = dict(loop_copy.get("capture", {}))
+                    capture_anchor_refs = dict(capture.get("anchorRefs", {}))
+                    capture_anchor_refs["resourceInvitationId"] = invitation["id"]
+                    capture["anchorRefs"] = capture_anchor_refs
+                    loop_copy["capture"] = capture
+            loops.append(cast(dict[str, object], loop_copy))
+        enriched["activeLoops"] = cast(list[dict[str, object]], loops)
+        selected_move = enriched.get("selectedMove")
+        if isinstance(selected_move, dict):
+            matched = next(
+                (
+                    loop
+                    for loop in enriched.get("activeLoops", [])
+                    if isinstance(loop, dict)
+                    and str(loop.get("loopKey") or "").strip()
+                    == str(selected_move.get("loopKey") or "").strip()
+                ),
+                None,
+            )
+            if isinstance(matched, dict):
+                selected_copy = cast(dict[str, object], deepcopy(selected_move))
+                if isinstance(matched.get("resourceInvitation"), dict):
+                    selected_copy["resourceInvitation"] = deepcopy(matched["resourceInvitation"])
+                    selected_copy["relatedResourceIds"] = list(
+                        matched.get("relatedResourceIds", [])
+                    )
+                    capture = dict(selected_copy.get("capture", {}))
+                    capture_anchor_refs = dict(capture.get("anchorRefs", {}))
+                    capture_anchor_refs["resourceInvitationId"] = matched["resourceInvitation"][
+                        "id"
+                    ]
+                    capture["anchorRefs"] = capture_anchor_refs
+                    selected_copy["capture"] = capture
+                enriched["selectedMove"] = cast(dict[str, object], selected_copy)
+        return enriched
+
+    async def _load_coach_runtime_inputs(
+        self,
+        *,
+        user_id: Id,
+        include_dashboard: bool = False,
+    ) -> dict[str, object]:
+        recent_practices = await self._repository.list_practice_sessions(
+            user_id,
+            statuses=["recommended", "accepted", "completed", "skipped"],
+            include_deleted=False,
+            limit=100,
         )
-        typology_state = (
-            method_state.get("typologyMethodState")
-            if isinstance(method_state.get("typologyMethodState"), dict)
-            else {}
+        journeys = await self._repository.list_journeys(
+            user_id,
+            include_deleted=False,
+            limit=50,
         )
-        practice_constraints = (
-            runtime_policy.get("practiceConstraints")
-            if isinstance(runtime_policy.get("practiceConstraints"), dict)
-            else {}
+        existing_briefs = await self._repository.list_proactive_briefs(
+            user_id,
+            include_deleted=False,
+            limit=100,
         )
-        stance = "paced_contact"
-        depth_level = str(runtime_policy.get("depthLevel") or "gentle").strip()
-        if depth_level == "grounding_only":
-            stance = "grounding_first"
-        elif depth_level == "standard":
-            stance = "symbolic_contact"
-        preferred_moves = [
-            str(item).strip()
-            for item in runtime_policy.get("preferredMoves", [])
-            if str(item).strip()
-        ]
-        preferred_question_styles = [
-            str(item).strip()
-            for item in questioning_preference.get("preferredQuestionStyles", [])
-            if str(item).strip()
-        ]
-        question_style = str(runtime_policy.get("questionStyle") or "").strip()
-        if question_style and question_style not in preferred_question_styles:
-            preferred_question_styles.append(question_style)
-        avoided_question_styles = [
-            str(item).strip()
-            for item in questioning_preference.get("avoidedQuestionStyles", [])
-            if str(item).strip()
-        ]
-        allowed_targets = {
-            "answer_only",
-            "body_state",
-            "conscious_attitude",
-            "goal",
-            "goal_tension",
-            "personal_amplification",
-            "reality_anchors",
-            "threshold_process",
-            "relational_scene",
-            "inner_outer_correspondence",
-            "numinous_encounter",
-            "aesthetic_resonance",
-            "consent_preference",
-            "interpretation_preference",
-            "typology_feedback",
+        profile = await self._repository.get_adaptation_profile(user_id)
+        adaptation_summary = self._adaptation_engine.summarize(profile)
+        result: dict[str, object] = {
+            "recentPractices": recent_practices,
+            "journeys": journeys,
+            "existingBriefs": existing_briefs,
+            "profile": profile,
+            "adaptationSummary": adaptation_summary,
         }
-        preferred_targets = [
-            str(item).strip()
-            for item in runtime_policy.get("preferredClarificationTargets", [])
-            if str(item).strip() in allowed_targets
-        ]
-        practice_frame_parts: list[str] = []
-        if bool(practice_constraints.get("preferLowIntensity")):
-            practice_frame_parts.append("Keep practices low intensity.")
-        max_duration = practice_constraints.get("maxDurationMinutes")
-        if isinstance(max_duration, int) and max_duration > 0:
-            practice_frame_parts.append(f"Keep practices within {max_duration} minutes.")
-        compensation_prompt = str(practice_constraints.get("compensationPrompt") or "").strip()
-        if compensation_prompt:
-            practice_frame_parts.append(compensation_prompt)
-        practice_bias = str(practice_constraints.get("practiceBias") or "").strip()
-        if practice_bias:
-            practice_frame_parts.append(practice_bias.replace("_", " "))
-        typology_frame = ""
-        prompt_bias = str(typology_state.get("promptBias") or "").strip()
-        balancing_function = str(typology_state.get("balancingFunction") or "").strip()
-        if prompt_bias or balancing_function:
-            fragments = []
-            if prompt_bias:
-                fragments.append(prompt_bias.replace("_", " "))
-            if balancing_function:
-                fragments.append(f"balance through {balancing_function}")
-            typology_frame = "; ".join(fragments)
-        stance_value = cast(
-            Literal["grounding_first", "paced_contact", "symbolic_contact"],
-            stance,
-        )
-        tone_value = cast(
-            Literal["grounded", "gentle", "direct", "spacious"],
-            str(runtime_policy.get("witnessTone") or "gentle").strip() or "gentle",
-        )
-        preferred_targets_value = cast(list[ClarificationCaptureTarget], preferred_targets)
-        updated_at = (
-            str(method_state.get("generatedAt") or "").strip()
-            or str(method_context.get("windowEnd") or "").strip()
-            or now_iso()
-        )
-        witness_state: WitnessStateSummary = {
-            "stance": stance_value,
-            "tone": tone_value,
-            "startingMove": preferred_moves[0]
-            if preferred_moves
-            else "grounding"
-            if stance == "grounding_first"
-            else "grounded_question"
-            if stance == "paced_contact"
-            else "association",
-            "maxQuestionsPerTurn": int(runtime_policy.get("maxClarifyingQuestions", 2) or 2),
-            "preferredQuestionStyles": preferred_question_styles,
-            "avoidedQuestionStyles": avoided_question_styles,
-            "preferredClarificationTargets": preferred_targets_value,
-            "blockedMoves": [
-                str(item).strip()
-                for item in runtime_policy.get("blockedMoves", [])
+        if include_dashboard:
+            result["dashboard"] = await self._repository.get_dashboard_summary(user_id=user_id)
+        return result
+
+    def _coach_expected_targets_from_context(
+        self,
+        *,
+        method_context: MethodContextSnapshot | None,
+        loop_key: str,
+    ) -> list[MethodStateCaptureTargetKind]:
+        if not isinstance(method_context, dict):
+            return []
+        coach_state = method_context.get("coachState")
+        if not isinstance(coach_state, dict):
+            return []
+        for loop in coach_state.get("activeLoops", []):
+            if not isinstance(loop, dict):
+                continue
+            if str(loop.get("loopKey") or "").strip() != loop_key:
+                continue
+            capture = loop.get("capture")
+            if not isinstance(capture, dict):
+                return []
+            return [
+                cast(MethodStateCaptureTargetKind, str(item))
+                for item in capture.get("expectedTargets", [])
                 if str(item).strip()
-            ],
-            "avoidPhrasingPatterns": [
-                str(item).strip()
-                for item in runtime_policy.get("avoidPhrasingPatterns", [])
+            ]
+        selected = coach_state.get("selectedMove")
+        if (
+            isinstance(selected, dict)
+            and str(selected.get("loopKey") or "").strip() == loop_key
+            and isinstance(selected.get("capture"), dict)
+        ):
+            return [
+                cast(MethodStateCaptureTargetKind, str(item))
+                for item in selected["capture"].get("expectedTargets", [])
                 if str(item).strip()
-            ],
-            "reasons": [
-                str(item).strip() for item in runtime_policy.get("reasons", []) if str(item).strip()
-            ],
-            "updatedAt": updated_at,
-        }
-        witness_voice = str(runtime_policy.get("witnessVoice") or "").strip()
-        if witness_voice:
-            witness_state["witnessVoice"] = witness_voice
-        active_goal_frame = str(runtime_policy.get("activeGoalFrame") or "").strip()
-        if active_goal_frame:
-            witness_state["activeGoalFrame"] = active_goal_frame
-        if practice_frame_parts:
-            witness_state["practiceFrame"] = " ".join(practice_frame_parts[:3])
-        if typology_frame:
-            witness_state["typologyFrame"] = typology_frame
-        recent_locale = str(runtime_policy.get("recentLocale") or "").strip()
-        if recent_locale:
-            witness_state["recentLocale"] = recent_locale
-        return witness_state
+            ]
+        return []
 
     async def set_cultural_frame(
         self,
@@ -2149,11 +2312,30 @@ class CirculatioService:
             window_end=window_end,
             material_id=str(anchor_refs.get("materialId") or response_material["id"]),
         )
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=user_id)
         method_context = self._enrich_method_context_snapshot(
             method_context,
             window_start=window_start,
             window_end=window_end,
+            surface="method_state_response",
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            safety_context=input_data.get("safetyContext"),
         )
+        warnings: list[str] = []
+        if not expected_targets:
+            coach_loop_key = str(anchor_refs.get("coachLoopKey") or "").strip()
+            if coach_loop_key:
+                expected_targets = self._coach_expected_targets_from_context(
+                    method_context=method_context,
+                    loop_key=coach_loop_key,
+                )
+                if not expected_targets:
+                    warnings.append("coach_loop_anchor_not_found")
         runtime_policy = derive_runtime_method_state_policy(method_context)
         life_context = deepcopy(input_data.get("lifeContextSnapshot"))
         if life_context is None:
@@ -2170,7 +2352,6 @@ class CirculatioService:
         consent_preferences = (
             list(method_context.get("consentPreferences", [])) if method_context else []
         )
-        warnings: list[str] = []
         routing_output: dict[str, object] = {
             "answerSummary": "",
             "evidenceSpans": [],
@@ -2870,7 +3051,21 @@ class CirculatioService:
             window_start=window_start,
             window_end=window_end,
         )
-        result = await self._core.generate_circulation_summary(summary_input)
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=user_id)
+        summary_input = deepcopy(summary_input)
+        summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            summary_input.get("methodContextSnapshot"),
+            window_start=window_start,
+            window_end=window_end,
+            surface="weekly_review",
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+        )
+        result = await self._core.generate_weekly_review_summary(summary_input)
         practice_session = await self._store_review_practice(user_id=user_id, result=result)
         context_snapshots = await self._repository.list_context_snapshots(
             user_id,
@@ -3027,6 +3222,7 @@ class CirculatioService:
             window_start=resolved_start,
             window_end=resolved_end,
             explicit_question=explicit_question,
+            surface="alive_today",
         )
         return {"summary": summary}
 
@@ -3046,6 +3242,7 @@ class CirculatioService:
             window_start=resolved_start,
             window_end=resolved_end,
             explicit_question=self._optional_str(input_data.get("explicitQuestion")),
+            surface="journey_page",
         )
         dashboard = await self._repository.get_dashboard_summary(user_id=input_data["userId"])
         weekly_reviews = await self._repository.list_weekly_reviews(input_data["userId"], limit=5)
@@ -3221,8 +3418,22 @@ class CirculatioService:
             threshold_process_id=input_data.get("thresholdProcessId"),
             explicit_question=input_data.get("explicitQuestion"),
         )
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
+        review_input = deepcopy(review_input)
+        review_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            review_input.get("methodContextSnapshot"),
+            window_start=resolved_start,
+            window_end=resolved_end,
+            surface="generic",
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+        )
         if input_data.get("safetyContext") is not None:
-            review_input = deepcopy(review_input)
             review_input["safetyContext"] = deepcopy(input_data["safetyContext"])
         result = await self._core.generate_threshold_review(review_input)
         practice_session: PracticeSessionRecord | None = None
@@ -3322,8 +3533,23 @@ class CirculatioService:
             window_end=resolved_end,
             explicit_question=input_data.get("explicitQuestion"),
         )
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
+        review_input = deepcopy(review_input)
+        review_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            review_input.get("methodContextSnapshot"),
+            window_start=resolved_start,
+            window_end=resolved_end,
+            surface="generic",
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+        )
+        review_input = cast(dict[str, object], self._sync_longitudinal_input_fields(review_input))
         if input_data.get("safetyContext") is not None:
-            review_input = deepcopy(review_input)
             review_input["safetyContext"] = deepcopy(input_data["safetyContext"])
         result = await self._core.generate_living_myth_review(review_input)
         practice_session: PracticeSessionRecord | None = None
@@ -3430,8 +3656,23 @@ class CirculatioService:
             packet_focus=input_data.get("packetFocus"),
             explicit_question=input_data.get("explicitQuestion"),
         )
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
+        packet_input = deepcopy(packet_input)
+        packet_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            packet_input.get("methodContextSnapshot"),
+            window_start=resolved_start,
+            window_end=resolved_end,
+            surface="analysis_packet",
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+        )
+        packet_input = cast(dict[str, object], self._sync_longitudinal_input_fields(packet_input))
         if input_data.get("safetyContext") is not None:
-            packet_input = deepcopy(packet_input)
             packet_input["safetyContext"] = deepcopy(input_data["safetyContext"])
         result = await self._core.generate_analysis_packet(packet_input)
         workflow: AnalysisPacketWorkflowResult = {"result": result}
@@ -3483,9 +3724,28 @@ class CirculatioService:
         if input_data.get("options") is not None:
             adapter_input["options"] = normalize_options(input_data["options"])
         practice_input = await self._context_adapter.build_practice_input(adapter_input)
-        profile = await self._repository.get_adaptation_profile(input_data["userId"])
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
+        profile = cast(dict[str, object] | None, coach_runtime["profile"])
         practice_hints = self._adaptation_engine.derive_practice_hints(profile=profile)
         practice_input = deepcopy(practice_input)
+        practice_surface: Literal["generic", "practice_followup"] = (
+            "practice_followup"
+            if str(trigger.get("triggerType") or "manual") == "practice_followup"
+            else "generic"
+        )
+        practice_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            practice_input.get("methodContextSnapshot"),
+            window_start=resolved_start,
+            window_end=resolved_end,
+            surface=practice_surface,
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+        )
         practice_input["practiceHints"] = deepcopy(practice_hints)
         practice_input["adaptationHints"] = deepcopy(practice_hints)
         llm_result = await self._core.generate_practice(practice_input)
@@ -3706,11 +3966,29 @@ class CirculatioService:
             window_start=resolved_start,
             window_end=resolved_end,
         )
+        memory_snapshot = await self._repository.build_memory_kernel_snapshot(input_data["userId"])
+        dashboard = await self._repository.get_dashboard_summary(user_id=input_data["userId"])
+        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
+        recent_practices = cast(list[PracticeSessionRecord], coach_runtime["recentPractices"])
+        journeys = cast(list[JourneyRecord], coach_runtime["journeys"])
+        existing_briefs = cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"])
+        profile = cast(dict[str, object] | None, coach_runtime["profile"])
+        cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
+        adaptation_summary = cast(
+            UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+        )
         summary_input = deepcopy(summary_input)
         summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
             summary_input.get("methodContextSnapshot"),
             window_start=resolved_start,
             window_end=resolved_end,
+            surface="rhythmic_brief",
+            existing_briefs=existing_briefs,
+            recent_practices=recent_practices,
+            journeys=journeys,
+            dashboard=dashboard,
+            adaptation_profile=adaptation_summary,
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
         method_context = summary_input.get("methodContextSnapshot")
         consent_status = self._consent_status(
@@ -3723,27 +4001,6 @@ class CirculatioService:
                 "briefs": [],
                 "skippedReasons": ["scheduled_proactive_briefing_not_allowed"],
             }
-        memory_snapshot = await self._repository.build_memory_kernel_snapshot(input_data["userId"])
-        dashboard = await self._repository.get_dashboard_summary(user_id=input_data["userId"])
-        recent_practices = await self._repository.list_practice_sessions(
-            input_data["userId"],
-            statuses=["recommended", "accepted", "completed", "skipped"],
-            include_deleted=False,
-            limit=100,
-        )
-        journeys = await self._repository.list_journeys(
-            input_data["userId"],
-            include_deleted=False,
-            limit=50,
-        )
-        existing_briefs = await self._repository.list_proactive_briefs(
-            input_data["userId"],
-            include_deleted=False,
-            limit=100,
-        )
-        profile = await self._repository.get_adaptation_profile(input_data["userId"])
-        cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
-        adaptation_summary = self._adaptation_engine.summarize(profile)
         seeds = self._proactive_engine.build_candidate_seeds(
             user_id=input_data["userId"],
             memory_snapshot=memory_snapshot,
@@ -4027,6 +4284,25 @@ class CirculatioService:
         if not isinstance(method_context, dict):
             return []
         root_ids: list[Id] = []
+        for signal in method_context.get("longitudinalSignals", []):
+            if not isinstance(signal, dict):
+                continue
+            root_ids = self._merge_ids(
+                root_ids,
+                [
+                    str(item)
+                    for item in signal.get("sourceEntityIds", [])
+                    if isinstance(item, str) and item.strip()
+                ],
+            )
+            root_ids = self._merge_ids(
+                root_ids,
+                [
+                    str(item)
+                    for item in signal.get("materialIds", [])
+                    if isinstance(item, str) and item.strip()
+                ],
+            )
         for collection_name in (
             "recentBodyStates",
             "activeGoals",
@@ -4049,6 +4325,7 @@ class CirculatioService:
         method_state = method_context.get("methodState")
         if isinstance(method_state, dict):
             for field_name in (
+                "grounding",
                 "containment",
                 "egoCapacity",
                 "egoRelationTrajectory",
@@ -4122,12 +4399,19 @@ class CirculatioService:
                         root_ids = self._merge_ids(root_ids, [record_id])
         clarification_state = method_context.get("clarificationState")
         if isinstance(clarification_state, dict):
-            for item in clarification_state.get("pendingPrompts", []):
-                if not isinstance(item, dict):
-                    continue
-                record_id = self._optional_str(item.get("id"))
-                if record_id:
-                    root_ids = self._merge_ids(root_ids, [record_id])
+            for collection_name in ("pendingPrompts", "recentlyUnrouted"):
+                for item in clarification_state.get(collection_name, []):
+                    if not isinstance(item, dict):
+                        continue
+                    record_id = self._optional_str(item.get("id"))
+                    prompt_id = self._optional_str(item.get("promptId"))
+                    material_id = self._optional_str(item.get("materialId"))
+                    if record_id:
+                        root_ids = self._merge_ids(root_ids, [record_id])
+                    if prompt_id:
+                        root_ids = self._merge_ids(root_ids, [prompt_id])
+                    if material_id:
+                        root_ids = self._merge_ids(root_ids, [material_id])
         return root_ids[:20]
 
     def _build_discovery_sections(
@@ -4357,6 +4641,51 @@ class CirculatioService:
                 graph_degree=degree_by_node_id.get(body_state_id, 0),
                 longitudinal_context=True,
             )
+        for signal in method_context.get("longitudinalSignals", [])[:5]:
+            if not isinstance(signal, dict):
+                continue
+            signal_id = self._optional_str(signal.get("id"))
+            signal_summary = self._optional_str(signal.get("summary"))
+            if not signal_id or not signal_summary:
+                continue
+            source_entity_ids = [
+                str(item)
+                for item in signal.get("sourceEntityIds", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            material_ids = [
+                str(item)
+                for item in signal.get("materialIds", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            signal_type = self._optional_str(signal.get("signalType")) or "longitudinal_signal"
+            strength = self._optional_str(signal.get("strength"))
+            summary = signal_summary
+            if strength:
+                summary = f"{signal_summary} Signal strength: {strength.replace('_', ' ')}."
+            entity_refs: dict[str, list[Id]] = {}
+            if source_entity_ids:
+                entity_refs["entities"] = source_entity_ids
+            if material_ids:
+                entity_refs["materials"] = material_ids
+            self._add_discovery_candidate(
+                candidates,
+                key=f"longitudinal_signal:{signal_id}",
+                label=(signal_type.replace("_", " ").title()),
+                summary=summary,
+                criteria=[
+                    "method_context_longitudinal_signal",
+                    f"longitudinal_signal:{signal_type}",
+                ],
+                source_kind="method_context",
+                entity_refs=entity_refs,
+                evidence_ids=[],
+                graph_degree=max(
+                    [degree_by_node_id.get(ref_id, 0) for ref_id in source_entity_ids],
+                    default=0,
+                ),
+                longitudinal_context=True,
+            )
         method_state = method_context.get("methodState")
         if isinstance(method_state, dict):
             method_state_summary = self._method_state_discovery_summary(method_state)
@@ -4375,6 +4704,77 @@ class CirculatioService:
                     evidence_ids=self._method_state_discovery_evidence_ids(method_state),
                     graph_degree=max(
                         [degree_by_node_id.get(ref_id, 0) for ref_id in method_state_ref_ids],
+                        default=0,
+                    ),
+                    longitudinal_context=True,
+                )
+            relational_field = (
+                method_state.get("relationalField")
+                if isinstance(method_state.get("relationalField"), dict)
+                else {}
+            )
+            relational_field_summary = self._relational_field_discovery_summary(relational_field)
+            if relational_field_summary:
+                relational_ref_ids = self._method_state_section_ref_ids(relational_field)
+                self._add_discovery_candidate(
+                    candidates,
+                    key="method_state_relational_field:current",
+                    label="Relational field",
+                    summary=relational_field_summary,
+                    criteria=["method_state_relational_field"],
+                    source_kind="method_context",
+                    entity_refs=({"entities": relational_ref_ids} if relational_ref_ids else {}),
+                    evidence_ids=self._method_state_section_evidence_ids(relational_field),
+                    graph_degree=max(
+                        [degree_by_node_id.get(ref_id, 0) for ref_id in relational_ref_ids],
+                        default=0,
+                    ),
+                    longitudinal_context=True,
+                )
+            questioning_preference = (
+                method_state.get("questioningPreference")
+                if isinstance(method_state.get("questioningPreference"), dict)
+                else {}
+            )
+            questioning_summary = self._questioning_preference_discovery_summary(
+                questioning_preference
+            )
+            if questioning_summary:
+                questioning_ref_ids = self._method_state_section_ref_ids(questioning_preference)
+                self._add_discovery_candidate(
+                    candidates,
+                    key="method_state_questioning_preference:current",
+                    label="Questioning preference",
+                    summary=questioning_summary,
+                    criteria=["method_state_questioning_preference"],
+                    source_kind="method_context",
+                    entity_refs=({"entities": questioning_ref_ids} if questioning_ref_ids else {}),
+                    evidence_ids=self._method_state_section_evidence_ids(questioning_preference),
+                    graph_degree=max(
+                        [degree_by_node_id.get(ref_id, 0) for ref_id in questioning_ref_ids],
+                        default=0,
+                    ),
+                    longitudinal_context=True,
+                )
+            typology_state = (
+                method_state.get("typologyMethodState")
+                if isinstance(method_state.get("typologyMethodState"), dict)
+                else {}
+            )
+            typology_summary = self._typology_method_state_discovery_summary(typology_state)
+            if typology_summary:
+                typology_ref_ids = self._method_state_section_ref_ids(typology_state)
+                self._add_discovery_candidate(
+                    candidates,
+                    key="method_state_typology_method_state:current",
+                    label="Typology method state",
+                    summary=typology_summary,
+                    criteria=["method_state_typology_method_state"],
+                    source_kind="method_context",
+                    entity_refs=({"entities": typology_ref_ids} if typology_ref_ids else {}),
+                    evidence_ids=self._method_state_section_evidence_ids(typology_state),
+                    graph_degree=max(
+                        [degree_by_node_id.get(ref_id, 0) for ref_id in typology_ref_ids],
                         default=0,
                     ),
                     longitudinal_context=True,
@@ -4433,6 +4833,26 @@ class CirculatioService:
                         [degree_by_node_id.get(ref_id, 0) for ref_id in practice_loop_ref_ids],
                         default=0,
                     ),
+                    longitudinal_context=True,
+                )
+        witness_state = method_context.get("witnessState")
+        if isinstance(witness_state, dict):
+            witness_summary = self._witness_state_discovery_summary(witness_state)
+            if witness_summary:
+                self._add_discovery_candidate(
+                    candidates,
+                    key="witness_state:current",
+                    label="Witness contract",
+                    summary=witness_summary,
+                    criteria=["method_context_witness_state"],
+                    source_kind="method_context",
+                    entity_refs={},
+                    evidence_ids=(
+                        self._method_state_discovery_evidence_ids(method_state)
+                        if isinstance(method_state, dict)
+                        else []
+                    ),
+                    graph_degree=0,
                     longitudinal_context=True,
                 )
         for journey in method_context.get("activeJourneys", [])[:5]:
@@ -4756,6 +5176,49 @@ class CirculatioService:
                     entity_refs={"entities": [prompt_id]},
                     evidence_ids=[],
                     graph_degree=degree_by_node_id.get(prompt_id, 0),
+                    longitudinal_context=True,
+                )
+            for answer in clarification_state.get("recentlyUnrouted", [])[:5]:
+                if not isinstance(answer, dict):
+                    continue
+                answer_id = self._optional_str(answer.get("id"))
+                if not answer_id:
+                    continue
+                self._add_discovery_candidate(
+                    candidates,
+                    key=f"clarification_unrouted:{answer_id}",
+                    label="Clarification friction",
+                    summary=self._clarification_friction_discovery_summary(answer),
+                    criteria=["clarification_state_recently_unrouted"],
+                    source_kind="method_context",
+                    entity_refs=(
+                        {"materials": [material_id]}
+                        if (material_id := self._optional_str(answer.get("materialId")))
+                        else {}
+                    ),
+                    evidence_ids=[],
+                    graph_degree=degree_by_node_id.get(answer_id, 0),
+                    longitudinal_context=True,
+                )
+            question_keys = [
+                str(item)
+                for item in clarification_state.get("avoidRepeatQuestionKeys", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            if question_keys:
+                self._add_discovery_candidate(
+                    candidates,
+                    key="clarification_avoid_repeat:current",
+                    label="Question friction",
+                    summary=(
+                        f"Avoid repeating {len(question_keys)} recent clarification question(s) "
+                        "until the context shifts."
+                    ),
+                    criteria=["clarification_state_avoid_repeat"],
+                    source_kind="method_context",
+                    entity_refs={},
+                    evidence_ids=[],
+                    graph_degree=0,
                     longitudinal_context=True,
                 )
 
@@ -5141,12 +5604,19 @@ class CirculatioService:
     ) -> DiscoverySection:
         method_state_criteria = {
             "method_context_method_state",
+            "method_context_longitudinal_signal",
+            "method_context_witness_state",
             "method_state_active_goal_tension",
             "method_state_practice_loop",
+            "method_state_relational_field",
+            "method_state_questioning_preference",
+            "method_state_typology_method_state",
             "method_context_goal_tension",
             "method_context_reality_anchor",
             "method_context_threshold_process",
             "clarification_state_pending_prompt",
+            "clarification_state_recently_unrouted",
+            "clarification_state_avoid_repeat",
         }
         method_state_candidates = [
             candidate
@@ -5156,14 +5626,48 @@ class CirculatioService:
                 for criterion in cast(list[str], candidate.get("criteria", []))
             )
         ]
+        prioritized_criteria = (
+            "method_context_witness_state",
+            "method_context_longitudinal_signal",
+            "method_state_relational_field",
+            "method_state_questioning_preference",
+            "method_state_typology_method_state",
+            "clarification_state_recently_unrouted",
+            "clarification_state_avoid_repeat",
+        )
+        ranked_candidates = sorted(method_state_candidates, key=self._discovery_item_sort_key)
+        selected_candidates: list[dict[str, object]] = []
+        selected_ids: set[int] = set()
+        for prioritized_criterion in prioritized_criteria:
+            candidate = next(
+                (
+                    item
+                    for item in ranked_candidates
+                    if prioritized_criterion in cast(list[str], item.get("criteria", []))
+                    and id(item) not in selected_ids
+                ),
+                None,
+            )
+            if candidate is None:
+                continue
+            selected_candidates.append(candidate)
+            selected_ids.add(id(candidate))
+            if len(selected_candidates) >= max_items:
+                break
+        if len(selected_candidates) < max_items:
+            for candidate in ranked_candidates:
+                if id(candidate) in selected_ids:
+                    continue
+                selected_candidates.append(candidate)
+                selected_ids.add(id(candidate))
+                if len(selected_candidates) >= max_items:
+                    break
         items = [
             self._candidate_to_discovery_item(candidate)
-            for candidate in sorted(method_state_candidates, key=self._discovery_item_sort_key)[
-                :max_items
-            ]
+            for candidate in selected_candidates[:max_items]
         ]
         summary = (
-            "Containment, threshold, and open clarification signals shaping current pacing."
+            "Method state, witness pacing, and clarification friction shaping the next move."
             if items
             else "No method-state pacing signal surfaced in this bounded discovery digest."
         )
@@ -5382,11 +5886,16 @@ class CirculatioService:
 
     def _method_state_discovery_summary(self, method_state: dict[str, object]) -> str | None:
         fragments: list[str] = []
+        grounding = method_state.get("grounding")
+        if isinstance(grounding, dict):
+            recommendation = self._optional_str(grounding.get("recommendation"))
+            if recommendation:
+                fragments.append(f"Grounding: {recommendation.replace('_', ' ')}.")
         containment = method_state.get("containment")
         if isinstance(containment, dict):
-            grounding_need = self._optional_str(containment.get("groundingNeed"))
-            if grounding_need:
-                fragments.append(f"Containment: {grounding_need.replace('_', ' ')}.")
+            status = self._optional_str(containment.get("status"))
+            if status:
+                fragments.append(f"Containment: {status.replace('_', ' ')}.")
         ego_capacity = method_state.get("egoCapacity")
         if isinstance(ego_capacity, dict):
             reflective_capacity = self._optional_str(ego_capacity.get("reflectiveCapacity"))
@@ -5424,9 +5933,127 @@ class CirculatioService:
             return None
         return " ".join(fragments)
 
+    def _method_state_section_ref_ids(self, section: dict[str, object]) -> list[Id]:
+        ref_ids: list[Id] = []
+        record_id = self._optional_str(section.get("goalTensionId"))
+        if record_id:
+            ref_ids = self._merge_ids(ref_ids, [record_id])
+        for ref in section.get("sourceRecordRefs", []):
+            if not isinstance(ref, dict):
+                continue
+            record_id = self._optional_str(ref.get("recordId"))
+            if record_id:
+                ref_ids = self._merge_ids(ref_ids, [record_id])
+        return ref_ids
+
+    def _method_state_section_evidence_ids(self, section: dict[str, object]) -> list[Id]:
+        return [
+            str(value)
+            for value in section.get("evidenceIds", [])
+            if isinstance(value, str) and value
+        ]
+
+    def _relational_field_discovery_summary(
+        self,
+        relational_field: dict[str, object],
+    ) -> str | None:
+        fragments: list[str] = []
+        relationship_contact = self._optional_str(relational_field.get("relationshipContact"))
+        if relationship_contact:
+            fragments.append(f"Relational contact: {relationship_contact.replace('_', ' ')}.")
+        isolation_risk = self._optional_str(relational_field.get("isolationRisk"))
+        if isolation_risk:
+            fragments.append(f"Isolation risk: {isolation_risk.replace('_', ' ')}.")
+        support_direction = self._optional_str(relational_field.get("supportDirection"))
+        if support_direction:
+            fragments.append(f"Support direction: {support_direction.replace('_', ' ')}.")
+        recurring_affect = [
+            str(item).strip()
+            for item in relational_field.get("recurringAffect", [])
+            if str(item).strip()
+        ]
+        if recurring_affect:
+            fragments.append(f"Recurring affect: {', '.join(recurring_affect[:2])}.")
+        return " ".join(fragments) or None
+
+    def _questioning_preference_discovery_summary(
+        self, questioning_preference: dict[str, object]
+    ) -> str | None:
+        fragments: list[str] = []
+        depth_pacing = self._optional_str(questioning_preference.get("depthPacing"))
+        if depth_pacing:
+            fragments.append(f"Question pacing: {depth_pacing.replace('_', ' ')}.")
+        max_questions = questioning_preference.get("maxQuestionsPerTurn")
+        if isinstance(max_questions, int) and max_questions > 0:
+            fragments.append(f"Max questions per turn: {max_questions}.")
+        preferred_targets = [
+            str(item).replace("_", " ")
+            for item in questioning_preference.get("preferredCaptureTargets", [])
+            if str(item).strip()
+        ]
+        if preferred_targets:
+            fragments.append(f"Prefer clarifications about {', '.join(preferred_targets[:2])}.")
+        friction_signals = [
+            str(item).replace("_", " ")
+            for item in questioning_preference.get("answerFrictionSignals", [])
+            if str(item).strip()
+        ]
+        if friction_signals:
+            fragments.append(f"Friction: {friction_signals[0]}.")
+        return " ".join(fragments) or None
+
+    def _typology_method_state_discovery_summary(
+        self, typology_state: dict[str, object]
+    ) -> str | None:
+        fragments: list[str] = []
+        status = self._optional_str(typology_state.get("status"))
+        if status:
+            fragments.append(f"Status: {status.replace('_', ' ')}.")
+        prompt_bias = self._optional_str(typology_state.get("promptBias"))
+        if prompt_bias and prompt_bias != "neutral":
+            fragments.append(f"Prompt bias: {prompt_bias.replace('_', ' ')}.")
+        practice_bias = self._optional_str(typology_state.get("practiceBias"))
+        if practice_bias and practice_bias != "neutral":
+            fragments.append(f"Practice bias: {practice_bias.replace('_', ' ')}.")
+        balancing_function = self._optional_str(typology_state.get("balancingFunction"))
+        if balancing_function:
+            fragments.append(f"Balancing function: {balancing_function}.")
+        return " ".join(fragments) or None
+
+    def _witness_state_discovery_summary(self, witness_state: dict[str, object]) -> str | None:
+        stance = self._optional_str(witness_state.get("stance"))
+        starting_move = self._optional_str(witness_state.get("startingMove"))
+        tone = self._optional_str(witness_state.get("tone"))
+        if not any((stance, starting_move, tone)):
+            return None
+        fragments: list[str] = []
+        if stance:
+            fragments.append(f"Witness stance: {stance.replace('_', ' ')}.")
+        if tone:
+            fragments.append(f"Tone: {tone.replace('_', ' ')}.")
+        if starting_move:
+            fragments.append(f"Start with {starting_move.replace('_', ' ')}.")
+        return " ".join(fragments)
+
+    def _clarification_friction_discovery_summary(self, answer: dict[str, object]) -> str:
+        capture_target = (
+            self._optional_str(answer.get("captureTarget")) or "clarification"
+        ).replace("_", " ")
+        routing_status = (
+            self._optional_str(answer.get("routingStatus")) or "needs_review"
+        ).replace("_", " ")
+        summary = f"Recent {capture_target} clarification stayed {routing_status}."
+        errors = [
+            str(item).strip() for item in answer.get("validationErrors", []) if str(item).strip()
+        ]
+        if errors:
+            summary = f"{summary} {errors[0]}"
+        return summary
+
     def _method_state_discovery_ref_ids(self, method_state: dict[str, object]) -> list[Id]:
         ref_ids: list[Id] = []
         for field_name in (
+            "grounding",
             "containment",
             "egoCapacity",
             "egoRelationTrajectory",
@@ -5462,6 +6089,7 @@ class CirculatioService:
     def _method_state_discovery_evidence_ids(self, method_state: dict[str, object]) -> list[Id]:
         evidence_ids: list[Id] = []
         for field_name in (
+            "grounding",
             "containment",
             "egoCapacity",
             "egoRelationTrajectory",
@@ -5528,17 +6156,30 @@ class CirculatioService:
         window_start: str,
         window_end: str,
         explicit_question: str | None = None,
+        surface: Literal["alive_today", "journey_page"] = "alive_today",
     ) -> tuple[CirculationSummaryInput, CirculationSummaryResult]:
         summary_input = await self._repository.build_circulation_summary_input(
             user_id,
             window_start=window_start,
             window_end=window_end,
         )
+        coach_runtime = await self._load_coach_runtime_inputs(
+            user_id=user_id,
+            include_dashboard=True,
+        )
         summary_input = deepcopy(summary_input)
         summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
             summary_input.get("methodContextSnapshot"),
             window_start=window_start,
             window_end=window_end,
+            surface=surface,
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            dashboard=cast(DashboardSummary | None, coach_runtime.get("dashboard")),
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
         )
         if explicit_question:
             summary_input["explicitQuestion"] = explicit_question
@@ -5633,12 +6274,24 @@ class CirculatioService:
                 ],
             }
         return {
-            "kind": "quiet",
-            "title": "Weekly reflection",
-            "summary": "No weekly reflection surface is open for this page.",
+            "kind": "review_due",
+            "title": "Weekly review is available",
+            "summary": self._compact_page_text(
+                "A weekly reflection surface is available for this page.",
+                max_length=320,
+            ),
             "windowStart": window_start,
             "windowEnd": window_end,
-            "actions": [],
+            "actions": [
+                self._journey_action(
+                    label="Generate weekly review",
+                    kind="tool",
+                    operation="circulatio.review.weekly",
+                    payload={"windowStart": window_start, "windowEnd": window_end},
+                    write_intent="write",
+                    requires_explicit_user_action=True,
+                )
+            ],
         }
 
     def _build_journey_rhythmic_invitations(
@@ -6261,6 +6914,22 @@ class CirculatioService:
                 return [item]
             if item.get("questionText") == question_text and item.get("status") == "pending":
                 return [item]
+        if question_key:
+            recent_prompts = await self._repository.list_clarification_prompts(
+                user_id,
+                limit=50,
+            )
+            for item in recent_prompts:
+                if item.get("status") == "deleted":
+                    continue
+                if item.get("questionKey") != question_key:
+                    continue
+                existing_material_id = self._optional_str(item.get("materialId"))
+                if existing_material_id not in {None, material["id"]}:
+                    continue
+                if item.get("status") == "pending":
+                    return [item]
+                return []
         timestamp = now_iso()
         routing_hints = (
             deepcopy(plan.get("routingHints")) if isinstance(plan.get("routingHints"), dict) else {}
@@ -6598,6 +7267,176 @@ class CirculatioService:
         else:
             raise ValidationError(f"Clarification target '{capture_target}' is not routable yet.")
         return ([{"recordType": record_type, "id": str(routed_record["id"])}], routed_record)
+
+    def _clarification_method_state_targets(
+        self, capture_target: ClarificationCaptureTarget
+    ) -> list[MethodStateCaptureTargetKind]:
+        mapping: dict[ClarificationCaptureTarget, MethodStateCaptureTargetKind] = {
+            "body_state": "body_state",
+            "conscious_attitude": "conscious_attitude",
+            "goal": "goal",
+            "goal_tension": "goal_tension",
+            "personal_amplification": "personal_amplification",
+            "reality_anchors": "reality_anchors",
+            "threshold_process": "threshold_process",
+            "relational_scene": "relational_scene",
+            "inner_outer_correspondence": "inner_outer_correspondence",
+            "numinous_encounter": "numinous_encounter",
+            "aesthetic_resonance": "aesthetic_resonance",
+            "consent_preference": "consent_preference",
+            "typology_feedback": "typology_lens",
+        }
+        target = mapping.get(capture_target)
+        return [target] if target is not None else []
+
+    async def _clarification_method_state_anchor_refs(
+        self,
+        *,
+        user_id: Id,
+        prompt: ClarificationPromptRecord | None,
+        answer: ClarificationAnswerRecord,
+    ) -> dict[str, object]:
+        anchor_refs: dict[str, object] = {}
+        routing_hints = (
+            deepcopy(prompt.get("routingHints"))
+            if prompt is not None and isinstance(prompt.get("routingHints"), dict)
+            else {}
+        )
+        hinted_anchor_refs = routing_hints.get("anchorRefs")
+        if isinstance(hinted_anchor_refs, dict):
+            anchor_refs.update(deepcopy(hinted_anchor_refs))
+        material_id = self._optional_str(answer.get("materialId")) or (
+            self._optional_str(prompt.get("materialId")) if prompt else None
+        )
+        if material_id and "materialId" not in anchor_refs:
+            anchor_refs["materialId"] = material_id
+        run_id = self._optional_str(answer.get("runId")) or (
+            self._optional_str(prompt.get("runId")) if prompt else None
+        )
+        if run_id and "runId" not in anchor_refs:
+            anchor_refs["runId"] = run_id
+        if run_id and "clarificationRefKey" not in anchor_refs:
+            try:
+                run = await self._repository.get_interpretation_run(user_id, run_id)
+            except EntityNotFoundError:
+                run = None
+            intent = (
+                run.get("result", {}).get("clarificationIntent") if isinstance(run, dict) else None
+            )
+            if isinstance(intent, dict):
+                ref_key = self._optional_str(intent.get("refKey"))
+                if ref_key:
+                    anchor_refs["clarificationRefKey"] = ref_key
+        return anchor_refs
+
+    async def _clarification_routed_record_from_entity_ref(
+        self,
+        *,
+        user_id: Id,
+        entity_type: str,
+        entity_id: Id,
+    ) -> dict[str, object] | None:
+        try:
+            if entity_type == "PersonalAmplification":
+                return await self._repository.get_personal_amplification(user_id, entity_id)
+            if entity_type == "BodyState":
+                return await self._repository.get_body_state(user_id, entity_id)
+            if entity_type == "ConsciousAttitude":
+                return await self._repository.get_conscious_attitude_snapshot(user_id, entity_id)
+            if entity_type == "Goal":
+                return await self._repository.get_goal(user_id, entity_id)
+            if entity_type == "GoalTension":
+                return await self._repository.get_goal_tension(user_id, entity_id)
+            if entity_type == "PracticeSession":
+                return await self._repository.get_practice_session(user_id, entity_id)
+            if entity_type == "ConsentPreference":
+                preferences = await self._repository.list_consent_preferences(user_id, limit=50)
+                return next(
+                    (
+                        item
+                        for item in preferences
+                        if str(item.get("id") or "").strip() == entity_id
+                    ),
+                    None,
+                )
+            if entity_type in {
+                "RealityAnchorSummary",
+                "ThresholdProcess",
+                "RelationalScene",
+                "InnerOuterCorrespondence",
+                "NuminousEncounter",
+                "AestheticResonance",
+            }:
+                return await self._repository.get_individuation_record(user_id, entity_id)
+            if entity_type == "TypologyLens":
+                return await self._repository.get_typology_lens(user_id, entity_id)
+            if entity_type == "DreamEntry":
+                return await self._repository.get_material(user_id, entity_id)
+            if entity_type == "AdaptationProfile":
+                profile = await self._repository.get_adaptation_profile(user_id)
+                if isinstance(profile, dict) and str(profile.get("id") or "").strip() == entity_id:
+                    return profile
+        except EntityNotFoundError:
+            return None
+        return None
+
+    async def _route_clarification_answer_from_text(
+        self,
+        *,
+        user_id: Id,
+        prompt: ClarificationPromptRecord | None,
+        answer: ClarificationAnswerRecord,
+        capture_target: ClarificationCaptureTarget,
+    ) -> tuple[list[dict[str, str]], dict[str, object] | None, list[str]] | None:
+        if self._method_state_llm is None:
+            return None
+        expected_targets = self._clarification_method_state_targets(capture_target)
+        if not expected_targets:
+            return None
+        anchor_refs = await self._clarification_method_state_anchor_refs(
+            user_id=user_id,
+            prompt=prompt,
+            answer=answer,
+        )
+        if not self._method_state_has_anchor(anchor_refs):
+            return None
+        try:
+            workflow = await self.process_method_state_response(
+                {
+                    "userId": user_id,
+                    "idempotencyKey": f"clarification_answer:{answer['id']}",
+                    "source": "clarifying_answer",
+                    "responseText": answer["answerText"],
+                    "observedAt": str(
+                        answer.get("updatedAt") or answer.get("createdAt") or now_iso()
+                    ),
+                    "anchorRefs": anchor_refs,
+                    "expectedTargets": expected_targets,
+                    "privacyClass": answer.get("privacyClass", "session_only"),
+                }
+            )
+        except ValidationError as exc:
+            return ([], None, [str(exc)])
+        created_record_refs = [
+            {
+                "recordType": str(item.get("entityType") or ""),
+                "id": str(item.get("entityId") or ""),
+            }
+            for item in workflow.get("appliedEntityRefs", [])
+            if isinstance(item, dict) and item.get("entityType") and item.get("entityId")
+        ]
+        routed_record = None
+        if created_record_refs:
+            routed_record = await self._clarification_routed_record_from_entity_ref(
+                user_id=user_id,
+                entity_type=created_record_refs[0]["recordType"],
+                entity_id=created_record_refs[0]["id"],
+            )
+            return (created_record_refs, routed_record, [])
+        warnings = [str(item) for item in workflow.get("warnings", []) if str(item).strip()] or [
+            "Free-text clarification answer could not be routed into a typed durable capture."
+        ]
+        return ([], None, warnings)
 
     async def _store_typology_feedback_record(
         self,
@@ -7674,11 +8513,24 @@ class CirculatioService:
             material_id=material["id"],
         )
         if method_context is not None:
+            coach_runtime = await self._load_coach_runtime_inputs(user_id=material["userId"])
             material_input["methodContextSnapshot"] = deepcopy(
                 self._enrich_method_context_snapshot(
                     method_context,
                     window_start=window_start,
                     window_end=window_end,
+                    surface="generic",
+                    existing_briefs=cast(
+                        list[ProactiveBriefRecord], coach_runtime["existingBriefs"]
+                    ),
+                    recent_practices=cast(
+                        list[PracticeSessionRecord], coach_runtime["recentPractices"]
+                    ),
+                    journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+                    adaptation_profile=cast(
+                        UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+                    ),
+                    safety_context=safety_context,
                 )
             )
         return material_input
@@ -7813,6 +8665,12 @@ class CirculatioService:
             record["nextFollowUpDueAt"] = str(defaults["nextFollowUpDueAt"])
         if defaults.get("relatedBriefId"):
             record["relatedBriefId"] = str(defaults["relatedBriefId"])
+        coach_loop_key = str(plan.get("coachLoopKey") or "").strip()
+        if coach_loop_key:
+            record["coachLoopKey"] = coach_loop_key
+        resource_invitation_id = str(plan.get("resourceInvitationId") or "").strip()
+        if resource_invitation_id:
+            record["resourceInvitationId"] = resource_invitation_id
         return await self._repository.create_practice_session(record)
 
     async def _store_rhythmic_brief(
@@ -7825,29 +8683,56 @@ class CirculatioService:
         created_at: str,
     ) -> ProactiveBriefRecord:
         expires_at = self._format_datetime(self._parse_datetime(created_at) + timedelta(days=7))
-        return await self._repository.create_proactive_brief(
-            {
-                "id": create_id("proactive_brief"),
-                "userId": user_id,
-                "briefType": str(seed["briefType"]),
-                "status": "candidate",
-                "title": str(result["title"]),
-                "summary": str(result["summary"]),
-                "suggestedAction": str(result.get("suggestedAction") or ""),
-                "triggerKey": str(seed["triggerKey"]),
-                "source": source,  # type: ignore[typeddict-item]
-                "priority": int(seed.get("priority", 0)),
-                "renderedResponse": str(result["userFacingResponse"]),
-                "expiresAt": expires_at,
-                "relatedJourneyIds": list(seed.get("relatedJourneyIds", [])),
-                "relatedMaterialIds": list(seed.get("relatedMaterialIds", [])),
-                "relatedSymbolIds": list(seed.get("relatedSymbolIds", [])),
-                "relatedPracticeSessionIds": list(seed.get("relatedPracticeSessionIds", [])),
-                "evidenceIds": list(seed.get("evidenceIds", [])),
-                "createdAt": created_at,
-                "updatedAt": created_at,
-            }
-        )
+        record: ProactiveBriefRecord = {
+            "id": create_id("proactive_brief"),
+            "userId": user_id,
+            "briefType": str(seed["briefType"]),
+            "status": "candidate",
+            "title": str(result["title"]),
+            "summary": str(result["summary"]),
+            "suggestedAction": str(result.get("suggestedAction") or ""),
+            "triggerKey": str(seed["triggerKey"]),
+            "source": source,  # type: ignore[typeddict-item]
+            "priority": int(seed.get("priority", 0)),
+            "renderedResponse": str(result["userFacingResponse"]),
+            "expiresAt": expires_at,
+            "relatedJourneyIds": list(seed.get("relatedJourneyIds", [])),
+            "relatedMaterialIds": list(seed.get("relatedMaterialIds", [])),
+            "relatedSymbolIds": list(seed.get("relatedSymbolIds", [])),
+            "relatedPracticeSessionIds": list(seed.get("relatedPracticeSessionIds", [])),
+            "evidenceIds": list(seed.get("evidenceIds", [])),
+            "createdAt": created_at,
+            "updatedAt": created_at,
+        }
+        coach_loop_key = str(seed.get("coachLoopKey") or "").strip()
+        if coach_loop_key:
+            record["coachLoopKey"] = coach_loop_key
+        coach_loop_kind = str(seed.get("coachLoopKind") or "").strip()
+        if coach_loop_kind:
+            record["coachLoopKind"] = cast(CoachLoopKind, coach_loop_kind)
+        coach_move_kind = str(seed.get("coachMoveKind") or "").strip()
+        if coach_move_kind:
+            record["coachMoveKind"] = cast(CoachMoveKind, coach_move_kind)
+        if isinstance(seed.get("capture"), dict):
+            record["capture"] = cast(CoachCaptureContract, deepcopy(seed["capture"]))
+        resource_invitation = result.get("resourceInvitation")
+        if not isinstance(resource_invitation, dict):
+            resource_invitation = seed.get("resourceInvitation")
+        if isinstance(resource_invitation, dict):
+            record["resourceInvitation"] = cast(
+                ResourceInvitationSummary,
+                deepcopy(resource_invitation),
+            )
+        related_resource_ids = [
+            str(item) for item in seed.get("relatedResourceIds", []) if str(item).strip()
+        ]
+        if not related_resource_ids and isinstance(resource_invitation, dict):
+            resource = resource_invitation.get("resource")
+            if isinstance(resource, dict) and str(resource.get("id") or "").strip():
+                related_resource_ids = [str(resource["id"])]
+        if related_resource_ids:
+            record["relatedResourceIds"] = cast(list[Id], related_resource_ids)
+        return await self._repository.create_proactive_brief(record)
 
     async def _store_interpretation_run(
         self,

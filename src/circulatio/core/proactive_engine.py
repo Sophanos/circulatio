@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from ..domain.adaptation import RhythmCadenceHints
 from ..domain.ids import create_id, now_iso
@@ -10,12 +11,24 @@ from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import (
     ProactiveBriefRecord,
     ProactiveBriefStatus,
+    ProactiveBriefType,
     RhythmBriefSource,
     RhythmicBriefSeed,
 )
 from ..domain.reviews import DashboardSummary
-from ..domain.types import Id, MethodContextSnapshot, UserAdaptationProfileSummary
-from .method_state_policy import derive_runtime_method_state_policy
+from ..domain.types import (
+    CoachCaptureContract,
+    CoachLoopKind,
+    CoachMoveKind,
+    Id,
+    MethodContextSnapshot,
+    ResourceInvitationSummary,
+    UserAdaptationProfileSummary,
+)
+from .method_state_policy import (
+    derive_runtime_method_state_policy,
+    get_active_goal_tension_summary,
+)
 
 
 class ProactiveEngine:
@@ -34,12 +47,24 @@ class ProactiveEngine:
         now: str,
         limit: int = 3,
     ) -> list[RhythmicBriefSeed]:
-        del existing_briefs
         runtime_policy = self._effective_runtime_policy(
             method_context=method_context,
             adaptation_profile=adaptation_profile,
         )
         seeds: list[RhythmicBriefSeed] = []
+        if source != "manual":
+            seeds.extend(
+                self._coach_loop_seeds(
+                    coach_state=(
+                        cast(dict[str, object] | None, (method_context or {}).get("coachState"))
+                        if isinstance(method_context, dict)
+                        else None
+                    ),
+                    existing_briefs=existing_briefs,
+                    source=source,
+                    now=now,
+                )
+            )
         seeds.extend(self._practice_followup_seeds(recent_practices=recent_practices, now=now))
         seeds.extend(self._journey_seeds(journeys=journeys, now=now))
         seeds.extend(self._series_seeds(method_context=method_context, now=now))
@@ -80,11 +105,13 @@ class ProactiveEngine:
                 now=now,
             )
         )
-        seeds.extend(self._weekly_review_seed(user_id=user_id, dashboard=dashboard, now=now))
+        if source in {"manual", "scheduled"}:
+            seeds.extend(self._weekly_review_seed(user_id=user_id, dashboard=dashboard, now=now))
         seeds = self._apply_runtime_policy_to_seeds(
             seeds=seeds,
             runtime_policy=runtime_policy,
         )
+        seeds = self._dedupe_seeds(seeds)
         seeds.sort(key=lambda item: int(item.get("priority", 0)), reverse=True)
         if source == "practice_followup":
             seeds = [item for item in seeds if item["briefType"] == "practice_followup"]
@@ -105,11 +132,24 @@ class ProactiveEngine:
             for item in existing_briefs
             if item.get("status") in {"candidate", "shown"} and item.get("triggerKey")
         }
+        active_coach_loop_keys = {
+            str(item.get("coachLoopKey"))
+            for item in existing_briefs
+            if item.get("status") in {"candidate", "shown"} and item.get("coachLoopKey")
+        }
         suppressed_trigger_keys = {
             str(item.get("triggerKey"))
             for item in existing_briefs
             if item.get("status") == "dismissed"
             and item.get("triggerKey")
+            and item.get("cooldownUntil")
+            and self._parse_datetime(item["cooldownUntil"]) > now_dt
+        }
+        suppressed_coach_loop_keys = {
+            str(item.get("coachLoopKey"))
+            for item in existing_briefs
+            if item.get("status") in {"dismissed", "acted_on"}
+            and item.get("coachLoopKey")
             and item.get("cooldownUntil")
             and self._parse_datetime(item["cooldownUntil"]) > now_dt
         }
@@ -134,7 +174,13 @@ class ProactiveEngine:
         due: list[RhythmicBriefSeed] = []
         for seed in seeds:
             trigger_key = seed["triggerKey"]
-            if trigger_key in active_trigger_keys or trigger_key in suppressed_trigger_keys:
+            coach_loop_key = str(seed.get("coachLoopKey") or "").strip()
+            if (
+                trigger_key in active_trigger_keys
+                or trigger_key in suppressed_trigger_keys
+                or (coach_loop_key and coach_loop_key in active_coach_loop_keys)
+                or (coach_loop_key and coach_loop_key in suppressed_coach_loop_keys)
+            ):
                 continue
             due.append(seed)
         return due
@@ -200,6 +246,24 @@ class ProactiveEngine:
             for seed in seeds
         ]
 
+    def _dedupe_seeds(self, seeds: list[RhythmicBriefSeed]) -> list[RhythmicBriefSeed]:
+        deduped: list[RhythmicBriefSeed] = []
+        seen_trigger_keys: set[str] = set()
+        seen_loop_keys: set[str] = set()
+        for seed in seeds:
+            trigger_key = str(seed.get("triggerKey") or "").strip()
+            coach_loop_key = str(seed.get("coachLoopKey") or "").strip()
+            if trigger_key and trigger_key in seen_trigger_keys:
+                continue
+            if coach_loop_key and coach_loop_key in seen_loop_keys:
+                continue
+            if trigger_key:
+                seen_trigger_keys.add(trigger_key)
+            if coach_loop_key:
+                seen_loop_keys.add(coach_loop_key)
+            deduped.append(seed)
+        return deduped
+
     def _practice_followup_seeds(
         self,
         *,
@@ -248,6 +312,100 @@ class ProactiveEngine:
                     "reason": "practice_session_due",
                 }
             )
+        return seeds
+
+    def _coach_loop_seeds(
+        self,
+        *,
+        coach_state: dict[str, object] | None,
+        existing_briefs: list[ProactiveBriefRecord],
+        source: RhythmBriefSource,
+        now: str,
+    ) -> list[RhythmicBriefSeed]:
+        del existing_briefs
+        if source == "manual" or not isinstance(coach_state, dict):
+            return []
+        seeds: list[RhythmicBriefSeed] = []
+        for loop in coach_state.get("activeLoops", []):
+            if not isinstance(loop, dict):
+                continue
+            if str(loop.get("status") or "").strip() != "eligible":
+                continue
+            loop_key = str(loop.get("loopKey") or "").strip()
+            if not loop_key:
+                continue
+            move_kind = str(loop.get("moveKind") or "").strip()
+            kind = str(loop.get("kind") or "").strip()
+            if move_kind == "track_without_prompt":
+                continue
+            brief_type = "daily"
+            if move_kind == "offer_resource":
+                brief_type = "resource_invitation"
+            elif kind == "practice_integration":
+                brief_type = "practice_followup"
+            elif kind in {"journey_reentry", "relational_scene"} and loop.get("relatedJourneyIds"):
+                brief_type = "journey_checkin"
+            elif kind == "goal_guidance":
+                brief_type = "weekly"
+            bucket = (
+                self._week_bucket(now)
+                if brief_type in {"weekly", "journey_checkin"}
+                else self._day_bucket(now)
+            )
+            seed: RhythmicBriefSeed = {
+                "briefType": cast(ProactiveBriefType, brief_type),
+                "triggerKey": f"coach_loop:{loop_key}:{brief_type}:{bucket}",
+                "titleHint": str(loop.get("titleHint") or "Coach loop"),
+                "summaryHint": str(loop.get("summaryHint") or "A live thread may be ready."),
+                "priority": int(loop.get("priority", 0) or 0),
+                "relatedJourneyIds": [
+                    str(item) for item in loop.get("relatedJourneyIds", []) if str(item).strip()
+                ],
+                "relatedMaterialIds": [
+                    str(item)
+                    for item in loop.get("relatedMaterialIds", [])
+                    if str(item).strip()
+                ],
+                "relatedSymbolIds": [
+                    str(item) for item in loop.get("relatedSymbolIds", []) if str(item).strip()
+                ],
+                "relatedPracticeSessionIds": [
+                    str(item)
+                    for item in loop.get("relatedPracticeSessionIds", [])
+                    if str(item).strip()
+                ],
+                "evidenceIds": [
+                    str(item) for item in loop.get("evidenceIds", []) if str(item).strip()
+                ],
+                "reason": f"coach_loop:{kind}",
+                "coachLoopKey": loop_key,
+                "coachLoopKind": cast(CoachLoopKind, kind),
+                "coachMoveKind": cast(CoachMoveKind, move_kind),
+            }
+            resource_invitation = (
+                loop.get("resourceInvitation")
+                if isinstance(loop.get("resourceInvitation"), dict)
+                else {}
+            )
+            suggested_action_hint = str(
+                resource_invitation.get("resource", {}).get("followUpQuestion") or ""
+            ).strip()
+            if not suggested_action_hint:
+                prompt_frame = loop.get("promptFrame")
+                if isinstance(prompt_frame, dict):
+                    suggested_action_hint = str(prompt_frame.get("askAbout") or "").strip()
+            if suggested_action_hint:
+                seed["suggestedActionHint"] = suggested_action_hint
+            if isinstance(loop.get("capture"), dict):
+                seed["capture"] = cast(CoachCaptureContract, dict(loop["capture"]))
+            if isinstance(resource_invitation, dict) and resource_invitation:
+                seed["resourceInvitation"] = cast(
+                    ResourceInvitationSummary, dict(resource_invitation)
+                )
+                resource = resource_invitation.get("resource")
+                if isinstance(resource, dict) and str(resource.get("id") or "").strip():
+                    seed["relatedResourceIds"] = [str(resource["id"])]
+            seeds.append(seed)
         return seeds
 
     def _journey_seeds(self, *, journeys: list[JourneyRecord], now: str) -> list[RhythmicBriefSeed]:
@@ -564,16 +722,7 @@ class ProactiveEngine:
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if method_context:
-            method_state = (
-                method_context.get("methodState")
-                if isinstance(method_context.get("methodState"), dict)
-                else {}
-            )
-            active_goal_tension = (
-                method_state.get("activeGoalTension")
-                if isinstance(method_state.get("activeGoalTension"), dict)
-                else {}
-            )
+            active_goal_tension = get_active_goal_tension_summary(method_context) or {}
             active_goal_tension_id = str(active_goal_tension.get("goalTensionId") or "").strip()
             if active_goal_tension_id:
                 balancing_direction = str(
@@ -601,27 +750,6 @@ class ProactiveEngine:
                         "relatedPracticeSessionIds": [],
                         "evidenceIds": list(active_goal_tension.get("evidenceIds", [])),
                         "reason": "goal_tension_active_method_state",
-                    }
-                ]
-            goal_tensions = method_context.get("goalTensions", [])
-            if goal_tensions:
-                tension = goal_tensions[0]
-                return [
-                    {
-                        "briefType": "daily",
-                        "triggerKey": f"daily:goal_tension:{tension['id']}:{self._day_bucket(now)}",
-                        "titleHint": "Goal tension",
-                        "summaryHint": "An active goal tension may be asking for gentle attention.",
-                        "suggestedActionHint": (
-                            "You can simply note the tension instead of resolving it."
-                        ),
-                        "priority": 70,
-                        "relatedJourneyIds": [],
-                        "relatedMaterialIds": [],
-                        "relatedSymbolIds": [],
-                        "relatedPracticeSessionIds": [],
-                        "evidenceIds": list(tension.get("evidenceIds", [])),
-                        "reason": "goal_tension_active",
                     }
                 ]
             signals = method_context.get("longitudinalSignals", [])
@@ -759,19 +887,18 @@ class ProactiveEngine:
         method_context: MethodContextSnapshot | None,
         adaptation_profile: UserAdaptationProfileSummary | None,
     ) -> dict[str, object]:
-        policy: dict[str, object] = {}
+        snapshot: MethodContextSnapshot | None = None
         if isinstance(method_context, dict):
-            snapshot = dict(method_context)
-            if adaptation_profile is not None and not isinstance(
-                snapshot.get("adaptationProfile"), dict
-            ):
-                snapshot["adaptationProfile"] = adaptation_profile
-            policy = dict(derive_runtime_method_state_policy(snapshot))
-        self._merge_adaptation_preferences(
-            runtime_policy=policy,
-            adaptation_profile=adaptation_profile,
-        )
-        return policy
+            snapshot = cast(MethodContextSnapshot, dict(method_context))
+        elif adaptation_profile is not None:
+            snapshot = cast(MethodContextSnapshot, {"adaptationProfile": adaptation_profile})
+        if (
+            isinstance(snapshot, dict)
+            and adaptation_profile is not None
+            and not isinstance(snapshot.get("adaptationProfile"), dict)
+        ):
+            snapshot["adaptationProfile"] = adaptation_profile
+        return dict(derive_runtime_method_state_policy(snapshot))
 
     def _apply_runtime_policy_to_seeds(
         self,
@@ -796,7 +923,10 @@ class ProactiveEngine:
     ) -> bool:
         depth_level = str(runtime_policy.get("depthLevel") or "").strip()
         brief_type = str(seed.get("briefType") or "").strip()
-        if depth_level == "grounding_only" and brief_type != "practice_followup":
+        if depth_level == "grounding_only" and brief_type not in {
+            "practice_followup",
+            "resource_invitation",
+        }:
             return True
         return False
 

@@ -144,6 +144,9 @@ class PracticeEngine:
             if isinstance(item, dict) and item.get("scope")
         }
         required_scope = self._required_scope(practice_type)
+        if required_scope and consent_status.get(required_scope) in {"declined", "revoked"}:
+            notes.append(f"{required_scope}_blocked_by_consent_fallback_to_journaling")
+            return finalize(self._fallback_plan("journaling"), notes)
         if practice_type == "active_imagination" and (
             "active_imagination" in blocked_moves
             or allowed_moves.get("active_imagination") not in {None, "allow", "ask_consent"}
@@ -152,9 +155,6 @@ class PracticeEngine:
             return finalize(self._fallback_plan("journaling"), notes)
         if required_scope and required_scope in blocked_moves:
             notes.append(f"{required_scope}_blocked_by_method_fallback_to_journaling")
-            return finalize(self._fallback_plan("journaling"), notes)
-        if required_scope and consent_status.get(required_scope) in {"declined", "revoked"}:
-            notes.append(f"{required_scope}_blocked_by_consent_fallback_to_journaling")
             return finalize(self._fallback_plan("journaling"), notes)
         if plan.get("requiresConsent") and required_scope:
             if consent_status.get(required_scope) == "ask_each_time":
@@ -255,6 +255,29 @@ class PracticeEngine:
         method_state: dict[str, object] = (
             dict(method_state_value) if isinstance(method_state_value, dict) else {}
         )
+        coach_state_value = method_context.get("coachState")
+        coach_state: dict[str, object] = (
+            dict(coach_state_value) if isinstance(coach_state_value, dict) else {}
+        )
+        selected_move_value = coach_state.get("selectedMove")
+        selected_move: dict[str, object] = (
+            dict(selected_move_value) if isinstance(selected_move_value, dict) else {}
+        )
+        active_loops_value = coach_state.get("activeLoops")
+        active_loops: list[dict[str, object]] = (
+            [item for item in active_loops_value if isinstance(item, dict)]
+            if isinstance(active_loops_value, list)
+            else []
+        )
+        selected_loop = next(
+            (
+                item
+                for item in active_loops
+                if str(item.get("loopKey") or "").strip()
+                == str(selected_move.get("loopKey") or "").strip()
+            ),
+            None,
+        )
         runtime_policy_dict: dict[str, object] = (
             runtime_policy if isinstance(runtime_policy, dict) else {}
         )
@@ -280,6 +303,18 @@ class PracticeEngine:
         instructions = [str(item) for item in result.get("instructions", []) if str(item).strip()]
         practice_type = str(result.get("type") or "journaling")
         current_modality = str(result.get("modality") or "").strip().lower()
+        selected_move_kind = str(selected_move.get("kind") or "").strip()
+        if str(selected_move.get("loopKey") or "").strip():
+            result["coachLoopKey"] = str(selected_move["loopKey"])
+        resource_invitation_value = selected_move.get("resourceInvitation")
+        resource_invitation = (
+            dict(resource_invitation_value)
+            if isinstance(resource_invitation_value, dict)
+            else {}
+        )
+        resource_invitation_id = str(resource_invitation.get("id") or "").strip()
+        if resource_invitation_id:
+            result["resourceInvitationId"] = resource_invitation_id
 
         max_duration = runtime_constraints.get("maxDurationMinutes")
         if not isinstance(max_duration, int):
@@ -360,6 +395,55 @@ class PracticeEngine:
         if bias_instruction and bias_instruction not in instructions:
             instructions.append(bias_instruction)
             notes.append("practice_bias_instruction_added")
+
+        selected_loop_kind = (
+            str(selected_loop.get("kind") or "").strip()
+            if isinstance(selected_loop, dict)
+            else ""
+        )
+        if isinstance(selected_loop, dict):
+            related_body_state_ids_value = selected_loop.get("relatedBodyStateIds")
+            related_body_state_ids = (
+                [str(item) for item in related_body_state_ids_value if str(item).strip()]
+                if isinstance(related_body_state_ids_value, list)
+                else []
+            )
+            if related_body_state_ids and not str(result.get("targetedBodyStateId") or "").strip():
+                result["targetedBodyStateId"] = related_body_state_ids[0]
+            related_scene_ids_value = selected_loop.get("relatedRelationalSceneIds")
+            related_scene_ids = (
+                [str(item) for item in related_scene_ids_value if str(item).strip()]
+                if isinstance(related_scene_ids_value, list)
+                else []
+            )
+            if related_scene_ids and not str(result.get("targetedRelationalSceneId") or "").strip():
+                result["targetedRelationalSceneId"] = related_scene_ids[0]
+
+        if selected_move_kind == "offer_resource" and selected_loop_kind == "resource_support":
+            if int(result.get("durationMinutes") or 0) > 5:
+                result["durationMinutes"] = 5
+            if str(result.get("intensity") or "").strip() != "low":
+                result["intensity"] = "low"
+            notes.append("coach_loop_prefers_gentler_modality")
+            resource_follow_up = str(
+                resource_invitation.get("resource", {}).get("followUpQuestion") or ""
+            ).strip()
+            if resource_follow_up and not str(result.get("followUpPrompt") or "").strip():
+                result["followUpPrompt"] = resource_follow_up
+        elif (
+            selected_move_kind in {"ask_practice_followup", "offer_resource"}
+            and selected_loop_kind == "practice_integration"
+            and practice_loop.get("recentOutcomeTrend") in {"activating", "mixed"}
+        ):
+            if int(result.get("durationMinutes") or 0) > 6:
+                result["durationMinutes"] = 6
+            result["intensity"] = "low"
+            notes.append("coach_loop_prefers_gentler_modality")
+            resource_follow_up = str(
+                resource_invitation.get("resource", {}).get("followUpQuestion") or ""
+            ).strip()
+            if resource_follow_up and not str(result.get("followUpPrompt") or "").strip():
+                result["followUpPrompt"] = resource_follow_up
 
         if practice_type in {
             "journaling",

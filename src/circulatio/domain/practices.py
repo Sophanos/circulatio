@@ -56,6 +56,8 @@ class PracticeSessionRecord(TypedDict, total=False):
     lastFollowUpBriefId: NotRequired[Id]
     followUpCount: NotRequired[int]
     relatedBriefId: NotRequired[Id]
+    coachLoopKey: NotRequired[Id]
+    resourceInvitationId: NotRequired[Id]
     createdAt: Required[ISODateString]
     updatedAt: Required[ISODateString]
     deletedAt: NotRequired[ISODateString]
@@ -91,6 +93,8 @@ class PracticeSessionUpdate(TypedDict, total=False):
     lastFollowUpBriefId: Id
     followUpCount: int
     relatedBriefId: Id
+    coachLoopKey: Id
+    resourceInvitationId: Id
     updatedAt: ISODateString
     deletedAt: ISODateString
     completedAt: ISODateString

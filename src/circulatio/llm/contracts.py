@@ -292,11 +292,24 @@ class LlmWeeklyReviewOutput(TypedDict, total=False):
     longitudinalObservations: NotRequired[list[LlmObservationCandidate]]
 
 
+class LlmAliveTodayOutput(TypedDict, total=False):
+    userFacingResponse: Required[str]
+    activeThemes: NotRequired[list[str]]
+    selectedCoachLoopKey: NotRequired[str]
+    coachMoveKind: NotRequired[str]
+    followUpQuestion: NotRequired[str]
+    suggestedAction: NotRequired[str]
+    practiceRecommendation: NotRequired[LlmPracticeCandidate]
+    resourceInvitation: NotRequired[dict[str, object]]
+    withheldReason: NotRequired[str]
+
+
 class LlmPracticeOutput(TypedDict, total=False):
     practiceRecommendation: Required[LlmPracticeCandidate]
     userFacingResponse: Required[str]
     followUpPrompt: NotRequired[str]
     adaptationNotes: NotRequired[list[str]]
+    resourceInvitation: NotRequired[dict[str, object]]
 
 
 class LlmRhythmicBriefOutput(TypedDict, total=False):
@@ -305,6 +318,7 @@ class LlmRhythmicBriefOutput(TypedDict, total=False):
     suggestedAction: NotRequired[str]
     userFacingResponse: Required[str]
     supportingRefs: NotRequired[list[str]]
+    resourceInvitation: NotRequired[dict[str, object]]
 
 
 class LlmInvitationCandidate(TypedDict, total=False):

@@ -520,6 +520,8 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 
 **Implementation status (April 2026):** The embedded Hermes/backend runtime now includes `alive_today`, the bounded read-only `discovery` digest, read-mostly journey pages, low-risk autonomous journey-container writes through Hermes tool exposure, explicit `/circulation journey ...` lifecycle commands for QA/debug/demo, label-based journey resolution for lightweight host writes, weekly review cadence, rhythmic briefs, and a repo-owned external Hermes-host smoke harness. Durable journey containers are organizational records, not symbolic truth claims; interpretation-derived symbolic memory remains approval-gated.
 
+**Coach OS refinement (April 2026):** Phase 6 now also exposes a single derived backend operating contract, `coachState`, on every enriched `MethodContextSnapshot`. `coachState` is not a new symbolic ontology. It is the shared runtime layer that tells `alive_today`, rhythmic briefs, journey pages, practice follow-up, and anchored reply routing which bounded coach loop is live, what one move is appropriate now, which moves are withheld, and when a curated resource invitation is safer than another prompt.
+
 **Goal:** Move from reactive interpretation to living rhythm.
 
 **User outcome:** Circulatio becomes longitudinal, not just reactive. Weekly reviews accumulate insight. Unresolved motifs resurface gently. Practices follow up. You are accompanied over time, not just served per request.
@@ -527,6 +529,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 **What gets built:**
 - Daily briefing
 - "What is alive today?" synthesis
+- A shared `coachState` contract derived from method context, method state, runtime policy, consent, cadence, and recent runtime records
 - A bounded `discovery` digest that lets Hermes or QA browse approved dashboard, memory-kernel, and graph state without triggering interpretation or writes
 - Durable journey containers that Hermes can create, update, and re-status autonomously as lightweight ongoing-thread records
 - Read-mostly journey pages that assemble opener, review surface, invitations, practice, and bounded analysis preview
@@ -536,6 +539,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - Journey check-ins
 - Recurrence-triggered surfacing
 - Practice follow-up loops
+- Curated resource invitations for grounding, somatic tracking, journaling, and gentler follow-up when depth work should not intensify
 - Purpose-built host context packets so Hermes-agent and later hosts can request bounded context for a specific job instead of dumping whole history
   - `TopicContextPacket`
   - `ThresholdPacket`
@@ -561,6 +565,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - The user feels accompanied, not chased
 - Hermes can browse approved symbolic state through one bounded discovery digest without silently escalating it into interpretation
 - Hermes can hold an ongoing thread as a named journey without silently escalating it into interpretation
+- Coach-facing surfaces share one bounded operating contract instead of each surface re-deriving its own pacing and follow-up behavior
 - A repeatable external Hermes-host smoke path can verify plugin load, tool availability, `/circulation journey` rendering, and journey persistence before shipping
 - Hermes-agent and later hosts can ask for bounded context by purpose rather than receiving undifferentiated history blobs
 - Local semantic/vector recall stays local-first, provenance-bound, and supplementary to Circulatio-owned records

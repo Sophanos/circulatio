@@ -14,6 +14,7 @@ from ..domain.types import (
     ThresholdReviewInput,
 )
 from .contracts import (
+    LlmAliveTodayOutput,
     LlmAnalysisPacketOutput,
     LlmInterpretationOutput,
     LlmLivingMythReviewOutput,
@@ -35,6 +36,11 @@ class CirculatioLlmPort(Protocol):
         self,
         input_data: CirculationSummaryInput,
     ) -> LlmWeeklyReviewOutput: ...
+
+    async def generate_alive_today(
+        self,
+        input_data: CirculationSummaryInput,
+    ) -> LlmAliveTodayOutput: ...
 
     async def generate_practice(
         self,

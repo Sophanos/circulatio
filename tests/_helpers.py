@@ -7,6 +7,7 @@ class FakeCirculatioLlm:
     def __init__(self) -> None:
         self.interpret_calls: list[dict[str, object]] = []
         self.review_calls: list[dict[str, object]] = []
+        self.alive_today_calls: list[dict[str, object]] = []
         self.life_calls: list[dict[str, object]] = []
         self.practice_calls: list[dict[str, object]] = []
         self.brief_calls: list[dict[str, object]] = []
@@ -593,6 +594,24 @@ class FakeCirculatioLlm:
                 "requiresConsent": False,
             },
         }
+
+    async def generate_alive_today(self, input_data: dict[str, object]) -> dict[str, object]:
+        payload = deepcopy(input_data)
+        self.alive_today_calls.append(payload)
+        coach_state = payload.get("methodContextSnapshot", {}).get("coachState", {})
+        selected_move = coach_state.get("selectedMove", {}) if isinstance(coach_state, dict) else {}
+        result = {
+            "userFacingResponse": "LLM alive today: one live thread is being held lightly.",
+            "activeThemes": ["llm-alive"],
+            "selectedCoachLoopKey": str(selected_move.get("loopKey") or "coach:alive_today"),
+            "coachMoveKind": str(selected_move.get("kind") or "ask_body_checkin"),
+            "followUpQuestion": "What changed in the body after contact?",
+            "suggestedAction": "Stay close to what changed before explaining it.",
+        }
+        resource_invitation = selected_move.get("resourceInvitation")
+        if isinstance(resource_invitation, dict):
+            result["resourceInvitation"] = deepcopy(resource_invitation)
+        return result
 
     async def summarize_life_context(
         self,
