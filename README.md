@@ -2,7 +2,7 @@
 
 > A Soul OS for Soul-Making.
 
-Circulatio is the symbolic backend that turns a host agent like Hermes into an individuation companion. It holds your dreams, body-states, reflections, charged events, and threshold material across time, then interprets them through a Jungian depth lens when *you* decide the moment is right.
+A memory system for depth. Circulatio collects dreams, body states, reflections, and charged events, then surfaces long-term patterns — on your timing, with your consent. It does not diagnose, gamify, or optimize. It holds, remembers, and sees.
 
 <p align="center">
   <img src="docs/diagram.svg" alt="Circulatio diagram: material enters the vessel (dreams, body states, reflections, charged events), passes through capture / hold / interpret, and becomes visible as pattern, journeys, living myth, and analysis packets — guarded by grounding, evidence, hypotheses, approval, and offline evolution." width="100%" />
