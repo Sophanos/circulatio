@@ -359,6 +359,12 @@ class PracticeSessionSummary(TypedDict, total=False):
     templateId: NotRequired[Id]
     modality: NotRequired[str]
     intensity: NotRequired[str]
+    coachLoopKey: NotRequired[Id]
+    resourceInvitationId: NotRequired[Id]
+    coachLoopKind: NotRequired[CoachLoopKind]
+    coachMoveKind: NotRequired[CoachMoveKind]
+    relatedResourceIds: NotRequired[list[Id]]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
     createdAt: Required[ISODateString]
     completedAt: NotRequired[ISODateString]
     nextFollowUpDueAt: NotRequired[ISODateString]
@@ -1723,7 +1729,11 @@ class PracticePlan(TypedDict, total=False):
     followUpPrompt: NotRequired[str]
     adaptationNotes: NotRequired[list[str]]
     coachLoopKey: NotRequired[str]
+    coachLoopKind: NotRequired[CoachLoopKind]
+    coachMoveKind: NotRequired[CoachMoveKind]
     resourceInvitationId: NotRequired[Id]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+    relatedResourceIds: NotRequired[list[Id]]
 
 
 class PersonalSymbolWritePayload(TypedDict, total=False):

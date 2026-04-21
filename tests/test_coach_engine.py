@@ -65,6 +65,60 @@ class CoachEngineTests(unittest.TestCase):
             "body_state",
         )
 
+    def test_generic_surface_prefers_practice_integration_before_resource_support(self) -> None:
+        engine = CoachEngine()
+        coach_state = engine.build_coach_state(
+            method_context={
+                "windowStart": "2026-04-20T00:00:00Z",
+                "windowEnd": "2026-04-21T00:00:00Z",
+                "recentBodyStates": [],
+                "activeJourneys": [],
+                "recentPracticeSessions": [],
+                "methodState": {
+                    "grounding": {"recommendation": "grounding_first"},
+                    "containment": {"status": "strained"},
+                    "practiceLoop": {"recentOutcomeTrend": "activating"},
+                },
+            },
+            runtime_policy={
+                "depthLevel": "grounding_only",
+                "blockedMoves": [],
+                "preferredMoves": [],
+                "preferredClarificationTargets": ["practice_outcome"],
+                "questionStyle": "body_first",
+                "witnessTone": "grounded",
+                "maxClarifyingQuestions": 1,
+                "practiceConstraints": {"preferLowIntensity": True},
+                "reasons": ["Containment currently requires grounding first."],
+            },
+            surface="generic",
+            existing_briefs=[],
+            recent_practices=[
+                {
+                    "id": "practice_1",
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "reason": "Track the pattern.",
+                    "instructions": ["Write for five minutes."],
+                    "durationMinutes": 8,
+                    "contraindicationsChecked": ["none"],
+                    "requiresConsent": False,
+                    "status": "completed",
+                    "activationBefore": "low",
+                    "activationAfter": "high",
+                    "createdAt": "2026-04-20T10:00:00Z",
+                    "updatedAt": "2026-04-20T10:05:00Z",
+                }
+            ],
+            journeys=[],
+            now="2026-04-21T00:00:00Z",
+        )
+
+        self.assertEqual(
+            coach_state["selectedMove"]["loopKey"],
+            "coach:practice_integration:practice_1",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

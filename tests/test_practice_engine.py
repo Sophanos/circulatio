@@ -53,6 +53,32 @@ class PracticeEngineTests(unittest.TestCase):
         )
         self.assertEqual(result["type"], "journaling")
 
+    def test_consent_fallback_precedes_method_block_for_active_imagination(self) -> None:
+        result = self.engine.reconcile_llm_practice(
+            practice={
+                "id": "practice_1",
+                "type": "active_imagination",
+                "reason": "Stay with the image.",
+                "instructions": ["Return to the image."],
+                "durationMinutes": 12,
+                "contraindicationsChecked": ["none"],
+                "requiresConsent": True,
+            },
+            safety={"status": "clear", "flags": ["none"], "depthWorkAllowed": True},
+            method_gate={"blockedMoves": ["active_imagination"]},
+            depth_readiness={"allowedMoves": {"active_imagination": "withhold"}},
+            consent_preferences=[{"scope": "active_imagination", "status": "revoked"}],
+        )
+        self.assertEqual(result["type"], "journaling")
+        self.assertIn(
+            "active_imagination_blocked_by_consent_fallback_to_journaling",
+            result["adaptationNotes"],
+        )
+        self.assertNotIn(
+            "active_imagination_blocked_by_method_fallback_to_journaling",
+            result["adaptationNotes"],
+        )
+
     def test_explicit_duration_cap(self) -> None:
         result = self.engine.reconcile_llm_practice(
             practice={
@@ -108,7 +134,10 @@ class PracticeEngineTests(unittest.TestCase):
             depth_readiness=None,
             consent_preferences=[],
             goal_tensions=[
-                {"id": "tension_1", "tensionSummary": "Directness and safety pull against each other."}
+                {
+                    "id": "tension_1",
+                    "tensionSummary": "Directness and safety pull against each other.",
+                }
             ],
             body_states=[{"id": "body_1", "sensation": "tightness"}],
         )

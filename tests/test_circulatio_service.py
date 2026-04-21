@@ -843,6 +843,16 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(len(llm.practice_calls), 1)
             profile = await repository.get_adaptation_profile("user_1")
             self.assertEqual(profile["sampleCounts"]["practice_recommended"], 1)
+            self.assertEqual(
+                profile["learnedSignals"]["practiceStats"]["byModality"]["writing"]["recommended"],
+                1,
+            )
+            self.assertEqual(
+                profile["learnedSignals"]["practiceStats"]["byTemplateId"]["llm-practice"][
+                    "recommended"
+                ],
+                1,
+            )
 
         asyncio.run(run())
 
@@ -3218,6 +3228,99 @@ class CirculatioServiceTests(unittest.TestCase):
             persisted = await repository.get_practice_session("user_1", record["id"])
             self.assertEqual(persisted["coachLoopKey"], "coach:soma:body_1")
             self.assertEqual(persisted["resourceInvitationId"], "resource_invitation_1")
+
+        asyncio.run(run())
+
+    def test_practice_followup_reuses_persisted_resource_invitation(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await repository.create_practice_session(
+                {
+                    "id": "practice_1",
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "reason": "Track the authority pattern.",
+                    "instructions": ["Write for five minutes."],
+                    "durationMinutes": 6,
+                    "contraindicationsChecked": ["none"],
+                    "requiresConsent": False,
+                    "status": "completed",
+                    "activationBefore": "low",
+                    "activationAfter": "high",
+                    "coachLoopKey": "coach:practice_integration:practice_1",
+                    "coachLoopKind": "practice_integration",
+                    "coachMoveKind": "offer_resource",
+                    "resourceInvitationId": "resource_invitation_1",
+                    "resourceInvitation": {
+                        "id": "resource_invitation_1",
+                        "resource": {
+                            "id": "resource_1",
+                            "title": "Three breaths",
+                            "provider": "Circulatio",
+                            "url": "https://example.com/resource",
+                            "resourceType": "micro_practice",
+                            "modality": "breath",
+                            "activationBand": "high",
+                            "contraindications": [],
+                            "tags": ["grounding"],
+                            "curationSource": "catalog",
+                            "reviewedAt": "2026-04-20T00:00:00Z",
+                        },
+                        "triggerLoopKey": "coach:practice_integration:practice_1",
+                        "reason": "A gentler resource fits the current pacing.",
+                        "activationRationale": "Recent practice signals suggest a gentler modality.",
+                        "capture": {
+                            "source": "practice_feedback",
+                            "anchorRefs": {
+                                "coachLoopKey": "coach:practice_integration:practice_1",
+                                "practiceSessionId": "practice_1",
+                                "resourceInvitationId": "resource_invitation_1",
+                            },
+                            "expectedTargets": [
+                                "practice_outcome",
+                                "practice_preference",
+                                "body_state",
+                            ],
+                            "maxQuestions": 1,
+                            "answerMode": "choice_then_free_text",
+                            "skipBehavior": "cooldown",
+                        },
+                        "presentationPolicy": {
+                            "allowNotNow": True,
+                            "preserveHostChoice": True,
+                            "renderAs": "resource_card",
+                        },
+                        "createdAt": "2026-04-20T10:05:00Z",
+                    },
+                    "relatedResourceIds": ["resource_1"],
+                    "createdAt": "2026-04-20T10:00:00Z",
+                    "updatedAt": "2026-04-20T10:05:00Z",
+                }
+            )
+            snapshot = service._enrich_method_context_snapshot(
+                {
+                    "windowStart": "2026-04-20T00:00:00Z",
+                    "windowEnd": "2026-04-21T00:00:00Z",
+                    "methodState": {
+                        "practiceLoop": {"recentOutcomeTrend": "activating"},
+                    },
+                },
+                window_start="2026-04-20T00:00:00Z",
+                window_end="2026-04-21T00:00:00Z",
+                surface="practice_followup",
+                existing_briefs=[],
+                recent_practices=await repository.list_practice_sessions("user_1"),
+                journeys=[],
+            )
+            coach_state = snapshot["coachState"]
+            self.assertEqual(
+                coach_state["selectedMove"]["resourceInvitation"]["id"],
+                "resource_invitation_1",
+            )
+            self.assertEqual(
+                coach_state["selectedMove"]["capture"]["anchorRefs"]["resourceInvitationId"],
+                "resource_invitation_1",
+            )
 
         asyncio.run(run())
 

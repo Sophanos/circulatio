@@ -14,13 +14,17 @@ from ..domain.practices import (
     PracticeSessionStatus,
 )
 from ..domain.types import (
+    CoachLoopKind,
+    CoachMoveKind,
     DepthReadinessAssessment,
+    Id,
     MethodContextSnapshot,
     MethodGateResult,
     PracticeAdaptationHints,
     PracticeOutcomeWritePayload,
     PracticePlan,
     PracticeTriggerSummary,
+    ResourceInvitationSummary,
     RuntimeHintSource,
     SafetyDisposition,
 )
@@ -303,9 +307,18 @@ class PracticeEngine:
         instructions = [str(item) for item in result.get("instructions", []) if str(item).strip()]
         practice_type = str(result.get("type") or "journaling")
         current_modality = str(result.get("modality") or "").strip().lower()
+        selected_loop_kind = (
+            str(selected_loop.get("kind") or "").strip()
+            if isinstance(selected_loop, dict)
+            else ""
+        )
         selected_move_kind = str(selected_move.get("kind") or "").strip()
         if str(selected_move.get("loopKey") or "").strip():
             result["coachLoopKey"] = str(selected_move["loopKey"])
+        if selected_loop_kind:
+            result["coachLoopKind"] = cast(CoachLoopKind, selected_loop_kind)
+        if selected_move_kind:
+            result["coachMoveKind"] = cast(CoachMoveKind, selected_move_kind)
         resource_invitation_value = selected_move.get("resourceInvitation")
         resource_invitation = (
             dict(resource_invitation_value)
@@ -315,6 +328,26 @@ class PracticeEngine:
         resource_invitation_id = str(resource_invitation.get("id") or "").strip()
         if resource_invitation_id:
             result["resourceInvitationId"] = resource_invitation_id
+            result["resourceInvitation"] = cast(
+                ResourceInvitationSummary,
+                deepcopy(resource_invitation),
+            )
+        related_resource_ids = [
+            str(item)
+            for item in selected_move.get("relatedResourceIds", [])
+            if str(item).strip()
+        ]
+        if not related_resource_ids and resource_invitation:
+            resource = resource_invitation.get("resource")
+            resource_id = (
+                str(resource.get("id") or "").strip()
+                if isinstance(resource, dict)
+                else ""
+            )
+            if resource_id:
+                related_resource_ids = [resource_id]
+        if related_resource_ids:
+            result["relatedResourceIds"] = cast(list[Id], related_resource_ids)
 
         max_duration = runtime_constraints.get("maxDurationMinutes")
         if not isinstance(max_duration, int):
@@ -396,11 +429,6 @@ class PracticeEngine:
             instructions.append(bias_instruction)
             notes.append("practice_bias_instruction_added")
 
-        selected_loop_kind = (
-            str(selected_loop.get("kind") or "").strip()
-            if isinstance(selected_loop, dict)
-            else ""
-        )
         if isinstance(selected_loop, dict):
             related_body_state_ids_value = selected_loop.get("relatedBodyStateIds")
             related_body_state_ids = (

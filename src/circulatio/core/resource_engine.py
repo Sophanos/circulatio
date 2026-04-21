@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import cast
 
 from ..domain.ids import create_id
@@ -23,6 +24,11 @@ class ResourceEngine:
         now: str,
     ) -> ResourceInvitationSummary | None:
         del safety_context
+        existing_invitation = loop.get("resourceInvitation")
+        if isinstance(existing_invitation, dict) and isinstance(
+            existing_invitation.get("resource"), dict
+        ):
+            return cast(ResourceInvitationSummary, deepcopy(existing_invitation))
         candidates = [
             resource
             for resource in CATALOG

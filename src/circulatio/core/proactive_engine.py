@@ -105,8 +105,7 @@ class ProactiveEngine:
                 now=now,
             )
         )
-        if source in {"manual", "scheduled"}:
-            seeds.extend(self._weekly_review_seed(user_id=user_id, dashboard=dashboard, now=now))
+        seeds.extend(self._weekly_review_seed(user_id=user_id, dashboard=dashboard, now=now))
         seeds = self._apply_runtime_policy_to_seeds(
             seeds=seeds,
             runtime_policy=runtime_policy,

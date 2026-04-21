@@ -160,6 +160,10 @@ def _project_practice_session_summary(record: PracticeSessionRecord) -> Practice
         "templateId",
         "modality",
         "intensity",
+        "coachLoopKey",
+        "resourceInvitationId",
+        "coachLoopKind",
+        "coachMoveKind",
         "completedAt",
         "nextFollowUpDueAt",
     ):
@@ -167,6 +171,12 @@ def _project_practice_session_summary(record: PracticeSessionRecord) -> Practice
     outcome = str(record.get("outcome") or "").strip()
     if outcome:
         result["outcome"] = _truncate(outcome, 180)
+    if record.get("outcomeEvidenceIds"):
+        result["outcomeEvidenceIds"] = list(record["outcomeEvidenceIds"])
+    if record.get("relatedResourceIds"):
+        result["relatedResourceIds"] = list(record["relatedResourceIds"])
+    if isinstance(record.get("resourceInvitation"), dict):
+        result["resourceInvitation"] = deepcopy(record["resourceInvitation"])
     return result
 
 

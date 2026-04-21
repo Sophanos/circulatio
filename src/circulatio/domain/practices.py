@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from typing import Literal, NotRequired, Required, TypedDict
 
-from .types import Id, ISODateString, PracticeScriptStep, PracticeType, SafetyFlag
+from .types import (
+    CoachLoopKind,
+    CoachMoveKind,
+    Id,
+    ISODateString,
+    PracticeScriptStep,
+    PracticeType,
+    ResourceInvitationSummary,
+    SafetyFlag,
+)
 
 PracticeSessionStatus = Literal["recommended", "accepted", "completed", "skipped", "deleted"]
 PracticeSessionSource = Literal[
@@ -57,7 +66,11 @@ class PracticeSessionRecord(TypedDict, total=False):
     followUpCount: NotRequired[int]
     relatedBriefId: NotRequired[Id]
     coachLoopKey: NotRequired[Id]
+    coachLoopKind: NotRequired[CoachLoopKind]
+    coachMoveKind: NotRequired[CoachMoveKind]
     resourceInvitationId: NotRequired[Id]
+    resourceInvitation: NotRequired[ResourceInvitationSummary]
+    relatedResourceIds: NotRequired[list[Id]]
     createdAt: Required[ISODateString]
     updatedAt: Required[ISODateString]
     deletedAt: NotRequired[ISODateString]
@@ -94,7 +107,11 @@ class PracticeSessionUpdate(TypedDict, total=False):
     followUpCount: int
     relatedBriefId: Id
     coachLoopKey: Id
+    coachLoopKind: CoachLoopKind
+    coachMoveKind: CoachMoveKind
     resourceInvitationId: Id
+    resourceInvitation: ResourceInvitationSummary
+    relatedResourceIds: list[Id]
     updatedAt: ISODateString
     deletedAt: ISODateString
     completedAt: ISODateString

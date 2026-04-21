@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Literal, cast
 
@@ -26,6 +27,7 @@ from ..domain.types import (
     Id,
     MethodContextSnapshot,
     MethodStateSourceRef,
+    ResourceInvitationSummary,
     UserAdaptationProfileSummary,
     WitnessStateSummary,
 )
@@ -680,6 +682,8 @@ class CoachEngine:
         )
         if practice is None and recent_outcome_trend not in {"activating", "mixed", "settling"}:
             return None, None
+        practice_source_refs = self._practice_loop_source_refs(practice)
+        practice_evidence_ids = self._practice_loop_evidence_ids(practice)
         practice_id = (
             str(practice.get("id") or "current").strip()
             if isinstance(practice, dict)
@@ -751,8 +755,8 @@ class CoachEngine:
             related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=[],
-            evidence_ids=[],
-            source_record_refs=[],
+            evidence_ids=practice_evidence_ids,
+            source_record_refs=practice_source_refs,
             blocked_moves=self._strings(runtime_policy.get("blockedMoves")),
             consent_scopes=[],
             reasons=self._dedupe_strings(
@@ -776,6 +780,8 @@ class CoachEngine:
             existing_briefs=existing_briefs,
             now=now,
         )
+        if isinstance(practice, dict):
+            self._attach_practice_resource_context(loop=loop, practice=practice)
         return loop, None
 
     def _journey_reentry_loop(
@@ -883,6 +889,8 @@ class CoachEngine:
             return None, None
         body_states = self._dict_list(method_context.get("recentBodyStates"))
         practice = self._select_recent_practice(recent_practices=recent_practices, now=now)
+        practice_source_refs = self._practice_loop_source_refs(practice)
+        practice_evidence_ids = self._practice_loop_evidence_ids(practice)
         loop_key = (
             f"coach:resource_support:{practice['id']}"
             if isinstance(practice, dict) and practice.get("id")
@@ -943,9 +951,15 @@ class CoachEngine:
             related_symbol_ids=[],
             related_body_state_ids=self._ids([body_states[0].get("id")]) if body_states else [],
             related_relational_scene_ids=[],
-            evidence_ids=[],
-            source_record_refs=self._dedupe_refs(
+            evidence_ids=self._dedupe_ids(
                 [
+                    *practice_evidence_ids,
+                    *self._ids(containment.get("evidenceIds")),
+                ]
+            ),
+            source_record_refs=self._dedupe_refs(
+                practice_source_refs
+                + [
                     ref
                     for ref in self._dict_list(containment.get("sourceRecordRefs"))
                     if isinstance(ref, dict)
@@ -977,6 +991,8 @@ class CoachEngine:
             existing_briefs=existing_briefs,
             now=now,
         )
+        if isinstance(practice, dict):
+            self._attach_practice_resource_context(loop=loop, practice=practice)
         return loop, None
 
     def _base_loop(
@@ -1085,6 +1101,90 @@ class CoachEngine:
             "skipBehavior": skip_behavior,
         }
 
+    def _practice_loop_source_refs(
+        self,
+        practice: PracticeSessionRecord | None,
+    ) -> list[MethodStateSourceRef]:
+        if not isinstance(practice, dict):
+            return []
+        refs: list[MethodStateSourceRef] = []
+        practice_id = str(practice.get("id") or "").strip()
+        if practice_id:
+            refs.append({"recordType": "PracticeSession", "recordId": practice_id})
+        related_brief_id = str(practice.get("relatedBriefId") or "").strip()
+        if related_brief_id:
+            refs.append({"recordType": "ProactiveBrief", "recordId": related_brief_id})
+        material_id = str(practice.get("materialId") or "").strip()
+        if material_id:
+            refs.append({"recordType": "Material", "recordId": material_id})
+        run_id = str(practice.get("runId") or "").strip()
+        if run_id:
+            refs.append({"recordType": "InterpretationRun", "recordId": run_id})
+        invitation = practice.get("resourceInvitation")
+        if isinstance(invitation, dict):
+            resource = invitation.get("resource")
+            resource_id = (
+                str(resource.get("id") or "").strip()
+                if isinstance(resource, dict)
+                else ""
+            )
+            if resource_id:
+                refs.append({"recordType": "EmbodiedResource", "recordId": resource_id})
+        return self._dedupe_refs(refs)
+
+    def _practice_loop_evidence_ids(
+        self,
+        practice: PracticeSessionRecord | None,
+    ) -> list[Id]:
+        if not isinstance(practice, dict):
+            return []
+        evidence_ids = self._ids(practice.get("outcomeEvidenceIds"))
+        invitation = practice.get("resourceInvitation")
+        if isinstance(invitation, dict):
+            resource = invitation.get("resource")
+            if isinstance(resource, dict):
+                evidence_ids = self._dedupe_ids(
+                    [
+                        *evidence_ids,
+                        *self._ids(resource.get("evidenceIds")),
+                    ]
+                )
+        return evidence_ids
+
+    def _attach_practice_resource_context(
+        self,
+        *,
+        loop: CoachLoopSummary | None,
+        practice: PracticeSessionRecord | None,
+    ) -> None:
+        if not isinstance(loop, dict) or not isinstance(practice, dict):
+            return
+        invitation = practice.get("resourceInvitation")
+        if isinstance(invitation, dict):
+            loop["resourceInvitation"] = cast(
+                ResourceInvitationSummary,
+                deepcopy(invitation),
+            )
+        related_resource_ids = self._ids(practice.get("relatedResourceIds"))
+        if not related_resource_ids and isinstance(invitation, dict):
+            resource = invitation.get("resource")
+            resource_id = (
+                str(resource.get("id") or "").strip()
+                if isinstance(resource, dict)
+                else ""
+            )
+            if resource_id:
+                related_resource_ids = [resource_id]
+        if related_resource_ids:
+            loop["relatedResourceIds"] = related_resource_ids
+        resource_invitation_id = str(practice.get("resourceInvitationId") or "").strip()
+        if resource_invitation_id and isinstance(loop.get("capture"), dict):
+            capture = cast(CoachCaptureContract, dict(loop["capture"]))
+            anchor_refs = dict(capture.get("anchorRefs", {}))
+            anchor_refs.setdefault("resourceInvitationId", resource_invitation_id)
+            capture["anchorRefs"] = cast(MethodStateAnchorRefs, anchor_refs)
+            loop["capture"] = capture
+
     def _loop_sort_key(
         self,
         loop: CoachLoopSummary,
@@ -1092,6 +1192,14 @@ class CoachEngine:
         surface: CoachSurface,
     ) -> tuple[int, int, str]:
         surface_order = {
+            "generic": {
+                "practice_integration": 0,
+                "goal_guidance": 1,
+                "relational_scene": 2,
+                "soma": 3,
+                "journey_reentry": 4,
+                "resource_support": 5,
+            },
             "alive_today": {
                 "journey_reentry": 0,
                 "resource_support": 1,

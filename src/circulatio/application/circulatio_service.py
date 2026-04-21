@@ -3761,6 +3761,8 @@ class CirculatioService:
             event_type="practice_recommended",
             signals={
                 "practiceType": llm_result["practiceRecommendation"]["type"],
+                "modality": llm_result["practiceRecommendation"].get("modality"),
+                "templateId": llm_result["practiceRecommendation"].get("templateId"),
                 "triggerType": trigger.get("triggerType", "manual"),
                 "source": (
                     llm_result["llmHealth"]["source"] if llm_result.get("llmHealth") else None
@@ -8668,9 +8670,34 @@ class CirculatioService:
         coach_loop_key = str(plan.get("coachLoopKey") or "").strip()
         if coach_loop_key:
             record["coachLoopKey"] = coach_loop_key
+        coach_loop_kind = str(plan.get("coachLoopKind") or "").strip()
+        if coach_loop_kind:
+            record["coachLoopKind"] = cast(CoachLoopKind, coach_loop_kind)
+        coach_move_kind = str(plan.get("coachMoveKind") or "").strip()
+        if coach_move_kind:
+            record["coachMoveKind"] = cast(CoachMoveKind, coach_move_kind)
+        resource_invitation = plan.get("resourceInvitation")
+        if isinstance(resource_invitation, dict):
+            record["resourceInvitation"] = cast(
+                ResourceInvitationSummary,
+                deepcopy(resource_invitation),
+            )
         resource_invitation_id = str(plan.get("resourceInvitationId") or "").strip()
+        if not resource_invitation_id and isinstance(resource_invitation, dict):
+            resource_invitation_id = str(resource_invitation.get("id") or "").strip()
         if resource_invitation_id:
             record["resourceInvitationId"] = resource_invitation_id
+        related_resource_ids = [
+            str(item)
+            for item in plan.get("relatedResourceIds", [])
+            if str(item).strip()
+        ]
+        if not related_resource_ids and isinstance(resource_invitation, dict):
+            resource = resource_invitation.get("resource")
+            if isinstance(resource, dict) and str(resource.get("id") or "").strip():
+                related_resource_ids = [str(resource["id"])]
+        if related_resource_ids:
+            record["relatedResourceIds"] = cast(list[Id], related_resource_ids)
         return await self._repository.create_practice_session(record)
 
     async def _store_rhythmic_brief(
