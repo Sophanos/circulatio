@@ -50,11 +50,10 @@
   <rect width="1600" height="1100" fill="#ffffff"/>
   <rect width="1600" height="1100" fill="url(#grain)"/>
   <ellipse cx="800" cy="463" rx="520" ry="430" fill="url(#halo)"/>
-  <g transform="translate(160 70)">
-    <text class="kicker" x="640" y="0" text-anchor="middle">soul + soma + spirit</text>
-    <text class="hero" x="640" y="88" text-anchor="middle">Soul OS for soul-making.</text>
+  <g transform="translate(160 90)">
+    <text class="subhero" x="640" y="0" text-anchor="middle">Where pattern and meaning surface.</text>
   </g>
-  <line x1="228" y1="256" x2="1372" y2="256" stroke="url(#linefade)" stroke-width="2"/>
+  <line x1="228" y1="190" x2="1372" y2="190" stroke="url(#linefade)" stroke-width="2"/>
   <g transform="translate(120 318)">
     <text class="section" x="260" y="-32" text-anchor="middle">material entering the vessel</text>
     <g transform="translate(0 0)">
@@ -98,7 +97,7 @@
     <path d="M-35 160a153 153 0 1 1 306 0a153 153 0 1 1-306 0" fill="none" stroke="#17191d" stroke-width="1.6" stroke-dasharray="2 14" stroke-linecap="round"/>
     <rect x="-8" y="15" width="252" height="290" rx="28" fill="url(#soft-vessel)" stroke="#17191d" stroke-width="2" filter="url(#soft-shadow)"/>
     <text class="center-title" x="118" y="74" text-anchor="middle">Circulatio</text>
-    <text class="center-sub" x="118" y="102" text-anchor="middle">Understanding</text>
+    <text class="center-sub" x="118" y="102" text-anchor="middle">Soul-making</text>
     <g transform="translate(22 130)">
       <rect width="192" height="44" rx="22" fill="#ffffff" stroke="#17191d" stroke-width="1"/>
       <text class="stage" x="24" y="29">Capture</text>
