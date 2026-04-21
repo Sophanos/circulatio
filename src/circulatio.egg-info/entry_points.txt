@@ -1,2 +1,0 @@
-[hermes_agent.plugins]
-circulatio = circulatio_hermes_plugin
