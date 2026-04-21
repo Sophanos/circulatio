@@ -8687,11 +8687,12 @@ class CirculatioService:
             resource_invitation_id = str(resource_invitation.get("id") or "").strip()
         if resource_invitation_id:
             record["resourceInvitationId"] = resource_invitation_id
-        related_resource_ids = [
-            str(item)
-            for item in plan.get("relatedResourceIds", [])
-            if str(item).strip()
-        ]
+        related_resource_ids_value = plan.get("relatedResourceIds")
+        related_resource_ids = (
+            [str(item) for item in related_resource_ids_value if str(item).strip()]
+            if isinstance(related_resource_ids_value, list)
+            else []
+        )
         if not related_resource_ids and isinstance(resource_invitation, dict):
             resource = resource_invitation.get("resource")
             if isinstance(resource, dict) and str(resource.get("id") or "").strip():

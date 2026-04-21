@@ -332,11 +332,12 @@ class PracticeEngine:
                 ResourceInvitationSummary,
                 deepcopy(resource_invitation),
             )
-        related_resource_ids = [
-            str(item)
-            for item in selected_move.get("relatedResourceIds", [])
-            if str(item).strip()
-        ]
+        related_resource_ids_value = selected_move.get("relatedResourceIds")
+        related_resource_ids = (
+            [str(item) for item in related_resource_ids_value if str(item).strip()]
+            if isinstance(related_resource_ids_value, list)
+            else []
+        )
         if not related_resource_ids and resource_invitation:
             resource = resource_invitation.get("resource")
             resource_id = (

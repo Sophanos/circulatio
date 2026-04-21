@@ -843,8 +843,9 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(len(llm.practice_calls), 1)
             profile = await repository.get_adaptation_profile("user_1")
             self.assertEqual(profile["sampleCounts"]["practice_recommended"], 1)
+            modality = workflow["practiceRecommendation"]["modality"]
             self.assertEqual(
-                profile["learnedSignals"]["practiceStats"]["byModality"]["writing"]["recommended"],
+                profile["learnedSignals"]["practiceStats"]["byModality"][modality]["recommended"],
                 1,
             )
             self.assertEqual(
