@@ -96,46 +96,16 @@ You → Hermes (routing, rhythm, gateway)
     SQLite (canonical storage)
 ```
 
-## Current State
+## What Is Possible
 
-The embedded Hermes/backend runtime now substantially covers the implemented backend surface through Phases 1–9. The primary deferred track is **Phase 7 standalone distribution**.
-
-- **Implemented:** hold-first capture, memory kernel, derived graph projections, native context derivation, the derived `coachState` runtime contract, LLM-first interpretation, soma/goal/culture layers, proactive rhythms, journey containers, threshold review, living myth review, bounded analysis packets, curated resource invitations, and approval-gated symbolic writes.
-- **Builder tooling:** an offline Evolution OS now lives in `tools/self_evolution/`, covering prompt fragments, the Hermes skill, and tool descriptions with eval fixtures in `tests/evals/circulatio_method/`, candidate-bundle evaluation in `scripts/evaluate_circulatio_method.py`, and manual review-package staging in `scripts/evolve_circulatio_method.py`.
-- **Best next user-facing work:** refine discovery/journey presentation quality, deepen practice and rhythm polish, and keep tightening method quality before widening the surface area.
-- **Deferred:** standalone local packaging, broader presentation surfaces, reflective/pareto candidate generation, and a more polished product shell outside the Hermes embedding.
-- **Source of truth:** `docs/ROADMAP.md` and `docs/ENGINEERING_GUIDE.md` track the current phase status and implementation scope in more detail than this README.
-
-## Docs
-
-- **Product & roadmap:** `docs/ROADMAP.md`
-- **Technical spec:** `docs/ENGINEERING_GUIDE.md`
-- **Hermeneutic method:** `docs/INTERPRETATION_ENGINE_SPEC.md`
-- **Operations & safety:** `docs/RUNBOOK.md`
-- **Offline Evolution OS:** `docs/SELF_EVOLUTION_OS.md`
-- **Embodied presentation track:** `docs/EMBODIED_PRESENTATION_PLAN.md`
-- **Agent guide:** `AGENTS.md`
-- **What success feels like:** `docs/SUCCESS_VISION.md`
-
-## Repo Layout
-
-```
-src/
-  circulatio/               # Core library
-    domain/                 # Types, records, graph vocab. No I/O.
-    application/            # CirculatioService orchestrates workflows.
-    core/                   # CirculatioCore, LLM orchestration, safety, evidence.
-    repositories/           # In-memory + SQLite. No external graph DB.
-    adapters/               # Context builder, Hermes/Life-OS adapters.
-    hermes/                 # Bridge contracts, router, runtime wiring.
-    llm/                    # Prompts, model adapter, JSON schema.
-  circulatio_hermes_plugin/ # Hermes plugin (tools, commands, schemas, yaml)
-
-tools/self_evolution/       # Offline Evolution OS builder tooling
-scripts/                    # Eval + evolution entry points
-tests/evals/                # Method eval fixtures (jsonl)
-docs/                       # Roadmap, spec, runbook, success vision, etc.
-```
+- **Hold without hurry.** Drop a dream, a body sensation, a charged moment. It waits. It does not interpret until you ask, or until the pattern itself demands attention.
+- **See pattern across time.** A symbol that returns in dreams, body states, and relational scenes becomes visible not as coincidence, but as recurrence with weight.
+- **Depth when you are ready.** Interpretation is offered, never imposed. Symbolic writes are proposals until you accept them. You set the depth and the pace.
+- **Treat the body as symbol.** Somatic events carry the same hermeneutic gravity as dreams. Tension is not a symptom to manage; it is a message to hold.
+- **Cultural resonance, not explanation.** Mythic and artistic parallels are offered as amplification — something that resonates, not something that proves.
+- **A witness that accumulates.** Not a dashboard. Not a coach. A companion that remembers what you forget and surfaces what you cannot yet hold alone.
+- **Proactive rhythm.** Brief check-ins, weekly synthesis, and journey pages arrive on a rhythm you consent to. You can always say not now.
+- **Embeddable and open.** Built as a backend you can plug into an agent, script against, or run locally when the time is right.
 
 ## The Bottom Line
 
