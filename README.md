@@ -1,6 +1,6 @@
 # Circulatio
 
-> A Soul OS for Soul-Making.
+> A companion for soul-making, where pattern and meaning surface.
 
 A memory system for depth. Circulatio collects dreams, body states, reflections, and charged events, then surfaces long-term patterns — on your timing, with your consent. It does not diagnose, gamify, or optimize. It holds, remembers, and sees.
 
