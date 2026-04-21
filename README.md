@@ -47,13 +47,6 @@ Circulatio is for people doing inner work — not as an escape from life, but as
 - You are interested in Jungian depth psychology, archetypes, and individuation — but you want a practical tool, not just theory.
 - You want a **witness** that accumulates with you, not a dashboard that reports on you.
 
-## What This Is Not
-
-- Not a wellness tracker (no calories, streaks, or mood scores).
-- Not a productivity OS (no tasks, habits, or optimization loops).
-- Not a therapy simulator (no diagnosis, no unqualified clinical language).
-- Not a chatbot that interprets everything you drop into it.
-
 ## The Daily Rhythm
 
 | Time | Experience |
@@ -62,17 +55,6 @@ Circulatio is for people doing inner work — not as an escape from life, but as
 | **Day** | Drop a fragment: a dream, a body sensation, a strange coincidence, a mood shift. Circulatio stores it. It **holds** without pressing. |
 | **Evening** | You ask: *"What is alive today?"* It weaves the morning's tension into the recurring water symbol, offers a cultural parallel as invitation, and asks a gentle question. |
 | **Weekly** | A deeper synthesis: what recurred, what shifted, what was avoided, what new symbol emerged, what goal tension is visible. You read it like a journal you did not write alone. |
-
-## Core Principles
-
-1. **You are the source of insight.** Circulatio is the mirror that remembers.
-2. **Pattern over interpretation.** A held recurrence is more powerful than a clever reading.
-3. **Body is symbol.** Somatic events are as meaningful as dreams.
-4. **Culture is amplification, not explanation.** Mythic parallels are resonance, not proof.
-5. **Shadow work requires consent.** Offered, never imposed.
-6. **The unconscious has its own timing.** Do not rush the door. Keep the key present.
-7. **The goal is individuation, not optimization.** More conscious conflict is better than unconscious harmony.
-8. **Success is obsolescence.** You should need Circulatio less over time, because you become your own witness.
 
 ## Architecture
 
@@ -109,10 +91,22 @@ You → Hermes (routing, rhythm, gateway)
 
 ## The Bottom Line
 
-Circulatio is not a wellness tracker, a therapy chatbot, or a productivity optimizer.  
+Circulatio is not a wellness tracker (no calories, streaks, or mood scores). It is not a productivity OS (no tasks, habits, or optimization loops). It is not a therapy simulator (no diagnosis, no unqualified clinical language). It is not a chatbot that interprets everything you drop into it. It is not a dashboard that reports on you.
+
 It is a **symbolic memory system for people doing inner work**.
 
-While other apps interpret immediately or never at all, Circulatio **holds first**—storing your dreams, body-states, and charged events with patience. Over weeks and months, it surfaces **longitudinal patterns** across your own material, offering depth interpretation only when the moment is ripe and only with your explicit approval.
+What it holds to:
+
+- **You are the source of insight.** Circulatio is the mirror that remembers.
+- **Pattern over interpretation.** A held recurrence is more powerful than a clever reading.
+- **Body is symbol.** Somatic events are as meaningful as dreams.
+- **Culture is amplification, not explanation.** Mythic parallels are resonance, not proof.
+- **Shadow work requires consent.** Offered, never imposed.
+- **The unconscious has its own timing.** Do not rush the door. Keep the key present.
+- **The goal is individuation, not optimization.** More conscious conflict is better than unconscious harmony.
+- **Success is obsolescence.** You should need Circulatio less over time, because you become your own witness.
+
+While other apps interpret immediately or never at all, Circulatio **holds first** — storing your dreams, body-states, and charged events with patience. Over weeks and months, it surfaces **longitudinal patterns** across your own material, offering depth interpretation only when the moment is ripe and only with your explicit approval.
 
 It treats your body as symbolic intelligence, your conflicts as meaningful tensions, and your unconscious as having its own timing. It does not gamify, diagnose, or chase retention. Its goal is simple: **to help you become your own witness**.
 
