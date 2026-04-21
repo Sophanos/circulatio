@@ -536,6 +536,36 @@ class HermesModelAdapterTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_complete_structured_json_preserves_raw_text_and_usage(self) -> None:
+        async def run() -> None:
+            async def async_call_llm(**kwargs):
+                del kwargs
+                return {
+                    "text": '{"ok": true}',
+                    "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+                }
+
+            def extract_content_or_reasoning(response):
+                return response["text"]
+
+            with auxiliary_client_modules(
+                async_call_llm=async_call_llm,
+                extract_content_or_reasoning=extract_content_or_reasoning,
+            ):
+                adapter = HermesModelAdapter()
+                result = await adapter.complete_structured_json(
+                    messages=[{"role": "user", "content": "Return valid JSON only."}],
+                    max_tokens=32,
+                )
+                self.assertEqual(result["payload"], {"ok": True})
+                self.assertEqual(result["rawText"], '{"ok": true}')
+                self.assertEqual(
+                    result["usage"],
+                    {"prompt_tokens": 11, "completion_tokens": 7},
+                )
+
+        asyncio.run(run())
+
     def test_optional_real_model_path_probe(self) -> None:
         if os.environ.get("CIRCULATIO_REAL_HERMES_MODEL") != "1":
             self.skipTest(
