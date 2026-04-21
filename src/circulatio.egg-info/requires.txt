@@ -1,0 +1,6 @@
+
+[dev]
+mypy
+pytest
+pytest-asyncio
+ruff

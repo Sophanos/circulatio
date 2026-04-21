@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "circulatio"
+version = "0.4.0"
+description = "Hermes-Circulation symbolic interpretation core"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Circulatio Maintainers" },
+]
+keywords = ["hermes", "jungian", "symbolic-interpretation", "sqlite"]
+dependencies = []
+
+[project.entry-points."hermes_agent.plugins"]
+circulatio = "circulatio_hermes_plugin:register"
+
+[project.optional-dependencies]
+dev = [
+  "mypy",
+  "pytest",
+  "pytest-asyncio",
+  "ruff",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.package-data]
+circulatio = ["py.typed"]
+circulatio_hermes_plugin = ["plugin.yaml", "skills/circulation/SKILL.md"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/circulatio/__init__.py" = ["E501"]
+"src/circulatio/core/__init__.py" = ["F401"]
+"src/circulatio/domain/__init__.py" = ["F401", "F403"]
+"src/circulatio/llm/prompt_builder.py" = ["E501"]
+"src/circulatio/orchestration/__init__.py" = ["F401"]
+"src/circulatio_hermes_plugin/schemas.py" = ["E501"]
+"tests/*.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["circulatio"]
+strict = false
+
+[[tool.mypy.overrides]]
+module = ["agent", "hermes_constants"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "circulatio.adapters.life_os_adapter",
+  "circulatio.application.circulatio_service",
+  "circulatio.core.circulatio_core",
+  "circulatio.core.evidence",
+  "circulatio.core.interpretation_fallbacks",
+  "circulatio.core.interpretation_mapping",
+  "circulatio.core.interpretation_sanitizers",
+  "circulatio.core.practice_templates",
+  "circulatio.core.proactive_engine",
+  "circulatio.hermes.agent_bridge",
+  "circulatio.hermes.boot_validation",
+  "circulatio.hermes.command_router",
+  "circulatio.hermes.idempotency",
+  "circulatio.hermes.profile_paths",
+  "circulatio.hermes.proposal_alias_index",
+  "circulatio.llm.hermes_model_adapter",
+  "circulatio.orchestration.hermes_circulation_facade",
+  "circulatio.repositories.hermes_profile_circulatio_repository",
+  "circulatio.repositories.in_memory_circulatio_repository",
+  "circulatio.repositories.in_memory_projection_contexts",
+  "circulatio.repositories.in_memory_projection_graph",
+  "circulatio.repositories.in_memory_projection_memory",
+  "circulatio.repositories.in_memory_projection_shared",
+  "circulatio.repositories.in_memory_projection_summary",
+  "circulatio.repositories.in_memory_projections",
+  "circulatio.repositories.in_memory_proposals",
+  "circulatio.repositories.in_memory_record_ops",
+]
+ignore_errors = true

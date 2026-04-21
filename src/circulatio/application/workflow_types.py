@@ -1,0 +1,653 @@
+from __future__ import annotations
+
+from typing import Literal, NotRequired, Required, TypedDict
+
+from ..adapters.context_adapter import LifeOsWindow
+from ..domain.context import ContextSnapshot
+from ..domain.graph import GraphNodeType
+from ..domain.interpretations import InterpretationRunRecord
+from ..domain.journeys import JourneyStatus
+from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
+from ..domain.materials import MaterialListFilters, MaterialRecord, StoredDreamStructure
+from ..domain.patterns import PatternHistoryEntry, PatternRecord
+from ..domain.practices import PracticeSessionRecord
+from ..domain.proactive import ProactiveBriefRecord, RhythmBriefSource
+from ..domain.records import DeletionMode, MaterialSource
+from ..domain.soma import BodyActivation, BodyStateRecord
+from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
+from ..domain.types import (
+    AnalysisPacketFocus,
+    AnalysisPacketResult,
+    CirculationSummaryResult,
+    FeedbackValue,
+    Id,
+    InterpretationOptions,
+    InterpretationResult,
+    LifeContextSnapshot,
+    LivingMythReviewResult,
+    MaterialType,
+    MemoryWriteProposal,
+    PracticeOutcomeWritePayload,
+    PracticePlan,
+    PracticeRecommendationResult,
+    PracticeTriggerSummary,
+    PrivacyClass,
+    RhythmicBriefResult,
+    SafetyContext,
+    SessionContext,
+    ThresholdReviewResult,
+    UserAssociationInput,
+)
+
+
+class CreateMaterialInput(TypedDict, total=False):
+    userId: Required[Id]
+    materialType: Required[MaterialType]
+    text: NotRequired[str]
+    title: NotRequired[str]
+    summary: NotRequired[str]
+    materialDate: NotRequired[str]
+    privacyClass: NotRequired[PrivacyClass]
+    source: NotRequired[MaterialSource]
+    tags: NotRequired[list[str]]
+    dreamStructure: NotRequired[StoredDreamStructure]
+
+
+class CreateAndInterpretMaterialInput(CreateMaterialInput, total=False):
+    sessionContext: NotRequired[SessionContext]
+    lifeContextSnapshot: NotRequired[LifeContextSnapshot]
+    lifeOsWindow: NotRequired[LifeOsWindow]
+    userAssociations: NotRequired[list[UserAssociationInput]]
+    explicitQuestion: NotRequired[str]
+    culturalOrigins: NotRequired[list[dict[str, object]]]
+    safetyContext: NotRequired[SafetyContext]
+    options: NotRequired[InterpretationOptions]
+
+
+class MaterialWorkflowResult(TypedDict, total=False):
+    material: Required[MaterialRecord]
+    run: Required[InterpretationRunRecord]
+    interpretation: Required[InterpretationResult]
+    pendingProposals: Required[list[MemoryWriteProposal]]
+    contextSnapshot: NotRequired[ContextSnapshot]
+    practiceSession: NotRequired[PracticeSessionRecord]
+
+
+class ApproveProposalsInput(TypedDict, total=False):
+    userId: Required[Id]
+    runId: Required[Id]
+    proposalIds: Required[list[Id]]
+    integrationNote: NotRequired[str]
+
+
+class RejectProposalsInput(TypedDict, total=False):
+    userId: Required[Id]
+    runId: Required[Id]
+    proposalIds: Required[list[Id]]
+    reason: NotRequired[str]
+
+
+class RejectHypothesesInput(TypedDict, total=False):
+    userId: Required[Id]
+    runId: Required[Id]
+    feedbackByHypothesisId: Required[dict[Id, FeedbackValue]]
+
+
+class ReviseEntityInput(TypedDict, total=False):
+    userId: Required[Id]
+    entityType: Required[GraphNodeType]
+    entityId: Required[Id]
+    revisionNote: Required[str]
+    replacement: NotRequired[dict[str, object]]
+
+
+class DeleteEntityInput(TypedDict, total=False):
+    userId: Required[Id]
+    entityType: Required[GraphNodeType]
+    entityId: Required[Id]
+    mode: NotRequired[DeletionMode]
+    reason: NotRequired[str]
+
+
+class SymbolHistoryResult(TypedDict):
+    symbol: SymbolRecord
+    history: list[SymbolHistoryEntry]
+    linkedMaterials: list[MaterialRecord]
+
+
+class PatternHistoryResult(TypedDict):
+    pattern: PatternRecord
+    history: list[PatternHistoryEntry]
+    linkedMaterials: list[MaterialRecord]
+
+
+class RecordPracticeOutcomeInput(TypedDict, total=False):
+    userId: Required[Id]
+    practiceSessionId: NotRequired[Id]
+    materialId: NotRequired[Id]
+    outcome: Required[PracticeOutcomeWritePayload]
+
+
+class GeneratePracticeInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    trigger: NotRequired[PracticeTriggerSummary]
+    sessionContext: NotRequired[SessionContext]
+    explicitQuestion: NotRequired[str]
+    safetyContext: NotRequired[SafetyContext]
+    options: NotRequired[InterpretationOptions]
+    persist: NotRequired[bool]
+
+
+class PracticeWorkflowResult(TypedDict, total=False):
+    practiceSession: NotRequired[PracticeSessionRecord]
+    practiceRecommendation: Required[PracticePlan]
+    userFacingResponse: Required[str]
+    contextSnapshot: NotRequired[ContextSnapshot]
+    llmResult: NotRequired[PracticeRecommendationResult]
+
+
+class RespondPracticeInput(TypedDict, total=False):
+    userId: Required[Id]
+    practiceSessionId: Required[Id]
+    action: Required[str]
+    note: NotRequired[str]
+    activationBefore: NotRequired[str]
+
+
+class CreateBodyStateInput(TypedDict, total=False):
+    userId: Required[Id]
+    sensation: Required[str]
+    observedAt: NotRequired[str]
+    bodyRegion: NotRequired[str]
+    activation: NotRequired[BodyActivation]
+    tone: NotRequired[str]
+    temporalContext: NotRequired[str]
+    linkedGoalIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+    noteText: NotRequired[str]
+
+
+class StoreBodyStateResult(TypedDict, total=False):
+    bodyState: Required[BodyStateRecord]
+    noteMaterial: NotRequired[MaterialRecord]
+
+
+class ListMaterialsInput(TypedDict, total=False):
+    userId: Required[Id]
+    filters: NotRequired[MaterialListFilters]
+
+
+class AliveTodayResult(TypedDict):
+    summary: CirculationSummaryResult
+
+
+JourneyLifecycleStatus = Literal["active", "paused", "completed", "archived"]
+
+
+class CreateJourneyInput(TypedDict, total=False):
+    userId: Required[Id]
+    label: Required[str]
+    currentQuestion: NotRequired[str]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedSymbolIds: NotRequired[list[Id]]
+    relatedPatternIds: NotRequired[list[Id]]
+    relatedDreamSeriesIds: NotRequired[list[Id]]
+    relatedGoalIds: NotRequired[list[Id]]
+    nextReviewDueAt: NotRequired[str]
+    status: NotRequired[JourneyLifecycleStatus]
+
+
+class ListJourneysInput(TypedDict, total=False):
+    userId: Required[Id]
+    statuses: NotRequired[list[JourneyStatus]]
+    includeDeleted: NotRequired[bool]
+    limit: NotRequired[int]
+
+
+class GetJourneyInput(TypedDict, total=False):
+    userId: Required[Id]
+    journeyId: NotRequired[Id]
+    journeyLabel: NotRequired[str]
+    includeDeleted: NotRequired[bool]
+
+
+class UpdateJourneyInput(TypedDict, total=False):
+    userId: Required[Id]
+    journeyId: NotRequired[Id]
+    journeyLabel: NotRequired[str]
+    label: NotRequired[str]
+    currentQuestion: NotRequired[str]
+    addRelatedMaterialIds: NotRequired[list[Id]]
+    removeRelatedMaterialIds: NotRequired[list[Id]]
+    addRelatedSymbolIds: NotRequired[list[Id]]
+    removeRelatedSymbolIds: NotRequired[list[Id]]
+    addRelatedPatternIds: NotRequired[list[Id]]
+    removeRelatedPatternIds: NotRequired[list[Id]]
+    addRelatedDreamSeriesIds: NotRequired[list[Id]]
+    removeRelatedDreamSeriesIds: NotRequired[list[Id]]
+    addRelatedGoalIds: NotRequired[list[Id]]
+    removeRelatedGoalIds: NotRequired[list[Id]]
+    nextReviewDueAt: NotRequired[str]
+
+
+class SetJourneyStatusInput(TypedDict, total=False):
+    userId: Required[Id]
+    journeyId: NotRequired[Id]
+    journeyLabel: NotRequired[str]
+    status: Required[JourneyLifecycleStatus]
+
+
+class GenerateJourneyPageInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    explicitQuestion: NotRequired[str]
+    maxInvitations: NotRequired[int]
+    includeAnalysisPacket: NotRequired[bool]
+
+
+JourneyPageActionKind = Literal["tool", "command", "entity"]
+JourneyPageWriteIntent = Literal["read", "write"]
+
+
+class JourneyPageAction(TypedDict, total=False):
+    label: Required[str]
+    kind: Required[JourneyPageActionKind]
+    operation: NotRequired[str]
+    command: NotRequired[str]
+    payload: NotRequired[dict[str, object]]
+    entityType: NotRequired[str]
+    entityId: NotRequired[Id]
+    writeIntent: Required[JourneyPageWriteIntent]
+    requiresExplicitUserAction: Required[bool]
+
+
+JourneyPageSection = Literal[
+    "alive_today",
+    "weekly_reflection",
+    "rhythmic_invitations",
+    "practice_container",
+    "analysis_packet",
+]
+
+
+class JourneyPageCard(TypedDict, total=False):
+    id: Required[Id]
+    section: Required[JourneyPageSection]
+    title: Required[str]
+    body: Required[str]
+    status: NotRequired[str]
+    entityRefs: NotRequired[dict[str, list[Id]]]
+    actions: Required[list[JourneyPageAction]]
+    payload: NotRequired[dict[str, object]]
+
+
+class JourneyAliveTodaySurface(TypedDict, total=False):
+    summaryId: Required[Id]
+    title: Required[str]
+    response: Required[str]
+    activeThemes: Required[list[str]]
+    recurringSymbolIds: Required[list[Id]]
+
+
+JourneyWeeklySurfaceKind = Literal[
+    "latest_review",
+    "review_due",
+    "review_invitation_active",
+    "quiet",
+]
+
+
+class JourneyWeeklySurface(TypedDict, total=False):
+    kind: Required[JourneyWeeklySurfaceKind]
+    title: Required[str]
+    summary: Required[str]
+    reviewId: NotRequired[Id]
+    briefId: NotRequired[Id]
+    windowStart: Required[str]
+    windowEnd: Required[str]
+    actions: Required[list[JourneyPageAction]]
+
+
+JourneyInvitationKind = Literal["active_brief", "due_seed_preview"]
+
+
+class JourneyInvitationPreview(TypedDict, total=False):
+    kind: Required[JourneyInvitationKind]
+    title: Required[str]
+    summary: Required[str]
+    briefType: Required[str]
+    briefId: NotRequired[Id]
+    triggerKey: NotRequired[str]
+    status: NotRequired[str]
+    suggestedAction: NotRequired[str]
+    relatedJourneyIds: Required[list[Id]]
+    relatedMaterialIds: Required[list[Id]]
+    relatedSymbolIds: Required[list[Id]]
+    relatedPracticeSessionIds: Required[list[Id]]
+    actions: Required[list[JourneyPageAction]]
+
+
+JourneyPracticeContainerKind = Literal[
+    "practice_follow_up",
+    "recommended_session",
+    "suggested_container",
+    "quiet",
+]
+
+
+class JourneyPracticeContainer(TypedDict, total=False):
+    kind: Required[JourneyPracticeContainerKind]
+    title: Required[str]
+    summary: Required[str]
+    practiceSessionId: NotRequired[Id]
+    status: NotRequired[str]
+    practiceRecommendation: NotRequired[PracticePlan]
+    actions: Required[list[JourneyPageAction]]
+
+
+class JourneyAnalysisPacketItem(TypedDict, total=False):
+    label: Required[str]
+    summary: NotRequired[str]
+    entityType: NotRequired[str]
+    entityId: NotRequired[Id]
+    source: Required[str]
+
+
+JourneyAnalysisSectionType = Literal[
+    "symbol_field",
+    "life_context",
+    "method_context",
+    "journey_threads",
+    "practice_context",
+]
+
+
+class JourneyAnalysisPacketSection(TypedDict, total=False):
+    sectionType: Required[JourneyAnalysisSectionType]
+    title: Required[str]
+    items: Required[list[JourneyAnalysisPacketItem]]
+
+
+class JourneyFutureSeams(TypedDict, total=False):
+    thresholdPacket: NotRequired[dict[str, object]]
+    relationalFieldPacket: NotRequired[dict[str, object]]
+    correspondencePacket: NotRequired[dict[str, object]]
+    livingMythPacket: NotRequired[dict[str, object]]
+
+
+class JourneyAnalysisPacketPreview(TypedDict, total=False):
+    status: Required[Literal["preview"]]
+    bounded: Required[bool]
+    windowStart: Required[str]
+    windowEnd: Required[str]
+    sections: Required[list[JourneyAnalysisPacketSection]]
+    futureSeams: NotRequired[JourneyFutureSeams]
+
+
+class JourneyPageResult(TypedDict, total=False):
+    pageId: Required[Id]
+    userId: Required[Id]
+    title: Required[str]
+    generatedAt: Required[str]
+    windowStart: Required[str]
+    windowEnd: Required[str]
+    cards: Required[list[JourneyPageCard]]
+    aliveToday: Required[JourneyAliveTodaySurface]
+    weeklySurface: Required[JourneyWeeklySurface]
+    rhythmicInvitations: Required[list[JourneyInvitationPreview]]
+    practiceContainer: Required[JourneyPracticeContainer]
+    analysisPacket: NotRequired[JourneyAnalysisPacketPreview]
+    fallbackText: Required[str]
+    warnings: Required[list[str]]
+
+
+class GenerateRhythmicBriefsInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    source: NotRequired[RhythmBriefSource]
+    limit: NotRequired[int]
+    safetyContext: NotRequired[SafetyContext]
+
+
+class RhythmicBriefWorkflowResult(TypedDict, total=False):
+    briefs: Required[list[ProactiveBriefRecord]]
+    skippedReasons: NotRequired[list[str]]
+
+
+class RespondRhythmicBriefInput(TypedDict, total=False):
+    userId: Required[Id]
+    briefId: Required[Id]
+    action: Required[str]
+    note: NotRequired[str]
+    llmResult: NotRequired[RhythmicBriefResult]
+
+
+class AnswerAmplificationPromptInput(TypedDict, total=False):
+    userId: Required[Id]
+    promptId: NotRequired[Id]
+    materialId: NotRequired[Id]
+    runId: NotRequired[Id]
+    symbolId: NotRequired[Id]
+    canonicalName: Required[str]
+    surfaceText: Required[str]
+    associationText: Required[str]
+    feelingTone: NotRequired[str]
+    bodySensations: NotRequired[list[str]]
+    memoryRefs: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class CaptureConsciousAttitudeInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: Required[str]
+    windowEnd: Required[str]
+    stanceSummary: Required[str]
+    activeValues: NotRequired[list[str]]
+    activeConflicts: NotRequired[list[str]]
+    avoidedThemes: NotRequired[list[str]]
+    emotionalTone: NotRequired[str]
+    egoPosition: NotRequired[str]
+    confidence: NotRequired[str]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedGoalIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class SetConsentPreferenceInput(TypedDict, total=False):
+    userId: Required[Id]
+    scope: Required[str]
+    status: Required[str]
+    note: NotRequired[str]
+    source: NotRequired[str]
+
+
+class SetCulturalFrameInput(TypedDict, total=False):
+    userId: Required[Id]
+    culturalFrameId: NotRequired[Id]
+    label: Required[str]
+    type: NotRequired[str]
+    allowedUses: NotRequired[list[str]]
+    avoidUses: NotRequired[list[str]]
+    notes: NotRequired[str]
+    status: NotRequired[str]
+
+
+class UpsertGoalInput(TypedDict, total=False):
+    userId: Required[Id]
+    goalId: NotRequired[Id]
+    label: Required[str]
+    description: NotRequired[str]
+    status: NotRequired[str]
+    valueTags: NotRequired[list[str]]
+    linkedMaterialIds: NotRequired[list[Id]]
+    linkedSymbolIds: NotRequired[list[Id]]
+
+
+class UpsertGoalTensionInput(TypedDict, total=False):
+    userId: Required[Id]
+    tensionId: NotRequired[Id]
+    goalIds: Required[list[Id]]
+    tensionSummary: Required[str]
+    polarityLabels: NotRequired[list[str]]
+    evidenceIds: NotRequired[list[Id]]
+    status: NotRequired[str]
+
+
+class CaptureRealityAnchorsInput(TypedDict, total=False):
+    userId: Required[Id]
+    label: NotRequired[str]
+    summary: Required[str]
+    anchorSummary: Required[str]
+    workDailyLifeContinuity: Required[str]
+    sleepBodyRegulation: Required[str]
+    relationshipContact: Required[str]
+    reflectiveCapacity: Required[str]
+    groundingRecommendation: Required[str]
+    reasons: NotRequired[list[str]]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedSymbolIds: NotRequired[list[Id]]
+    relatedGoalIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class UpsertThresholdProcessInput(TypedDict, total=False):
+    userId: Required[Id]
+    thresholdId: NotRequired[Id]
+    label: NotRequired[str]
+    summary: Required[str]
+    thresholdName: Required[str]
+    phase: Required[str]
+    whatIsEnding: Required[str]
+    notYetBegun: Required[str]
+    bodyCarrying: NotRequired[str]
+    groundingStatus: Required[str]
+    symbolicLens: NotRequired[str]
+    invitationReadiness: Required[str]
+    normalizedThresholdKey: Required[str]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedSymbolIds: NotRequired[list[Id]]
+    relatedGoalIds: NotRequired[list[Id]]
+    relatedDreamSeriesIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class RecordRelationalSceneInput(TypedDict, total=False):
+    userId: Required[Id]
+    sceneId: NotRequired[Id]
+    label: NotRequired[str]
+    summary: Required[str]
+    sceneSummary: Required[str]
+    chargedRoles: NotRequired[list[dict[str, object]]]
+    recurringAffect: NotRequired[list[str]]
+    recurrenceContexts: NotRequired[list[str]]
+    normalizedSceneKey: Required[str]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedGoalIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class RecordInnerOuterCorrespondenceInput(TypedDict, total=False):
+    userId: Required[Id]
+    correspondenceId: NotRequired[Id]
+    label: NotRequired[str]
+    summary: Required[str]
+    correspondenceSummary: Required[str]
+    innerRefs: NotRequired[list[Id]]
+    outerRefs: NotRequired[list[Id]]
+    symbolIds: NotRequired[list[Id]]
+    userCharge: Required[str]
+    caveat: Required[str]
+    normalizedCorrespondenceKey: Required[str]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class RecordNuminousEncounterInput(TypedDict, total=False):
+    userId: Required[Id]
+    label: NotRequired[str]
+    summary: Required[str]
+    encounterMedium: Required[str]
+    affectTone: Required[str]
+    containmentNeed: Required[str]
+    interpretationConstraint: Required[str]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedSymbolIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class RecordAestheticResonanceInput(TypedDict, total=False):
+    userId: Required[Id]
+    label: NotRequired[str]
+    summary: Required[str]
+    medium: Required[str]
+    objectDescription: Required[str]
+    resonanceSummary: Required[str]
+    feelingTone: NotRequired[str]
+    bodySensations: NotRequired[list[str]]
+    relatedMaterialIds: NotRequired[list[Id]]
+    relatedSymbolIds: NotRequired[list[Id]]
+    privacyClass: NotRequired[PrivacyClass]
+
+
+class GenerateThresholdReviewInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    thresholdProcessId: NotRequired[Id]
+    explicitQuestion: NotRequired[str]
+    safetyContext: NotRequired[SafetyContext]
+    persist: NotRequired[bool]
+
+
+class ThresholdReviewWorkflowResult(TypedDict, total=False):
+    review: NotRequired[LivingMythReviewRecord]
+    result: Required[ThresholdReviewResult]
+    pendingProposals: Required[list[MemoryWriteProposal]]
+    practiceSession: NotRequired[PracticeSessionRecord]
+
+
+class GenerateLivingMythReviewInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    explicitQuestion: NotRequired[str]
+    safetyContext: NotRequired[SafetyContext]
+    persist: NotRequired[bool]
+
+
+class LivingMythReviewWorkflowResult(TypedDict, total=False):
+    review: NotRequired[LivingMythReviewRecord]
+    result: Required[LivingMythReviewResult]
+    pendingProposals: Required[list[MemoryWriteProposal]]
+    practiceSession: NotRequired[PracticeSessionRecord]
+
+
+class GenerateAnalysisPacketInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    packetFocus: NotRequired[AnalysisPacketFocus]
+    explicitQuestion: NotRequired[str]
+    safetyContext: NotRequired[SafetyContext]
+    persist: NotRequired[bool]
+
+
+class AnalysisPacketWorkflowResult(TypedDict, total=False):
+    packet: NotRequired[AnalysisPacketRecord]
+    result: Required[AnalysisPacketResult]
+
+
+class ApproveLivingMythReviewProposalsInput(TypedDict, total=False):
+    userId: Required[Id]
+    reviewId: Required[Id]
+    proposalIds: Required[list[Id]]
+
+
+class RejectLivingMythReviewProposalsInput(TypedDict, total=False):
+    userId: Required[Id]
+    reviewId: Required[Id]
+    proposalIds: Required[list[Id]]
+    reason: NotRequired[str]
