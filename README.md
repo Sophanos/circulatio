@@ -1,9 +1,6 @@
 # Circulatio
 
 > A Soul OS for Soul-Making.
->
-> Hermes connects the days. Circulatio connects the depths.
-> Together they build soul + soma + spirit — the whole person, not the optimized one.
 
 Circulatio is the symbolic backend that turns a host agent like Hermes into an individuation companion. It holds your dreams, body-states, reflections, charged events, and threshold material across time, then interprets them through a Jungian depth lens when *you* decide the moment is right.
 
