@@ -299,17 +299,23 @@ def _derive_grounding_summary(snapshot: MethodContextSnapshot) -> GroundingSumma
         return None
 
     recommendation: GroundingRecommendation = "clear_for_depth"
+    recent_practice_activation = (
+        _count_matching_signal(
+            strain_signals,
+            "Recent practice outcomes increased activation.",
+        )
+        >= 1
+    )
     if (
         signals["anchorRecommendation"] == "grounding_first"
         or signals["activationPattern"] == "overwhelming"
-        or _count_matching_signal(strain_signals, "Recent practice outcomes increased activation.") >= 1
     ):
         recommendation = "grounding_first"
     elif (
         signals["anchorRecommendation"] == "pace_gently"
         or signals["wellbeingGrounding"] == "strained"
         or signals["activationPattern"] in {"high", "mixed"}
-        or _count_matching_signal(strain_signals, "Recent practice outcomes increased activation.") >= 1
+        or recent_practice_activation
     ):
         recommendation = "pace_gently"
 
@@ -414,11 +420,12 @@ def _collect_grounding_signal_bundle(snapshot: MethodContextSnapshot) -> _Ground
 
     wellbeing = snapshot.get("livingMythContext", {}).get("latestSymbolicWellbeing")
     wellbeing_grounding: Literal["steady", "strained", "unknown"] = "unknown"
-    if isinstance(wellbeing, dict) and wellbeing.get("id"):
-        source_refs.append(
-            {"recordType": "SymbolicWellbeingSnapshot", "recordId": str(wellbeing["id"])}
-        )
-        evidence_ids.extend(_string_ids(wellbeing.get("evidenceIds")))
+    if isinstance(wellbeing, dict):
+        if wellbeing.get("id"):
+            source_refs.append(
+                {"recordType": "SymbolicWellbeingSnapshot", "recordId": str(wellbeing["id"])}
+            )
+            evidence_ids.extend(_string_ids(wellbeing.get("evidenceIds")))
         wellbeing_grounding = _normalize_wellbeing_grounding(wellbeing.get("groundingCapacity"))
         if wellbeing_grounding == "steady":
             support_signals.append("Symbolic wellbeing still shows workable grounding.")
@@ -431,6 +438,7 @@ def _collect_grounding_signal_bundle(snapshot: MethodContextSnapshot) -> _Ground
     for body_state in body_states[:5]:
         if body_state.get("id"):
             source_refs.append({"recordType": "BodyState", "recordId": str(body_state["id"])})
+        evidence_ids.extend(_string_ids(body_state.get("evidenceIds")))
         if body_state.get("activation") == "overwhelming":
             strain_signals.append("Recent body activation reached overwhelming intensity.")
         elif body_state.get("activation") == "high":
@@ -442,6 +450,11 @@ def _collect_grounding_signal_bundle(snapshot: MethodContextSnapshot) -> _Ground
     worsened = 0
     improved = 0
     for practice in practices:
+        if practice.get("id"):
+            source_refs.append({"recordType": "PracticeSession", "recordId": str(practice["id"])})
+        evidence_ids.extend(
+            _string_ids(practice.get("outcomeEvidenceIds") or practice.get("evidenceIds"))
+        )
         before = _activation_score(practice.get("activationBefore"))
         after = _activation_score(practice.get("activationAfter"))
         if before is None or after is None:
@@ -508,7 +521,9 @@ def _derive_ego_capacity_summary(
 
     if reflective_capacity == "unknown":
         grounding_recommendation = (
-            str(grounding.get("recommendation") or "").strip() if isinstance(grounding, dict) else ""
+            str(grounding.get("recommendation") or "").strip()
+            if isinstance(grounding, dict)
+            else ""
         )
         containment_status = (
             str(containment.get("status") or "").strip() if isinstance(containment, dict) else ""
@@ -710,7 +725,7 @@ def _derive_active_goal_tension_summary(
     snapshot: MethodContextSnapshot,
 ) -> ActiveGoalTensionSummary | None:
     ranked_statuses = {"active": 0, "integrating": 1, "candidate": 2}
-    candidate_tensions: list[tuple[int, dict[str, object]]] = []
+    candidate_tensions: list[tuple[int, object]] = []
     for index, raw_tension in enumerate(snapshot.get("goalTensions", [])[:5]):
         if not isinstance(raw_tension, dict):
             continue
@@ -1221,6 +1236,43 @@ def cast_question_styles(values: Sequence[str]) -> list[QuestionStyle]:
     return [cast(QuestionStyle, item) for item in values if item in allowed]
 
 
+def _practice_modalities_from_stats(
+    practice_stats: dict[str, object],
+) -> tuple[list[str], list[str], list[str]]:
+    by_modality = practice_stats.get("byModality")
+    if not isinstance(by_modality, dict):
+        return [], [], []
+
+    preferred: list[str] = []
+    avoided: list[str] = []
+    reasons: list[str] = []
+    for modality, raw_stats in by_modality.items():
+        if not isinstance(raw_stats, dict):
+            continue
+        modality_name = str(modality or "").strip()
+        if not modality_name or modality_name == "unknown":
+            continue
+        recommended = _stat_int(raw_stats.get("recommended"))
+        accepted = _stat_int(raw_stats.get("accepted"))
+        completed = _stat_int(raw_stats.get("completed"))
+        skipped = _stat_int(raw_stats.get("skipped"))
+        positive = recommended + accepted + completed
+        if (
+            completed >= 2
+            or (accepted >= 2 and positive > skipped)
+            or (recommended >= 3 and positive > skipped)
+        ):
+            preferred.append(modality_name)
+            reasons.append(f"Practice stats keep returning to {modality_name}.")
+        if skipped >= 2 and skipped >= positive:
+            avoided.append(modality_name)
+            reasons.append(f"Practice stats often leave {modality_name} unused.")
+
+    preferred = _dedupe(preferred)[:4]
+    avoided = [item for item in _dedupe(avoided)[:4] if item not in preferred]
+    return preferred, avoided, _dedupe(reasons)[:4]
+
+
 def _dominant_activation_pattern(values: list[str]) -> ActivationPattern:
     filtered = [item for item in values if item]
     if not filtered:
@@ -1247,6 +1299,10 @@ def _confidence_from_signal_count(count: int) -> Confidence:
     if count >= 2:
         return "medium"
     return "low"
+
+
+def _stat_int(value: object) -> int:
+    return value if isinstance(value, int) and value > 0 else 0
 
 
 def _clean_text(value: object, *, limit: int = 220) -> str:
@@ -1292,6 +1348,29 @@ def _dedupe_refs(values: list[MethodStateSourceRef]) -> list[MethodStateSourceRe
         seen.add(key)
         deduped.append(item)
     return deduped
+
+
+def _normalize_grounding_recommendation(value: object) -> GroundingRecommendation | None:
+    candidate = str(value or "").strip()
+    if candidate in {"clear_for_depth", "pace_gently", "grounding_first"}:
+        return cast(GroundingRecommendation, candidate)
+    return None
+
+
+def _normalize_wellbeing_grounding(
+    value: object,
+) -> Literal["steady", "strained", "unknown"]:
+    candidate = str(value or "").strip().lower()
+    if candidate in {"steady", "supported", "available", "grounded"}:
+        return "steady"
+    if candidate in {"strained", "fragile", "thin", "low"}:
+        return "strained"
+    return "unknown"
+
+
+def _count_matching_signal(values: Sequence[str], pattern: str) -> int:
+    lowered_pattern = pattern.lower()
+    return sum(1 for value in values if lowered_pattern in value.lower())
 
 
 def _normalize_current_relation(value: object) -> CurrentRelation:

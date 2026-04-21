@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
+from ..core.method_state_policy import get_containment_summary, get_grounding_summary
 from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.ids import now_iso
 from ..domain.practices import PracticeSessionRecord
@@ -296,11 +297,8 @@ async def _build_readiness_summary(
         if isinstance(method_context, dict)
         else []
     )
-    containment = (
-        method_context.get("methodState", {}).get("containment", {})
-        if isinstance(method_context, dict)
-        else {}
-    )
+    containment = get_containment_summary(method_context) or {}
+    grounding = get_grounding_summary(method_context) or {}
     individuation_context = (
         method_context.get("individuationContext", {}) if isinstance(method_context, dict) else {}
     )
@@ -315,7 +313,7 @@ async def _build_readiness_summary(
             and individuation_context.get("thresholdProcesses")
         ),
         "groundingStrained": str(containment.get("status") or "") in {"strained", "thin"}
-        or str(containment.get("groundingNeed") or "") == "grounding_first",
+        or str(grounding.get("recommendation") or "") == "grounding_first",
         "relevantConsentBlocks": blocked_scopes,
     }
 
