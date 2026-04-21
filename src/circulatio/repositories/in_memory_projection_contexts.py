@@ -13,6 +13,11 @@ from ..domain.types import (
     ThresholdReviewInput,
 )
 from .in_memory_bucket import UserCirculatioBucket
+from .in_memory_projection_method_state import (
+    build_clarification_state_summary_locked,
+    build_method_state_summary_locked,
+    build_recent_dream_dynamics_locked,
+)
 from .in_memory_projection_shared import (
     _is_within_window,
     _material_timestamp,
@@ -112,6 +117,10 @@ def _build_individuation_context_summary(
             result["realityAnchors"] = {
                 **summary,
                 "anchorSummary": details.get("anchorSummary", record["summary"]),
+                "workDailyLifeContinuity": details.get("workDailyLifeContinuity"),
+                "sleepBodyRegulation": details.get("sleepBodyRegulation"),
+                "relationshipContact": details.get("relationshipContact"),
+                "reflectiveCapacity": details.get("reflectiveCapacity"),
                 "groundingRecommendation": details.get("groundingRecommendation", "pace_gently"),
                 "reasons": list(details.get("reasons", [])),
             }
@@ -397,7 +406,24 @@ def build_life_context_snapshot_locked(
     ]
     symbols = active_symbols(bucket)
     patterns = active_patterns(bucket)
-    if not materials and not practices and not symbols and not patterns:
+    goals = [
+        item
+        for item in bucket.goals.values()
+        if item.get("status") not in {"deleted", "completed"} and item["userId"] == user_id
+    ]
+    goal_tensions = [
+        item
+        for item in bucket.goal_tensions.values()
+        if item.get("status") != "deleted" and item["userId"] == user_id
+    ]
+    if (
+        not materials
+        and not practices
+        and not symbols
+        and not patterns
+        and not goals
+        and not goal_tensions
+    ):
         return None
     snapshot: LifeContextSnapshot = {
         "windowStart": window_start,
@@ -425,6 +451,17 @@ def build_life_context_snapshot_locked(
     focus_summary = _derive_focus_summary(symbols, patterns)
     if focus_summary:
         snapshot["focusSummary"] = focus_summary
+    goals.sort(key=lambda item: item.get("updatedAt", item.get("createdAt", "")), reverse=True)
+    if goals:
+        snapshot["activeGoals"] = [_project_goal_summary(item) for item in goals[:5]]
+    goal_tensions.sort(
+        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
+        reverse=True,
+    )
+    if goal_tensions:
+        snapshot["goalTensions"] = [
+            _project_goal_tension_summary(item) for item in goal_tensions[:5]
+        ]
     mental_state = _derive_mental_state_summary(
         [
             item
@@ -658,6 +695,14 @@ def build_method_context_snapshot_locked(
         snapshot["recentPracticeSessions"] = [
             _project_practice_session_summary(item) for item in practices[:5]
         ]
+    recent_dream_dynamics = build_recent_dream_dynamics_locked(
+        bucket,
+        user_id=user_id,
+        window_start=window_start,
+        window_end=window_end,
+    )
+    if recent_dream_dynamics:
+        snapshot["recentDreamDynamics"] = recent_dream_dynamics
     signals = _derive_longitudinal_signals(bucket)
     if signals:
         snapshot["longitudinalSignals"] = signals
@@ -679,6 +724,22 @@ def build_method_context_snapshot_locked(
     )
     if living_myth_context:
         snapshot["livingMythContext"] = living_myth_context
+    method_state = build_method_state_summary_locked(
+        bucket,
+        user_id=user_id,
+        window_start=window_start,
+        window_end=window_end,
+        snapshot=snapshot,
+    )
+    if method_state:
+        snapshot["methodState"] = method_state
+    clarification_state = build_clarification_state_summary_locked(
+        bucket,
+        user_id=user_id,
+        material_id=material_id,
+    )
+    if clarification_state:
+        snapshot["clarificationState"] = clarification_state
     return snapshot if len(snapshot) > 3 else None
 
 

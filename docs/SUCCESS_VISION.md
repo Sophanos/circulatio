@@ -2,7 +2,7 @@
 >
 > This document is the deep-dive: what success feels like from the user's perspective.
 >
-> **Implementation status (April 2026):** The backend/runtime surface now supports read-mostly journey pages, autonomous low-risk journey containers through Hermes, human-label journey resolution, explicit `/circulation journey ...` QA/demo commands, threshold review, living myth review, bounded analysis packets, approval-gated durable writes, and ripeness-based proactive invitations. Normal user flow still stays Hermes-routed and tool-first. This document remains the experiential target those workflows should serve.
+> **Implementation status (April 2026):** The backend/runtime surface now supports the bounded read-only `discovery` digest, read-mostly journey pages, autonomous low-risk journey containers through Hermes, human-label journey resolution, explicit `/circulation journey ...` QA/demo commands, threshold review, living myth review, bounded analysis packets, approval-gated durable writes, ripeness-based proactive invitations, and an offline Evolution OS for the text artifacts that shape these interactions. That builder layer now emits candidate manifests, diffs, and review packages outside the runtime path. Normal user flow still stays Hermes-routed and tool-first. This document remains the experiential target those workflows should serve.
 
 # Circulatio: Success Vision
 ## What It Feels Like To Use It
@@ -22,6 +22,10 @@ The user should feel:
 - **Accompanied**, not managed
 - **More conscious**, not more dependent
 - **That their own psyche is the source of insight**, and Circulatio is the mirror that remembers
+
+### Builder Constraint
+
+Any future self-evolution loop must optimize for this felt experience, not just task completion or verbosity. If an evolved skill, prompt fragment, or tool description makes Circulatio more efficient but less collaborative, less tentative, or less user-owned, it is a regression. In phase 1 this document is guidance for reviewers, not an automatic mutation target.
 
 ---
 

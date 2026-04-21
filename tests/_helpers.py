@@ -13,6 +13,7 @@ class FakeCirculatioLlm:
         self.threshold_review_calls: list[dict[str, object]] = []
         self.living_myth_review_calls: list[dict[str, object]] = []
         self.analysis_packet_calls: list[dict[str, object]] = []
+        self.method_state_route_calls: list[dict[str, object]] = []
         self.force_active_imagination = False
 
     async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
@@ -268,6 +269,15 @@ class FakeCirculatioLlm:
             "hypotheses": hypotheses,
             "depthReadiness": depth_readiness,
             "methodGate": method_gate,
+            "clarificationIntent": {
+                "refKey": "clarify_primary_image",
+                "questionText": "Which image feels most alive to you right now?",
+                "expectedTargets": ["body_state", "personal_amplification"],
+                "anchorRefs": {},
+                "consentScopes": ["somatic_correlation"],
+                "storagePolicy": "direct_if_explicit",
+                "expiresAt": "2026-12-31T00:00:00Z",
+            },
             "amplificationPrompts": [
                 {
                     "symbolRefKey": symbols[0]["refKey"],
@@ -323,6 +333,247 @@ class FakeCirculatioLlm:
             "proposalCandidates": proposals,
             "userFacingResponse": "LLM interpretation: a cautious symbolic reading is available.",
             "clarifyingQuestion": "Which image feels most alive to you right now?",
+        }
+
+    async def route_method_state_response(self, input_data: dict[str, object]) -> dict[str, object]:
+        payload = deepcopy(input_data)
+        self.method_state_route_calls.append(payload)
+        response_text = str(payload.get("responseText") or "").strip()
+        lowered = response_text.lower()
+        source = str(payload.get("source") or "").strip()
+        expected_targets = {
+            str(item) for item in payload.get("expectedTargets", []) if str(item).strip()
+        }
+        evidence_spans = []
+        if response_text:
+            target_kinds = sorted(expected_targets) or ["conscious_attitude"]
+            evidence_spans.append(
+                {
+                    "refKey": "response_primary",
+                    "quote": response_text,
+                    "summary": response_text[:180],
+                    "targetKinds": target_kinds,
+                }
+            )
+
+        capture_candidates: list[dict[str, object]] = []
+        follow_up_prompts: list[str] = []
+        routing_warnings: list[str] = []
+
+        def include(target_kind: str) -> bool:
+            return not expected_targets or target_kind in expected_targets
+
+        if include("personal_amplification") and source == "amplification_answer":
+            capture_candidates.append(
+                {
+                    "targetKind": "personal_amplification",
+                    "application": "direct_write",
+                    "confidence": "high",
+                    "payload": {
+                        "associationText": response_text,
+                        "feelingTone": "charged" if "uneasy" in lowered else "curious",
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user gave a direct personal association.",
+                }
+            )
+        if include("body_state") and source in {"body_note", "clarifying_answer", "dream_dynamics"}:
+            body_region = "jaw" if "jaw" in lowered else "chest" if "chest" in lowered else None
+            sensation = (
+                "tightness"
+                if any(token in lowered for token in {"tight", "clench", "locked"})
+                else "heat"
+                if "heat" in lowered
+                else "tension"
+            )
+            capture_candidates.append(
+                {
+                    "targetKind": "body_state",
+                    "application": "direct_write",
+                    "confidence": "high",
+                    "payload": {
+                        "sensation": sensation,
+                        "bodyRegion": body_region,
+                        "tone": "charged",
+                        "activation": "moderate",
+                        "temporalContext": "response_followup",
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user explicitly described a body response.",
+                }
+            )
+        if include("relational_scene") and source == "relational_scene":
+            capture_candidates.append(
+                {
+                    "targetKind": "relational_scene",
+                    "application": "direct_write",
+                    "confidence": "medium",
+                    "payload": {
+                        "summary": "A recurring relational scene was described directly.",
+                        "sceneSummary": response_text,
+                        "normalizedSceneKey": "relational-scene",
+                        "recurringAffect": ["pressure"] if "pressure" in lowered else ["charge"],
+                        "recurrenceContexts": ["relationship"],
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user described a recurring scene, not an interpretation.",
+                }
+            )
+        if include("dream_dynamics") and source == "dream_dynamics":
+            capture_candidates.append(
+                {
+                    "targetKind": "dream_dynamics",
+                    "application": "direct_write",
+                    "confidence": "medium",
+                    "payload": {
+                        "egoStance": "watching" if "watch" in lowered else "moving",
+                        "actionSummary": response_text,
+                        "affectBefore": "fear" if "fear" in lowered else "charge",
+                        "affectAfter": "curiosity" if "curious" in lowered else "unresolved",
+                        "lysisSummary": "The ending remained charged.",
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user described dream action and stance directly.",
+                }
+            )
+        if include("practice_outcome") and source == "practice_feedback":
+            capture_candidates.append(
+                {
+                    "targetKind": "practice_outcome",
+                    "application": "direct_write",
+                    "confidence": "high",
+                    "payload": {
+                        "practiceType": "journaling",
+                        "outcome": response_text,
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user gave direct practice feedback.",
+                }
+            )
+        if include("practice_preference") and source == "practice_feedback":
+            capture_candidates.append(
+                {
+                    "targetKind": "practice_preference",
+                    "application": "direct_write",
+                    "confidence": "high",
+                    "payload": {
+                        "preferredModalities": ["writing"],
+                        "maxDurationMinutes": 5,
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user named a direct practice preference.",
+                }
+            )
+        if include("goal_tension") and source == "goal_feedback":
+            capture_candidates.append(
+                {
+                    "targetKind": "goal_tension",
+                    "application": "candidate_write",
+                    "confidence": "medium",
+                    "payload": {
+                        "goalIds": [str(payload.get("anchorRefs", {}).get("goalId") or "goal_1")],
+                        "tensionSummary": response_text,
+                        "polarityLabels": ["safety", "directness"],
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The response sounds like an explicit goal conflict.",
+                }
+            )
+        if include("reality_anchors") and source in {"clarifying_answer", "freeform_followup"}:
+            capture_candidates.append(
+                {
+                    "targetKind": "reality_anchors",
+                    "application": "direct_write",
+                    "confidence": "high",
+                    "payload": {
+                        "summary": "Outer life is steady enough for careful reflection.",
+                        "anchorSummary": response_text,
+                        "workDailyLifeContinuity": "stable",
+                        "sleepBodyRegulation": "stable",
+                        "relationshipContact": "available",
+                        "reflectiveCapacity": "steady",
+                        "groundingRecommendation": "clear_for_depth",
+                        "reasons": ["Explicitly described as current reality support."],
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user named concrete reality anchors directly.",
+                }
+            )
+        if include("threshold_process") and source in {"clarifying_answer", "freeform_followup"}:
+            capture_candidates.append(
+                {
+                    "targetKind": "threshold_process",
+                    "application": "direct_write",
+                    "confidence": "medium",
+                    "payload": {
+                        "summary": "A threshold process was described directly.",
+                        "thresholdName": "Vocational threshold",
+                        "phase": "liminal",
+                        "whatIsEnding": "An older work identity is loosening.",
+                        "notYetBegun": "The next form is not yet stable.",
+                        "groundingStatus": "steady",
+                        "invitationReadiness": "ask",
+                        "normalizedThresholdKey": "vocational-threshold",
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user described a live threshold without asking for interpretation.",
+                }
+            )
+        if include("consent_preference") and source == "consent_update":
+            capture_candidates.append(
+                {
+                    "targetKind": "consent_preference",
+                    "application": "direct_write",
+                    "confidence": "high",
+                    "payload": {
+                        "scope": "projection_language",
+                        "status": "allow" if "allow" in lowered else "revoked",
+                        "note": response_text,
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": [],
+                    "reason": "The user explicitly updated consent.",
+                }
+            )
+        if include("projection_hypothesis"):
+            capture_candidates.append(
+                {
+                    "targetKind": "projection_hypothesis",
+                    "application": "approval_proposal",
+                    "confidence": "medium",
+                    "payload": {
+                        "hypothesisSummary": "A projection-pattern possibility was cautiously named.",
+                        "projectionPattern": response_text,
+                        "userTestPrompt": "Does this feel like your material rather than only theirs?",
+                        "normalizedHypothesisKey": "projection-pattern",
+                    },
+                    "supportingEvidenceRefs": ["response_primary"],
+                    "consentScopes": ["projection_language"],
+                    "reason": "Projection language should stay approval-gated.",
+                }
+            )
+
+        if not capture_candidates:
+            follow_up_prompts.append(
+                "What feels explicit enough here for Circulatio to hold directly?"
+            )
+            routing_warnings.append("method_state_no_structured_capture")
+
+        return {
+            "answerSummary": response_text[:180],
+            "evidenceSpans": evidence_spans,
+            "captureCandidates": capture_candidates,
+            "followUpPrompts": follow_up_prompts,
+            "routingWarnings": routing_warnings,
         }
 
     async def generate_weekly_review(self, input_data: dict[str, object]) -> dict[str, object]:

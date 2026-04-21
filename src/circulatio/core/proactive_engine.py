@@ -15,6 +15,7 @@ from ..domain.proactive import (
 )
 from ..domain.reviews import DashboardSummary
 from ..domain.types import Id, MethodContextSnapshot, UserAdaptationProfileSummary
+from .method_state_policy import derive_runtime_method_state_policy
 
 
 class ProactiveEngine:
@@ -33,7 +34,11 @@ class ProactiveEngine:
         now: str,
         limit: int = 3,
     ) -> list[RhythmicBriefSeed]:
-        del existing_briefs, adaptation_profile
+        del existing_briefs
+        runtime_policy = self._effective_runtime_policy(
+            method_context=method_context,
+            adaptation_profile=adaptation_profile,
+        )
         seeds: list[RhythmicBriefSeed] = []
         seeds.extend(self._practice_followup_seeds(recent_practices=recent_practices, now=now))
         seeds.extend(self._journey_seeds(journeys=journeys, now=now))
@@ -76,6 +81,10 @@ class ProactiveEngine:
             )
         )
         seeds.extend(self._weekly_review_seed(user_id=user_id, dashboard=dashboard, now=now))
+        seeds = self._apply_runtime_policy_to_seeds(
+            seeds=seeds,
+            runtime_policy=runtime_policy,
+        )
         seeds.sort(key=lambda item: int(item.get("priority", 0)), reverse=True)
         if source == "practice_followup":
             seeds = [item for item in seeds if item["briefType"] == "practice_followup"]
@@ -555,6 +564,45 @@ class ProactiveEngine:
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if method_context:
+            method_state = (
+                method_context.get("methodState")
+                if isinstance(method_context.get("methodState"), dict)
+                else {}
+            )
+            active_goal_tension = (
+                method_state.get("activeGoalTension")
+                if isinstance(method_state.get("activeGoalTension"), dict)
+                else {}
+            )
+            active_goal_tension_id = str(active_goal_tension.get("goalTensionId") or "").strip()
+            if active_goal_tension_id:
+                balancing_direction = str(
+                    active_goal_tension.get("balancingDirection") or ""
+                ).strip()
+                reason = (
+                    balancing_direction
+                    or "An active goal tension may be asking for gentle attention."
+                )
+                return [
+                    {
+                        "briefType": "daily",
+                        "triggerKey": (
+                            f"daily:goal_tension:{active_goal_tension_id}:{self._day_bucket(now)}"
+                        ),
+                        "titleHint": "Goal tension",
+                        "summaryHint": reason,
+                        "suggestedActionHint": (
+                            "You can name the live tension without forcing resolution."
+                        ),
+                        "priority": 74,
+                        "relatedJourneyIds": [],
+                        "relatedMaterialIds": [],
+                        "relatedSymbolIds": [],
+                        "relatedPracticeSessionIds": [],
+                        "evidenceIds": list(active_goal_tension.get("evidenceIds", [])),
+                        "reason": "goal_tension_active_method_state",
+                    }
+                ]
             goal_tensions = method_context.get("goalTensions", [])
             if goal_tensions:
                 tension = goal_tensions[0]
@@ -704,3 +752,257 @@ class ProactiveEngine:
                 if evidence_id not in evidence_ids:
                     evidence_ids.append(evidence_id)
         return {"materialIds": material_ids[:3], "evidenceIds": evidence_ids[:5]}
+
+    def _effective_runtime_policy(
+        self,
+        *,
+        method_context: MethodContextSnapshot | None,
+        adaptation_profile: UserAdaptationProfileSummary | None,
+    ) -> dict[str, object]:
+        policy: dict[str, object] = {}
+        if isinstance(method_context, dict):
+            snapshot = dict(method_context)
+            if adaptation_profile is not None and not isinstance(
+                snapshot.get("adaptationProfile"), dict
+            ):
+                snapshot["adaptationProfile"] = adaptation_profile
+            policy = dict(derive_runtime_method_state_policy(snapshot))
+        self._merge_adaptation_preferences(
+            runtime_policy=policy,
+            adaptation_profile=adaptation_profile,
+        )
+        return policy
+
+    def _apply_runtime_policy_to_seeds(
+        self,
+        *,
+        seeds: list[RhythmicBriefSeed],
+        runtime_policy: dict[str, object],
+    ) -> list[RhythmicBriefSeed]:
+        filtered: list[RhythmicBriefSeed] = []
+        for seed in seeds:
+            if self._seed_blocked_by_policy(seed=seed, runtime_policy=runtime_policy):
+                continue
+            personalized = dict(seed)
+            self._personalize_seed_copy(seed=personalized, runtime_policy=runtime_policy)
+            filtered.append(personalized)
+        return filtered
+
+    def _seed_blocked_by_policy(
+        self,
+        *,
+        seed: RhythmicBriefSeed,
+        runtime_policy: dict[str, object],
+    ) -> bool:
+        depth_level = str(runtime_policy.get("depthLevel") or "").strip()
+        brief_type = str(seed.get("briefType") or "").strip()
+        if depth_level == "grounding_only" and brief_type != "practice_followup":
+            return True
+        return False
+
+    def _personalize_seed_copy(
+        self,
+        *,
+        seed: RhythmicBriefSeed,
+        runtime_policy: dict[str, object],
+    ) -> None:
+        tone = str(runtime_policy.get("witnessTone") or "").strip()
+        question_style = str(runtime_policy.get("questionStyle") or "").strip()
+        practice_constraints = (
+            runtime_policy.get("practiceConstraints")
+            if isinstance(runtime_policy.get("practiceConstraints"), dict)
+            else {}
+        )
+        avoid_patterns = [
+            str(item).strip()
+            for item in runtime_policy.get("avoidPhrasingPatterns", [])
+            if str(item).strip()
+        ]
+        active_goal_frame = str(runtime_policy.get("activeGoalFrame") or "").strip()
+        brief_type = str(seed.get("briefType") or "").strip()
+        if question_style and brief_type != "practice_followup":
+            action_hint = self._question_style_action_hint(question_style)
+            if action_hint:
+                seed["suggestedActionHint"] = action_hint
+        if tone == "direct":
+            seed["summaryHint"] = self._sanitize_text(
+                "A live thread looks ready for a plain, bounded check-in.",
+                avoid_patterns=avoid_patterns,
+            )
+        elif tone == "spacious":
+            seed["summaryHint"] = self._sanitize_text(
+                "A live thread may be ready for a light check-in with room around it.",
+                avoid_patterns=avoid_patterns,
+            )
+        elif tone == "grounded":
+            seed["summaryHint"] = self._sanitize_text(
+                "Keep this concrete and close to lived contact before making meaning.",
+                avoid_patterns=avoid_patterns,
+            )
+        elif seed.get("summaryHint"):
+            seed["summaryHint"] = self._sanitize_text(
+                str(seed.get("summaryHint") or ""),
+                avoid_patterns=avoid_patterns,
+            )
+        if seed.get("suggestedActionHint"):
+            seed["suggestedActionHint"] = self._sanitize_text(
+                str(seed.get("suggestedActionHint") or ""),
+                avoid_patterns=avoid_patterns,
+            )
+        if seed.get("titleHint"):
+            seed["titleHint"] = self._sanitize_text(
+                str(seed.get("titleHint") or ""),
+                avoid_patterns=avoid_patterns,
+            )
+        if active_goal_frame and str(seed.get("reason") or "").startswith("goal_tension_active"):
+            seed["summaryHint"] = self._sanitize_text(
+                active_goal_frame,
+                avoid_patterns=avoid_patterns,
+            )
+        prefer_low_intensity = bool(practice_constraints.get("preferLowIntensity"))
+        protect_relational_space = bool(practice_constraints.get("protectRelationalSpace"))
+        if prefer_low_intensity and brief_type in {
+            "threshold_invitation",
+            "chapter_invitation",
+            "analysis_packet_invitation",
+            "return_invitation",
+            "bridge_invitation",
+        }:
+            seed["priority"] = max(int(seed.get("priority", 0)) - 18, 1)
+        if protect_relational_space and brief_type in {
+            "threshold_invitation",
+            "analysis_packet_invitation",
+        }:
+            seed["priority"] = max(int(seed.get("priority", 0)) - 12, 1)
+
+    def _question_style_action_hint(self, question_style: str) -> str:
+        mapping = {
+            "body_first": "You can notice what your body does around this before naming meaning.",
+            "image_first": "You can name the image that returns before explaining it.",
+            "relational_first": "You can notice the contact pattern before deciding what it means.",
+            "choice_based": (
+                "You can name the next small choice instead of solving the whole story."
+            ),
+            "reflection_first": "You can say what feels most true in plain language.",
+        }
+        return mapping.get(question_style, "")
+
+    def _sanitize_text(self, text: str, *, avoid_patterns: list[str]) -> str:
+        sanitized = text
+        lowered = sanitized.lower()
+        for pattern in avoid_patterns:
+            if not pattern:
+                continue
+            pattern_lower = pattern.lower()
+            if pattern_lower not in lowered:
+                continue
+            start = lowered.find(pattern_lower)
+            end = start + len(pattern_lower)
+            sanitized = sanitized[:start].rstrip(" ,.;:") + sanitized[end:]
+            lowered = sanitized.lower()
+        return " ".join(sanitized.split()).strip() or text
+
+    def _merge_adaptation_preferences(
+        self,
+        *,
+        runtime_policy: dict[str, object],
+        adaptation_profile: UserAdaptationProfileSummary | None,
+    ) -> None:
+        communication_preferences = self._adaptation_scope(
+            adaptation_profile,
+            explicit_scope="communication",
+            learned_scope="communicationPolicy",
+        )
+        interpretation_preferences = self._adaptation_scope(
+            adaptation_profile,
+            explicit_scope="interpretation",
+            learned_scope="interpretationPolicy",
+        )
+        interpretation_stats = self._adaptation_nested(adaptation_profile, "interpretationStats")
+        interaction_feedback = self._adaptation_nested(
+            adaptation_profile, "interactionFeedbackStats"
+        )
+        tone = str(communication_preferences.get("tone") or "").strip()
+        if tone and not runtime_policy.get("witnessTone"):
+            runtime_policy["witnessTone"] = tone
+        question_style = str(communication_preferences.get("questioningStyle") or "").strip()
+        question_style_map = {
+            "soma_first": "body_first",
+            "image_first": "image_first",
+            "feeling_first": "relational_first",
+            "reflective": "reflection_first",
+        }
+        mapped_style = question_style_map.get(question_style)
+        if mapped_style and not runtime_policy.get("questionStyle"):
+            runtime_policy["questionStyle"] = mapped_style
+        depth_preference = str(interpretation_preferences.get("depthPreference") or "").strip()
+        if depth_preference == "brief_pattern_notes" and not runtime_policy.get("depthLevel"):
+            runtime_policy["depthLevel"] = "gentle"
+        preferred_voice = self._last_string(interpretation_stats.get("preferredWitnessVoice"))
+        if preferred_voice and not runtime_policy.get("witnessVoice"):
+            runtime_policy["witnessVoice"] = preferred_voice
+        rejected_patterns = self._strings(interpretation_stats.get("rejectedPhrasingPatterns"))
+        if rejected_patterns and not runtime_policy.get("avoidPhrasingPatterns"):
+            runtime_policy["avoidPhrasingPatterns"] = rejected_patterns[:5]
+        interpretation_feedback = (
+            interaction_feedback.get("interpretation")
+            if isinstance(interaction_feedback.get("interpretation"), dict)
+            else {}
+        )
+        recent_locale = self._last_string(interpretation_feedback.get("recentLocales"))
+        if recent_locale and not runtime_policy.get("recentLocale"):
+            runtime_policy["recentLocale"] = recent_locale
+
+    def _adaptation_scope(
+        self,
+        adaptation_profile: UserAdaptationProfileSummary | None,
+        *,
+        explicit_scope: str,
+        learned_scope: str,
+    ) -> dict[str, object]:
+        if not isinstance(adaptation_profile, dict):
+            return {}
+        explicit_preferences = (
+            adaptation_profile.get("explicitPreferences")
+            if isinstance(adaptation_profile.get("explicitPreferences"), dict)
+            else {}
+        )
+        learned_signals = (
+            adaptation_profile.get("learnedSignals")
+            if isinstance(adaptation_profile.get("learnedSignals"), dict)
+            else {}
+        )
+        result: dict[str, object] = {}
+        explicit = explicit_preferences.get(explicit_scope)
+        learned = learned_signals.get(learned_scope)
+        if isinstance(learned, dict):
+            result.update(learned)
+        if isinstance(explicit, dict):
+            result.update(explicit)
+        return result
+
+    def _adaptation_nested(
+        self,
+        adaptation_profile: UserAdaptationProfileSummary | None,
+        key: str,
+    ) -> dict[str, object]:
+        if not isinstance(adaptation_profile, dict):
+            return {}
+        learned_signals = (
+            adaptation_profile.get("learnedSignals")
+            if isinstance(adaptation_profile.get("learnedSignals"), dict)
+            else {}
+        )
+        nested = learned_signals.get(key)
+        return dict(nested) if isinstance(nested, dict) else {}
+
+    def _strings(self, value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+
+    def _last_string(self, value: object) -> str:
+        if not isinstance(value, list):
+            return ""
+        values = [str(item).strip() for item in value if str(item).strip()]
+        return values[-1] if values else ""

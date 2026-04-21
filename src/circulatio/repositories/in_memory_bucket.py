@@ -4,10 +4,12 @@ from dataclasses import dataclass, field
 
 from ..domain.adaptation import UserAdaptationProfileRecord
 from ..domain.amplifications import AmplificationPromptRecord, PersonalAmplificationRecord
+from ..domain.clarifications import ClarificationAnswerRecord, ClarificationPromptRecord
 from ..domain.conscious_attitude import ConsciousAttitudeSnapshotRecord
 from ..domain.context import ContextSnapshot
 from ..domain.culture import CollectiveAmplificationRecord, CulturalFrameRecord
 from ..domain.dream_series import DreamSeriesMembershipRecord, DreamSeriesRecord
+from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.goals import GoalRecord, GoalTensionRecord
 from ..domain.individuation import IndividuationRecord
 from ..domain.integration import IntegrationRecord
@@ -15,6 +17,7 @@ from ..domain.interpretations import InterpretationRunRecord
 from ..domain.journeys import JourneyRecord
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialRecord, MaterialRevision
+from ..domain.method_state import MethodStateCaptureRunRecord
 from ..domain.patterns import PatternHistoryEntry, PatternRecord
 from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import ProactiveBriefRecord
@@ -40,6 +43,8 @@ class UserCirculatioBucket:
     material_summaries: dict[Id, MaterialSummary] = field(default_factory=dict)
     context_snapshots: dict[Id, ContextSnapshot] = field(default_factory=dict)
     interpretation_runs: dict[Id, InterpretationRunRecord] = field(default_factory=dict)
+    clarification_prompts: dict[Id, ClarificationPromptRecord] = field(default_factory=dict)
+    clarification_answers: dict[Id, ClarificationAnswerRecord] = field(default_factory=dict)
     evidence: dict[Id, EvidenceItem] = field(default_factory=dict)
     symbols: dict[Id, SymbolRecord] = field(default_factory=dict)
     symbol_name_index: dict[str, Id] = field(default_factory=dict)
@@ -54,6 +59,7 @@ class UserCirculatioBucket:
     living_myth_records: dict[Id, LivingMythRecord] = field(default_factory=dict)
     living_myth_reviews: dict[Id, LivingMythReviewRecord] = field(default_factory=dict)
     analysis_packets: dict[Id, AnalysisPacketRecord] = field(default_factory=dict)
+    method_state_capture_runs: dict[Id, MethodStateCaptureRunRecord] = field(default_factory=dict)
     conscious_attitudes: dict[Id, ConsciousAttitudeSnapshotRecord] = field(default_factory=dict)
     amplification_prompts: dict[Id, AmplificationPromptRecord] = field(default_factory=dict)
     personal_amplifications: dict[Id, PersonalAmplificationRecord] = field(default_factory=dict)
@@ -69,6 +75,7 @@ class UserCirculatioBucket:
     journeys: dict[Id, JourneyRecord] = field(default_factory=dict)
     proactive_briefs: dict[Id, ProactiveBriefRecord] = field(default_factory=dict)
     feedback: list[InterpretationFeedbackSummary] = field(default_factory=list)
+    interaction_feedback: list[InteractionFeedbackRecord] = field(default_factory=list)
     cultural_origins: list[CulturalOriginSummary] = field(default_factory=list)
     suppressed: dict[str, SuppressedHypothesisSummary] = field(default_factory=dict)
     applied_proposal_ids: set[Id] = field(default_factory=set)

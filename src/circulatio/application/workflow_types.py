@@ -3,12 +3,25 @@ from __future__ import annotations
 from typing import Literal, NotRequired, Required, TypedDict
 
 from ..adapters.context_adapter import LifeOsWindow
+from ..domain.clarifications import (
+    ClarificationAnswerRecord,
+    ClarificationCaptureTarget,
+    ClarificationPromptRecord,
+)
 from ..domain.context import ContextSnapshot
 from ..domain.graph import GraphNodeType
 from ..domain.interpretations import InterpretationRunRecord
 from ..domain.journeys import JourneyStatus
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialListFilters, MaterialRecord, StoredDreamStructure
+from ..domain.memory import MemoryNamespace, MemoryRetrievalRankingProfile
+from ..domain.method_state import (
+    MethodStateAnchorRefs,
+    MethodStateAppliedEntityRef,
+    MethodStateCaptureRunRecord,
+    MethodStateCaptureTargetKind,
+    MethodStateResponseSource,
+)
 from ..domain.patterns import PatternHistoryEntry, PatternRecord
 from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import ProactiveBriefRecord, RhythmBriefSource
@@ -69,6 +82,7 @@ class MaterialWorkflowResult(TypedDict, total=False):
     run: Required[InterpretationRunRecord]
     interpretation: Required[InterpretationResult]
     pendingProposals: Required[list[MemoryWriteProposal]]
+    pendingClarificationPrompts: NotRequired[list[ClarificationPromptRecord]]
     contextSnapshot: NotRequired[ContextSnapshot]
     practiceSession: NotRequired[PracticeSessionRecord]
 
@@ -128,6 +142,52 @@ class RecordPracticeOutcomeInput(TypedDict, total=False):
     outcome: Required[PracticeOutcomeWritePayload]
 
 
+class ProcessMethodStateResponseInput(TypedDict, total=False):
+    userId: Required[Id]
+    idempotencyKey: Required[str]
+    source: Required[MethodStateResponseSource]
+    responseText: Required[str]
+    observedAt: NotRequired[str]
+    anchorRefs: NotRequired[MethodStateAnchorRefs]
+    expectedTargets: NotRequired[list[MethodStateCaptureTargetKind]]
+    privacyClass: NotRequired[PrivacyClass]
+    sessionContext: NotRequired[SessionContext]
+    lifeContextSnapshot: NotRequired[LifeContextSnapshot]
+    safetyContext: NotRequired[SafetyContext]
+    options: NotRequired[InterpretationOptions]
+
+
+class MethodStateWorkflowResult(TypedDict, total=False):
+    captureRun: Required[MethodStateCaptureRunRecord]
+    responseMaterial: Required[MaterialRecord]
+    evidence: Required[list[dict[str, object]]]
+    appliedEntityRefs: Required[list[MethodStateAppliedEntityRef]]
+    pendingProposals: Required[list[MemoryWriteProposal]]
+    followUpPrompts: Required[list[str]]
+    withheldCandidates: Required[list[dict[str, object]]]
+    warnings: Required[list[str]]
+
+
+class AnswerClarificationInput(TypedDict, total=False):
+    userId: Required[Id]
+    promptId: NotRequired[Id]
+    materialId: NotRequired[Id]
+    runId: NotRequired[Id]
+    answerText: Required[str]
+    answerPayload: NotRequired[dict[str, object]]
+    captureTargetOverride: NotRequired[ClarificationCaptureTarget]
+    privacyClass: NotRequired[PrivacyClass]
+    skip: NotRequired[bool]
+
+
+class AnswerClarificationResult(TypedDict, total=False):
+    prompt: NotRequired[ClarificationPromptRecord]
+    answer: Required[ClarificationAnswerRecord]
+    createdRecordRefs: Required[list[dict[str, str]]]
+    routedRecord: NotRequired[dict[str, object]]
+    routingStatus: Required[str]
+
+
 class GeneratePracticeInput(TypedDict, total=False):
     userId: Required[Id]
     windowStart: NotRequired[str]
@@ -165,6 +225,8 @@ class CreateBodyStateInput(TypedDict, total=False):
     tone: NotRequired[str]
     temporalContext: NotRequired[str]
     linkedGoalIds: NotRequired[list[Id]]
+    linkedMaterialIds: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
     noteText: NotRequired[str]
 
@@ -181,6 +243,69 @@ class ListMaterialsInput(TypedDict, total=False):
 
 class AliveTodayResult(TypedDict):
     summary: CirculationSummaryResult
+
+
+class GenerateDiscoveryInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    explicitQuestion: NotRequired[str]
+    textQuery: NotRequired[str]
+    rootNodeIds: NotRequired[list[Id]]
+    memoryNamespaces: NotRequired[list[MemoryNamespace]]
+    rankingProfile: NotRequired[MemoryRetrievalRankingProfile]
+    maxItems: NotRequired[int]
+
+
+DiscoverySectionKey = Literal[
+    "recurring",
+    "dream_body_event_links",
+    "ripe_to_revisit",
+    "conscious_attitude",
+    "body_states",
+    "method_state",
+    "journey_threads",
+    "held_for_now",
+]
+
+
+class DiscoveryDigestItem(TypedDict, total=False):
+    label: Required[str]
+    summary: NotRequired[str]
+    criteria: Required[list[str]]
+    sourceKinds: Required[list[str]]
+    entityRefs: Required[dict[str, list[Id]]]
+    evidenceIds: Required[list[Id]]
+
+
+class DiscoverySection(TypedDict, total=False):
+    key: Required[DiscoverySectionKey]
+    title: Required[str]
+    summary: Required[str]
+    items: Required[list[DiscoveryDigestItem]]
+
+
+class DiscoverySourceCounts(TypedDict):
+    recentMaterialCount: int
+    recurringSymbolCount: int
+    activePatternCount: int
+    pendingProposalCount: int
+    memoryItemCount: int
+    graphNodeCount: int
+    graphEdgeCount: int
+
+
+class DiscoveryResult(TypedDict, total=False):
+    discoveryId: Required[Id]
+    userId: Required[Id]
+    generatedAt: Required[str]
+    windowStart: Required[str]
+    windowEnd: Required[str]
+    explicitQuestion: NotRequired[str]
+    sections: Required[list[DiscoverySection]]
+    sourceCounts: Required[DiscoverySourceCounts]
+    fallbackText: Required[str]
+    warnings: Required[list[str]]
 
 
 JourneyLifecycleStatus = Literal["active", "paused", "completed", "archived"]
@@ -438,6 +563,7 @@ class AnswerAmplificationPromptInput(TypedDict, total=False):
     feelingTone: NotRequired[str]
     bodySensations: NotRequired[list[str]]
     memoryRefs: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -454,6 +580,9 @@ class CaptureConsciousAttitudeInput(TypedDict, total=False):
     confidence: NotRequired[str]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedGoalIds: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
+    source: NotRequired[str]
+    status: NotRequired[str]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -485,6 +614,7 @@ class UpsertGoalInput(TypedDict, total=False):
     valueTags: NotRequired[list[str]]
     linkedMaterialIds: NotRequired[list[Id]]
     linkedSymbolIds: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
 
 
 class UpsertGoalTensionInput(TypedDict, total=False):
@@ -547,6 +677,7 @@ class RecordRelationalSceneInput(TypedDict, total=False):
     normalizedSceneKey: Required[str]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedGoalIds: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -562,6 +693,7 @@ class RecordInnerOuterCorrespondenceInput(TypedDict, total=False):
     userCharge: Required[str]
     caveat: Required[str]
     normalizedCorrespondenceKey: Required[str]
+    evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -575,6 +707,7 @@ class RecordNuminousEncounterInput(TypedDict, total=False):
     interpretationConstraint: Required[str]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedSymbolIds: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -589,6 +722,7 @@ class RecordAestheticResonanceInput(TypedDict, total=False):
     bodySensations: NotRequired[list[str]]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedSymbolIds: NotRequired[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 

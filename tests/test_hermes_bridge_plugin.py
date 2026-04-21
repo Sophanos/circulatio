@@ -37,6 +37,7 @@ from circulatio_hermes_plugin.tools import (
     create_journey_tool,
     dashboard_summary_tool,
     delete_entity_tool,
+    discovery_tool,
     generate_practice_recommendation_tool,
     generate_rhythmic_briefs_tool,
     get_journey_tool,
@@ -49,7 +50,10 @@ from circulatio_hermes_plugin.tools import (
     list_pending_tool,
     living_myth_review_tool,
     memory_kernel_tool,
+    method_state_respond_tool,
     query_graph_tool,
+    record_interpretation_feedback_tool,
+    record_practice_feedback_tool,
     reject_hypotheses_tool,
     reject_proposals_tool,
     reject_review_proposals_tool,
@@ -424,6 +428,117 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_method_state_tool_requires_anchor_for_freeform_followup_and_supports_anchored_capture(
+        self,
+    ) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            invalid = json.loads(
+                await method_state_respond_tool(
+                    {
+                        "source": "freeform_followup",
+                        "responseText": "It landed hard.",
+                    },
+                    **self._tool_kwargs(call_id="tool_method_state_invalid"),
+                )
+            )
+            self.assertEqual(invalid["status"], "validation_error")
+
+            stored = json.loads(
+                await store_dream_tool(
+                    {"text": "A snake stood in the doorway."},
+                    **self._tool_kwargs(call_id="tool_method_state_store"),
+                )
+            )
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {"materialId": stored["result"]["materialId"]},
+                    **self._tool_kwargs(call_id="tool_method_state_interpret"),
+                )
+            )
+            runtime = get_runtime("default")
+            prompts = await runtime.repository.list_amplification_prompts(
+                "hermes:default:local",
+                run_id=interpreted["result"]["runId"],
+            )
+            captured = json.loads(
+                await method_state_respond_tool(
+                    {
+                        "source": "amplification_answer",
+                        "responseText": "It feels ancient and watchful.",
+                        "anchorRefs": {
+                            "promptId": prompts[0]["id"],
+                            "runId": interpreted["result"]["runId"],
+                        },
+                        "expectedTargets": ["personal_amplification"],
+                    },
+                    **self._tool_kwargs(call_id="tool_method_state_capture"),
+                )
+            )
+            self.assertEqual(captured["status"], "ok")
+            self.assertTrue(captured["result"]["captureRunId"])
+            self.assertEqual(
+                captured["result"]["appliedEntityRefs"][0]["entityType"],
+                "PersonalAmplification",
+            )
+            amplifications = await runtime.repository.list_personal_amplifications(
+                "hermes:default:local",
+                run_id=interpreted["result"]["runId"],
+            )
+            self.assertEqual(len(amplifications), 1)
+
+        asyncio.run(run())
+
+    def test_method_state_capture_proposals_can_be_listed_and_rejected(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            stored = json.loads(
+                await store_reflection_tool(
+                    {"text": "I keep reacting to him like he already decided against me."},
+                    **self._tool_kwargs(call_id="tool_method_state_projection_store"),
+                )
+            )
+            captured = json.loads(
+                await method_state_respond_tool(
+                    {
+                        "source": "freeform_followup",
+                        "responseText": "It may be my own old authority pattern landing on him.",
+                        "anchorRefs": {"materialId": stored["result"]["materialId"]},
+                        "expectedTargets": ["projection_hypothesis"],
+                    },
+                    **self._tool_kwargs(call_id="tool_method_state_projection_capture"),
+                )
+            )
+            self.assertEqual(captured["status"], "ok")
+            capture_run_id = captured["result"]["captureRunId"]
+            proposal_alias = captured["pendingProposals"][0]["alias"]
+
+            listed = json.loads(
+                await list_pending_tool(
+                    {"captureRunId": capture_run_id},
+                    **self._tool_kwargs(call_id="tool_method_state_projection_list"),
+                )
+            )
+            self.assertEqual(listed["status"], "ok")
+            self.assertEqual(
+                [item["alias"] for item in listed["pendingProposals"]], [proposal_alias]
+            )
+
+            rejected = json.loads(
+                await reject_proposals_tool(
+                    {
+                        "captureRunId": capture_run_id,
+                        "proposalRefs": [proposal_alias],
+                        "reason": "not yet",
+                    },
+                    **self._tool_kwargs(call_id="tool_method_state_projection_reject"),
+                )
+            )
+            self.assertEqual(rejected["status"], "ok")
+            self.assertEqual(rejected["pendingProposals"], [])
+
+        asyncio.run(run())
+
     def test_phase_8_9_tools_cover_reviews_packets_and_direct_capture(self) -> None:
         async def run() -> None:
             self._install_in_memory_runtime()
@@ -716,6 +831,75 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_discovery_tool_builds_read_only_digest_without_writes(self) -> None:
+        async def run() -> None:
+            self._install_fake_runtime()
+            runtime = get_runtime("default")
+            stored = json.loads(
+                await store_reflection_tool(
+                    {"text": "A snake kept appearing in memory after the meeting."},
+                    **self._tool_kwargs(call_id="tool_discovery_store"),
+                )
+            )
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {"materialId": stored["result"]["materialId"]},
+                    **self._tool_kwargs(call_id="tool_discovery_interpret"),
+                )
+            )
+            approved = json.loads(
+                await approve_proposals_tool(
+                    {
+                        "runId": interpreted["result"]["runId"],
+                        "proposalRefs": [
+                            item["alias"] for item in interpreted.get("pendingProposals", [])
+                        ],
+                    },
+                    **self._tool_kwargs(call_id="tool_discovery_approve"),
+                )
+            )
+            self.assertEqual(approved["status"], "ok")
+
+            before_materials = await runtime.repository.list_materials("hermes:default:local")
+            before_runs = await runtime.repository.list_interpretation_runs("hermes:default:local")
+            before_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
+
+            discovery = json.loads(
+                await discovery_tool(
+                    {"textQuery": "snake", "maxItems": 4},
+                    **self._tool_kwargs(call_id="tool_discovery_read"),
+                )
+            )
+            self.assertEqual(discovery["status"], "ok")
+            self.assertEqual(discovery["pendingProposals"], [])
+            self.assertTrue(discovery["result"]["discoveryId"])
+            self.assertEqual(discovery["result"]["sectionCount"], 8)
+            self.assertEqual(
+                [section["key"] for section in discovery["result"]["discovery"]["sections"]],
+                [
+                    "recurring",
+                    "dream_body_event_links",
+                    "ripe_to_revisit",
+                    "conscious_attitude",
+                    "body_states",
+                    "method_state",
+                    "journey_threads",
+                    "held_for_now",
+                ],
+            )
+            self.assertGreaterEqual(discovery["result"]["sourceCounts"]["memoryItemCount"], 0)
+            self.assertGreaterEqual(discovery["result"]["sourceCounts"]["graphNodeCount"], 0)
+            self.assertIn("Discovery digest", discovery["result"]["discovery"]["fallbackText"])
+
+            after_materials = await runtime.repository.list_materials("hermes:default:local")
+            after_runs = await runtime.repository.list_interpretation_runs("hermes:default:local")
+            after_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
+            self.assertEqual(len(after_materials), len(before_materials))
+            self.assertEqual(len(after_runs), len(before_runs))
+            self.assertEqual(len(after_reviews), len(before_reviews))
+
+        asyncio.run(run())
+
     def test_practice_and_brief_tools_cover_new_runtime_surface(self) -> None:
         async def run() -> None:
             self._install_in_memory_runtime()
@@ -753,6 +937,55 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_feedback_tools_cover_interpretation_and_practice_feedback_surface(self) -> None:
+        async def run() -> None:
+            self._install_fake_runtime()
+            stored = json.loads(
+                await store_reflection_tool(
+                    {"text": "A sharp image stayed after the conflict."},
+                    **self._tool_kwargs(call_id="tool_feedback_store"),
+                )
+            )
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {"materialId": stored["result"]["materialId"]},
+                    **self._tool_kwargs(call_id="tool_feedback_interpret"),
+                )
+            )
+            interpretation_feedback = json.loads(
+                await record_interpretation_feedback_tool(
+                    {
+                        "runId": interpreted["result"]["runId"],
+                        "feedback": "too_much",
+                        "note": "Zu dicht.",
+                        "locale": "de-DE",
+                    },
+                    **self._tool_kwargs(call_id="tool_feedback_interpretation"),
+                )
+            )
+            self.assertEqual(interpretation_feedback["status"], "ok")
+
+            practice = json.loads(
+                await generate_practice_recommendation_tool(
+                    {},
+                    **self._tool_kwargs(call_id="tool_feedback_practice_seed"),
+                )
+            )
+            practice_feedback = json.loads(
+                await record_practice_feedback_tool(
+                    {
+                        "practiceSessionId": practice["result"]["practiceSessionId"],
+                        "feedback": "too_long",
+                        "note": "Demasiado largo.",
+                        "locale": "es-ES",
+                    },
+                    **self._tool_kwargs(call_id="tool_feedback_practice"),
+                )
+            )
+            self.assertEqual(practice_feedback["status"], "ok")
+
+        asyncio.run(run())
+
     def test_command_path_supports_practice_and_brief_subcommands(self) -> None:
         async def run() -> None:
             self._install_in_memory_runtime()
@@ -774,6 +1007,55 @@ class HermesBridgePluginTests(unittest.TestCase):
                 **self._kwargs(message_id="msg_brief"),
             )
             self.assertIn("Rhythmic briefs:", rendered_brief)
+
+        asyncio.run(run())
+
+    def test_command_path_supports_discovery_subcommand(self) -> None:
+        async def run() -> None:
+            self._install_fake_runtime()
+            runtime = get_runtime("default")
+            stored = json.loads(
+                await store_reflection_tool(
+                    {"text": "A snake kept appearing in memory after the meeting."},
+                    **self._tool_kwargs(call_id="tool_command_discovery_store"),
+                )
+            )
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {"materialId": stored["result"]["materialId"]},
+                    **self._tool_kwargs(call_id="tool_command_discovery_interpret"),
+                )
+            )
+            approved = json.loads(
+                await approve_proposals_tool(
+                    {
+                        "runId": interpreted["result"]["runId"],
+                        "proposalRefs": [
+                            item["alias"] for item in interpreted.get("pendingProposals", [])
+                        ],
+                    },
+                    **self._tool_kwargs(call_id="tool_command_discovery_approve"),
+                )
+            )
+            self.assertEqual(approved["status"], "ok")
+
+            before_materials = await runtime.repository.list_materials("hermes:default:local")
+            before_runs = await runtime.repository.list_interpretation_runs("hermes:default:local")
+            before_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
+
+            rendered = await handle_circulation(
+                "discovery --query snake",
+                **self._kwargs(message_id="msg_discovery"),
+            )
+            self.assertIn("Discovery digest", rendered)
+            self.assertIn("Recurring", rendered)
+
+            after_materials = await runtime.repository.list_materials("hermes:default:local")
+            after_runs = await runtime.repository.list_interpretation_runs("hermes:default:local")
+            after_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
+            self.assertEqual(len(after_materials), len(before_materials))
+            self.assertEqual(len(after_runs), len(before_runs))
+            self.assertEqual(len(after_reviews), len(before_reviews))
 
         asyncio.run(run())
 
@@ -900,6 +1182,7 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "circulatio_query_graph",
                 "circulatio_dashboard_summary",
                 "circulatio_memory_kernel",
+                "circulatio_discovery",
                 "circulatio_create_journey",
                 "circulatio_list_journeys",
                 "circulatio_get_journey",
@@ -934,11 +1217,14 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "circulatio_record_aesthetic_resonance",
                 "circulatio_set_consent",
                 "circulatio_answer_amplification",
+                "circulatio_method_state_respond",
                 "circulatio_upsert_goal",
                 "circulatio_upsert_goal_tension",
                 "circulatio_set_cultural_frame",
                 "circulatio_generate_practice_recommendation",
                 "circulatio_respond_practice_recommendation",
+                "circulatio_record_interpretation_feedback",
+                "circulatio_record_practice_feedback",
                 "circulatio_generate_rhythmic_briefs",
                 "circulatio_respond_rhythmic_brief",
             },
@@ -951,7 +1237,9 @@ class HermesBridgePluginTests(unittest.TestCase):
         self.assertTrue(all(tool["toolset"] == "circulatio" for tool in ctx.tools.values()))
         self.assertTrue(all(tool["is_async"] for tool in ctx.tools.values()))
         self.assertIn("circulatio_alive_today", ctx.tools)
+        self.assertIn("circulatio_discovery", ctx.tools)
         self.assertIn("circulatio_weekly_review", ctx.tools)
+        self.assertIn("circulatio_method_state_respond", ctx.tools)
         self.assertIn(
             "do not call this tool again in the same turn with unchanged material",
             ctx.tools["circulatio_interpret_material"]["description"],
@@ -964,6 +1252,7 @@ class HermesBridgePluginTests(unittest.TestCase):
             "do not present a numbered menu",
             ctx.tools["circulatio_store_dream"]["description"],
         )
+        self.assertIn("read-only", ctx.tools["circulatio_discovery"]["description"])
 
     def test_registered_plugin_handlers_smoke_through_modern_context(self) -> None:
         async def run() -> None:
@@ -1004,6 +1293,17 @@ class HermesBridgePluginTests(unittest.TestCase):
             )
             self.assertEqual(packet_response["status"], "ok")
             self.assertTrue(packet_response["result"]["packetId"])
+
+            discovery_handler = ctx.tools["circulatio_discovery"]["handler"]
+            discovery_response = json.loads(
+                await discovery_handler(
+                    {"textQuery": "snake", "maxItems": 4},
+                    **self._tool_kwargs(call_id="tool_ctx_discovery"),
+                )
+            )
+            self.assertEqual(discovery_response["status"], "ok")
+            self.assertEqual(discovery_response["result"]["sectionCount"], 8)
+            self.assertIn("Discovery digest", discovery_response["message"])
 
             journey_handler = ctx.tools["circulatio_journey_page"]["handler"]
             journey_response = json.loads(
@@ -1295,6 +1595,47 @@ class HermesBridgePluginTests(unittest.TestCase):
         self.assertIn("Journey page", rendered)
         self.assertIn("Alive today:", rendered)
         self.assertIn("Actions: Generate weekly review", rendered)
+
+    def test_result_renderer_renders_discovery_when_message_differs_from_fallback(self) -> None:
+        renderer = CirculatioResultRenderer()
+        rendered = renderer.render(
+            {
+                "requestId": "req_discovery",
+                "idempotencyKey": "key_discovery",
+                "replayed": False,
+                "status": "ok",
+                "message": "Loaded discovery digest.",
+                "result": {
+                    "discovery": {
+                        "discoveryId": "discovery_1",
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "sections": [
+                            {
+                                "key": "recurring",
+                                "title": "Recurring",
+                                "summary": "Structural recurrences surfaced from dashboard and approved memory.",
+                                "items": [
+                                    {
+                                        "label": "snake",
+                                        "criteria": ["dashboard_recurring_symbol"],
+                                        "sourceKinds": ["dashboard"],
+                                        "entityRefs": {"symbols": ["symbol_1"]},
+                                        "evidenceIds": [],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                },
+                "pendingProposals": [],
+                "affectedEntityIds": [],
+                "errors": [],
+            }
+        )
+        self.assertIn("Discovery digest", rendered)
+        self.assertIn("Recurring", rendered)
+        self.assertIn("- snake", rendered)
 
     def test_no_internal_routing_module_or_capture_any_operation_is_exposed(self) -> None:
         self.assertNotIn("circulatio_capture_any", get_args(BridgeOperation))

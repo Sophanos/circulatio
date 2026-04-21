@@ -190,6 +190,15 @@ class HermesModelAdapterTests(unittest.TestCase):
                 "proposalCandidates": [],
                 "userFacingResponse": "",
                 "clarifyingQuestion": "What felt strongest in the chase?",
+                "clarificationIntent": {
+                    "refKey": "clarify_chase_body",
+                    "questionText": "What felt strongest in the chase?",
+                    "expectedTargets": ["body_state", "personal_amplification"],
+                    "anchorRefs": {},
+                    "consentScopes": ["somatic_correlation"],
+                    "storagePolicy": "direct_if_explicit",
+                    "expiresAt": "2026-12-31T00:00:00Z",
+                },
             }
 
             async def async_call_llm(**kwargs):
@@ -222,7 +231,76 @@ class HermesModelAdapterTests(unittest.TestCase):
                     "What felt strongest in the chase?",
                 )
                 self.assertEqual(
+                    workflow["interpretation"]["clarificationIntent"]["refKey"],
+                    "clarify_chase_body",
+                )
+                self.assertEqual(
                     workflow["interpretation"]["llmInterpretationHealth"]["status"], "structured"
+                )
+
+        asyncio.run(run())
+
+    def test_route_method_state_response_uses_json_schema_and_returns_structured_candidates(
+        self,
+    ) -> None:
+        async def run() -> None:
+            calls = []
+            response_payload = {
+                "answerSummary": "Jaw tightness came up with the image.",
+                "evidenceSpans": [
+                    {
+                        "refKey": "resp_1",
+                        "quote": "My jaw tightened when I pictured the door.",
+                        "summary": "Jaw tightness appeared with the image.",
+                        "targetKinds": ["body_state"],
+                    }
+                ],
+                "captureCandidates": [
+                    {
+                        "targetKind": "body_state",
+                        "application": "direct_write",
+                        "confidence": "high",
+                        "payload": {
+                            "sensation": "tightness",
+                            "bodyRegion": "jaw",
+                            "activation": "moderate",
+                        },
+                        "supportingEvidenceRefs": ["resp_1"],
+                        "consentScopes": [],
+                        "reason": "The user directly reported a body response.",
+                    }
+                ],
+                "followUpPrompts": [],
+                "routingWarnings": [],
+            }
+
+            async def async_call_llm(**kwargs):
+                calls.append(kwargs)
+                return {"text": json.dumps(response_payload)}
+
+            def extract_content_or_reasoning(response):
+                return response["text"]
+
+            with auxiliary_client_modules(
+                async_call_llm=async_call_llm,
+                extract_content_or_reasoning=extract_content_or_reasoning,
+            ):
+                adapter = HermesModelAdapter()
+                output = await adapter.route_method_state_response(
+                    {
+                        "userId": "user_route_method_state",
+                        "responseText": "My jaw tightened when I pictured the door.",
+                        "source": "clarifying_answer",
+                        "anchorRefs": {"runId": "run_1", "clarificationRefKey": "clarify_door"},
+                        "expectedTargets": ["body_state"],
+                        "consentPreferences": [],
+                    }
+                )
+                self.assertEqual(output["captureCandidates"][0]["targetKind"], "body_state")
+                self.assertEqual(output["evidenceSpans"][0]["refKey"], "resp_1")
+                self.assertEqual(
+                    calls[0]["response_format"]["json_schema"]["name"],
+                    "circulatio_method_state_routing",
                 )
 
         asyncio.run(run())

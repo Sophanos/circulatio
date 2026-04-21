@@ -3,18 +3,26 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from typing import Literal, cast
 
 from ..adapters.context_adapter import BuildContextInput, BuildPracticeContextInput, ContextAdapter
 from ..core.adaptation_engine import AdaptationEngine
 from ..core.circulatio_core import CirculatioCore
+from ..core.method_state_policy import derive_runtime_method_state_policy
 from ..core.practice_engine import PracticeEngine
 from ..core.proactive_engine import ProactiveEngine
 from ..domain.adaptation import AdaptationSignalEvent
 from ..domain.amplifications import AmplificationPromptRecord, PersonalAmplificationRecord
+from ..domain.clarifications import (
+    ClarificationAnswerRecord,
+    ClarificationCaptureTarget,
+    ClarificationPromptRecord,
+)
 from ..domain.conscious_attitude import ConsciousAttitudeSnapshotRecord
 from ..domain.context import ContextSnapshot
 from ..domain.culture import CulturalFrameRecord
 from ..domain.errors import ConflictError, EntityNotFoundError, ValidationError
+from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.goals import GoalRecord, GoalTensionRecord
 from ..domain.graph import GraphNodeType, GraphQuery, GraphQueryResult
 from ..domain.ids import create_id, now_iso
@@ -25,6 +33,12 @@ from ..domain.journeys import JourneyRecord
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialRecord, MaterialRevision, StoredDreamStructure
 from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
+from ..domain.method_state import (
+    MethodStateAppliedEntityRef,
+    MethodStateCaptureCandidate,
+    MethodStateCaptureRunRecord,
+    MethodStateCaptureTargetKind,
+)
 from ..domain.normalization import normalize_options, normalize_session_context
 from ..domain.patterns import PatternHistoryEntry
 from ..domain.practices import PracticeSessionRecord
@@ -35,34 +49,52 @@ from ..domain.reviews import DashboardSummary, WeeklyReviewRecord
 from ..domain.soma import BodyStateRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
+    AdaptationPreferenceScope,
+    AmplificationSourceSummary,
     CirculationSummaryInput,
     CirculationSummaryResult,
+    EvidenceItem,
     FeedbackValue,
     Id,
+    InterpretationInteractionFeedback,
     InterpretationOptions,
     InterpretationResult,
     LifeContextSnapshot,
     MaterialInterpretationInput,
+    MemoryWritePlan,
+    MemoryWriteProposal,
     MethodContextSnapshot,
+    PracticeInteractionFeedback,
     PracticeOutcomeWritePayload,
     PracticePlan,
     RhythmicBriefInput,
     SafetyContext,
     SessionContext,
+    UserAdaptationProfileSummary,
     UserAssociationInput,
+    WitnessStateSummary,
 )
+from ..domain.typology import TypologyLensRecord
+from ..llm.ports import CirculatioMethodStateLlmPort
 from ..repositories.circulatio_repository import CirculatioRepository
 from .workflow_types import (
     AliveTodayResult,
     AnalysisPacketWorkflowResult,
     AnswerAmplificationPromptInput,
+    AnswerClarificationInput,
+    AnswerClarificationResult,
     CaptureConsciousAttitudeInput,
     CaptureRealityAnchorsInput,
     CreateAndInterpretMaterialInput,
     CreateBodyStateInput,
     CreateJourneyInput,
     CreateMaterialInput,
+    DiscoveryDigestItem,
+    DiscoveryResult,
+    DiscoverySection,
+    DiscoverySourceCounts,
     GenerateAnalysisPacketInput,
+    GenerateDiscoveryInput,
     GenerateJourneyPageInput,
     GenerateLivingMythReviewInput,
     GeneratePracticeInput,
@@ -82,8 +114,10 @@ from .workflow_types import (
     ListJourneysInput,
     LivingMythReviewWorkflowResult,
     MaterialWorkflowResult,
+    MethodStateWorkflowResult,
     PatternHistoryResult,
     PracticeWorkflowResult,
+    ProcessMethodStateResponseInput,
     RecordAestheticResonanceInput,
     RecordInnerOuterCorrespondenceInput,
     RecordNuminousEncounterInput,
@@ -103,6 +137,25 @@ from .workflow_types import (
     UpsertThresholdProcessInput,
 )
 
+_METHOD_STATE_POLICY_TARGETS_BY_BLOCKED_MOVE: dict[
+    str, tuple[MethodStateCaptureTargetKind, ...]
+] = {
+    "active_imagination": ("threshold_process", "numinous_encounter"),
+    "projection_language": ("projection_hypothesis",),
+    "inner_outer_correspondence": ("inner_outer_correspondence",),
+    "archetypal_patterning": ("typology_lens",),
+    "living_myth_synthesis": ("living_myth_question",),
+}
+
+_METHOD_STATE_GROUNDING_ONLY_BLOCKED_TARGETS: tuple[MethodStateCaptureTargetKind, ...] = (
+    "projection_hypothesis",
+    "inner_outer_correspondence",
+    "typology_lens",
+    "living_myth_question",
+    "threshold_process",
+    "numinous_encounter",
+)
+
 
 class CirculatioService:
     def __init__(
@@ -113,6 +166,8 @@ class CirculatioService:
         adaptation_engine: AdaptationEngine | None = None,
         practice_engine: PracticeEngine | None = None,
         proactive_engine: ProactiveEngine | None = None,
+        method_state_llm: CirculatioMethodStateLlmPort | None = None,
+        trusted_amplification_sources: list[AmplificationSourceSummary] | None = None,
     ) -> None:
         self._repository = repository
         self._core = core
@@ -120,6 +175,8 @@ class CirculatioService:
         self._adaptation_engine = adaptation_engine or AdaptationEngine()
         self._practice_engine = practice_engine or PracticeEngine()
         self._proactive_engine = proactive_engine or ProactiveEngine()
+        self._method_state_llm = method_state_llm
+        self._trusted_amplification_sources = deepcopy(trusted_amplification_sources or [])
 
     @property
     def repository(self) -> CirculatioRepository:
@@ -169,7 +226,7 @@ class CirculatioService:
         privacy_class = input_data.get("privacyClass", "session_only")
         note_text = (input_data.get("noteText") or "").strip()
         note_material: MaterialRecord | None = None
-        linked_material_ids: list[Id] = []
+        linked_material_ids: list[Id] = list(input_data.get("linkedMaterialIds", []))
         if note_text:
             note_material = await self.store_material(
                 {
@@ -191,7 +248,7 @@ class CirculatioService:
             "linkedMaterialIds": linked_material_ids,
             "linkedSymbolIds": [],
             "linkedGoalIds": list(input_data.get("linkedGoalIds", [])),
-            "evidenceIds": [],
+            "evidenceIds": list(input_data.get("evidenceIds", [])),
             "privacyClass": privacy_class,
             "status": "active",
             "createdAt": timestamp,
@@ -263,7 +320,7 @@ class CirculatioService:
             "memoryRefs": list(input_data.get("memoryRefs", [])),
             "bodySensations": list(input_data.get("bodySensations", [])),
             "source": "user_answered_prompt" if prompt else "user_response",
-            "evidenceIds": [],
+            "evidenceIds": list(input_data.get("evidenceIds", [])),
             "privacyClass": input_data.get("privacyClass", "user_private"),
             "status": "active",
             "createdAt": timestamp,
@@ -301,6 +358,196 @@ class CirculatioService:
         )
         return created
 
+    async def answer_clarification(
+        self,
+        input_data: AnswerClarificationInput,
+    ) -> AnswerClarificationResult:
+        answer_text = (input_data.get("answerText") or "").strip()
+        if not input_data.get("skip") and not answer_text:
+            raise ValidationError("answerText is required")
+        prompt: ClarificationPromptRecord | None = None
+        if input_data.get("promptId"):
+            prompt = await self._repository.get_clarification_prompt(
+                input_data["userId"], input_data["promptId"]
+            )
+            if prompt["userId"] != input_data["userId"]:
+                raise ValidationError("Clarification prompt belongs to a different user.")
+            existing_answer_id = prompt.get("answerRecordId")
+            if existing_answer_id:
+                existing_answer = await self._repository.get_clarification_answer(
+                    input_data["userId"], existing_answer_id
+                )
+                if input_data.get("skip"):
+                    return {
+                        "prompt": prompt,
+                        "answer": existing_answer,
+                        "createdRecordRefs": list(existing_answer.get("createdRecordRefs", [])),
+                        "routingStatus": str(existing_answer.get("routingStatus") or "skipped"),
+                    }
+                comparable_existing = {
+                    "answerText": str(existing_answer.get("answerText") or "").strip(),
+                    "answerPayload": deepcopy(existing_answer.get("answerPayload", {})),
+                }
+                comparable_new = {
+                    "answerText": answer_text,
+                    "answerPayload": deepcopy(input_data.get("answerPayload", {})),
+                }
+                if comparable_existing != comparable_new:
+                    raise ValidationError(
+                        "Clarification prompt already has a different stored answer."
+                    )
+                result: AnswerClarificationResult = {
+                    "answer": existing_answer,
+                    "createdRecordRefs": list(existing_answer.get("createdRecordRefs", [])),
+                    "routingStatus": str(existing_answer.get("routingStatus") or "routed"),
+                }
+                if prompt is not None:
+                    result["prompt"] = prompt
+                return result
+
+        timestamp = now_iso()
+        target = cast(
+            ClarificationCaptureTarget,
+            input_data.get("captureTargetOverride")
+            or (prompt.get("captureTarget") if prompt else None)
+            or "answer_only",
+        )
+        answer_record: ClarificationAnswerRecord = {
+            "id": create_id("clarification_answer"),
+            "userId": input_data["userId"],
+            "answerText": answer_text,
+            "captureTarget": target,
+            "routingStatus": "routing_pending",
+            "createdRecordRefs": [],
+            "privacyClass": str(
+                input_data.get("privacyClass")
+                or (prompt.get("privacyClass") if prompt else None)
+                or "session_only"
+            ),
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
+        }
+        for key in ("promptId", "materialId", "runId"):
+            value = input_data.get(key) or (prompt.get(key) if prompt else None)
+            if value:
+                answer_record[key] = value  # type: ignore[index]
+        if isinstance(input_data.get("answerPayload"), dict):
+            answer_record["answerPayload"] = deepcopy(input_data["answerPayload"])
+
+        stored_answer = await self._repository.create_clarification_answer(answer_record)
+        if input_data.get("skip"):
+            stored_answer = await self._repository.update_clarification_answer(
+                input_data["userId"],
+                stored_answer["id"],
+                {
+                    "routingStatus": "skipped",
+                    "updatedAt": now_iso(),
+                },
+            )
+            if prompt is not None:
+                prompt = await self._repository.update_clarification_prompt(
+                    input_data["userId"],
+                    prompt["id"],
+                    {
+                        "status": "skipped",
+                        "answerRecordId": stored_answer["id"],
+                        "answeredAt": stored_answer["updatedAt"],
+                        "updatedAt": stored_answer["updatedAt"],
+                    },
+                )
+            await self._record_adaptation_signal(
+                user_id=input_data["userId"],
+                event_type="clarification_skipped",
+                signals={
+                    "intent": prompt.get("intent") if prompt else "other",
+                    "captureTarget": target,
+                    "routingStatus": "skipped",
+                },
+            )
+            result: AnswerClarificationResult = {
+                "answer": stored_answer,
+                "createdRecordRefs": [],
+                "routingStatus": "skipped",
+            }
+            if prompt is not None:
+                result["prompt"] = prompt
+            return result
+
+        routing_payload = (
+            deepcopy(input_data.get("answerPayload"))
+            if isinstance(input_data.get("answerPayload"), dict)
+            else None
+        )
+        created_record_refs: list[dict[str, str]] = []
+        routed_record: dict[str, object] | None = None
+        routing_status = "unrouted"
+        validation_errors: list[str] = []
+
+        if target == "answer_only":
+            routing_status = "unrouted"
+        elif routing_payload is None:
+            routing_status = "needs_review"
+            validation_errors.append(
+                "Structured answerPayload is required for this clarification target."
+            )
+        else:
+            try:
+                created_record_refs, routed_record = await self._route_clarification_answer(
+                    user_id=input_data["userId"],
+                    prompt=prompt,
+                    answer=stored_answer,
+                    capture_target=target,
+                    payload=routing_payload,
+                )
+                routing_status = "routed"
+            except ValidationError as exc:
+                routing_status = "needs_review"
+                validation_errors.append(str(exc))
+
+        stored_answer = await self._repository.update_clarification_answer(
+            input_data["userId"],
+            stored_answer["id"],
+            {
+                "routingStatus": routing_status,
+                "createdRecordRefs": created_record_refs,
+                "validationErrors": validation_errors,
+                "updatedAt": now_iso(),
+            },
+        )
+        if prompt is not None:
+            prompt = await self._repository.update_clarification_prompt(
+                input_data["userId"],
+                prompt["id"],
+                {
+                    "status": "answered" if routing_status == "routed" else "answered_unrouted",
+                    "answerRecordId": stored_answer["id"],
+                    "answeredAt": stored_answer["updatedAt"],
+                    "updatedAt": stored_answer["updatedAt"],
+                },
+            )
+        await self._record_adaptation_signal(
+            user_id=input_data["userId"],
+            event_type="clarification_answered"
+            if routing_status == "routed"
+            else "clarification_unrouted",
+            signals={
+                "intent": prompt.get("intent") if prompt else "other",
+                "captureTarget": target,
+                "expectedAnswerKind": prompt.get("expectedAnswerKind") if prompt else "free_text",
+                "routingStatus": routing_status,
+            },
+        )
+        result = {
+            "answer": stored_answer,
+            "createdRecordRefs": created_record_refs,
+            "routingStatus": routing_status,
+        }
+        if prompt is not None:
+            result["prompt"] = prompt
+        if routed_record is not None:
+            result["routedRecord"] = routed_record
+        return result
+
     async def capture_conscious_attitude(
         self,
         input_data: CaptureConsciousAttitudeInput,
@@ -312,8 +559,8 @@ class CirculatioService:
         record: ConsciousAttitudeSnapshotRecord = {
             "id": create_id("conscious_attitude"),
             "userId": input_data["userId"],
-            "source": "user_reported",
-            "status": "active",
+            "source": str(input_data.get("source") or "manual_checkin"),
+            "status": str(input_data.get("status") or "user_confirmed"),
             "windowStart": input_data["windowStart"],
             "windowEnd": input_data["windowEnd"],
             "stanceSummary": stance_summary,
@@ -321,7 +568,7 @@ class CirculatioService:
             "activeConflicts": list(input_data.get("activeConflicts", [])),
             "avoidedThemes": list(input_data.get("avoidedThemes", [])),
             "confidence": str(input_data.get("confidence") or "low"),
-            "evidenceIds": [],
+            "evidenceIds": list(input_data.get("evidenceIds", [])),
             "relatedMaterialIds": list(input_data.get("relatedMaterialIds", [])),
             "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
             "privacyClass": input_data.get("privacyClass", "user_private"),
@@ -399,6 +646,131 @@ class CirculatioService:
         )
         return record
 
+    async def set_adaptation_preferences(
+        self,
+        *,
+        user_id: Id,
+        scope: AdaptationPreferenceScope,
+        preferences: dict[str, object],
+    ) -> UserAdaptationProfileSummary:
+        current = await self._repository.get_adaptation_profile(user_id)
+        profile = self._adaptation_engine.ensure_profile(user_id=user_id, current=current)
+        try:
+            updated = self._adaptation_engine.set_explicit_preferences(
+                profile=profile,
+                scope=scope,
+                preferences=preferences,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        await self._persist_adaptation_profile(user_id=user_id, current=current, updated=updated)
+        summary = self._adaptation_engine.summarize(updated)
+        if summary is None:
+            raise ValidationError("Adaptation profile could not be summarized.")
+        return summary
+
+    async def apply_learned_policy_update(
+        self,
+        *,
+        user_id: Id,
+        scope: AdaptationPreferenceScope,
+        policy: dict[str, object],
+    ) -> UserAdaptationProfileSummary:
+        current = await self._repository.get_adaptation_profile(user_id)
+        profile = self._adaptation_engine.ensure_profile(user_id=user_id, current=current)
+        try:
+            updated = self._adaptation_engine.set_learned_policy(
+                profile=profile,
+                scope=scope,
+                policy=policy,
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        await self._persist_adaptation_profile(user_id=user_id, current=current, updated=updated)
+        summary = self._adaptation_engine.summarize(updated)
+        if summary is None:
+            raise ValidationError("Adaptation profile could not be summarized.")
+        return summary
+
+    async def record_interpretation_feedback(
+        self,
+        user_id: Id,
+        run_id: Id,
+        feedback: InterpretationInteractionFeedback,
+        note: str | None = None,
+        locale: str | None = None,
+    ) -> InteractionFeedbackRecord:
+        self._validate_interpretation_feedback(feedback)
+        await self._repository.get_interpretation_run(user_id, run_id)
+        timestamp = now_iso()
+        record: InteractionFeedbackRecord = {
+            "id": create_id("interaction_feedback"),
+            "userId": user_id,
+            "domain": "interpretation",
+            "targetType": "interpretation_run",
+            "targetId": run_id,
+            "feedback": feedback,
+            "createdAt": timestamp,
+        }
+        if note is not None:
+            record["note"] = str(note)
+        normalized_locale = self._optional_str(locale)
+        if normalized_locale:
+            record["locale"] = normalized_locale
+        stored = await self._repository.create_interaction_feedback(record)
+        await self._record_adaptation_signal(
+            user_id=user_id,
+            event_type="interaction_feedback_interpretation",
+            signals={
+                "feedback": feedback,
+                "locale": normalized_locale,
+                "targetId": run_id,
+            },
+            success=feedback in {"good_level", "helpful"},
+        )
+        return stored
+
+    async def record_practice_feedback(
+        self,
+        user_id: Id,
+        practice_session_id: Id,
+        feedback: PracticeInteractionFeedback,
+        note: str | None = None,
+        locale: str | None = None,
+    ) -> InteractionFeedbackRecord:
+        self._validate_practice_feedback(feedback)
+        practice = await self._repository.get_practice_session(user_id, practice_session_id)
+        timestamp = now_iso()
+        record: InteractionFeedbackRecord = {
+            "id": create_id("interaction_feedback"),
+            "userId": user_id,
+            "domain": "practice",
+            "targetType": "practice_session",
+            "targetId": practice_session_id,
+            "feedback": feedback,
+            "createdAt": timestamp,
+        }
+        if note is not None:
+            record["note"] = str(note)
+        normalized_locale = self._optional_str(locale)
+        if normalized_locale:
+            record["locale"] = normalized_locale
+        stored = await self._repository.create_interaction_feedback(record)
+        await self._record_adaptation_signal(
+            user_id=user_id,
+            event_type="interaction_feedback_practice",
+            signals={
+                "feedback": feedback,
+                "locale": normalized_locale,
+                "targetId": practice_session_id,
+                "practiceType": practice["practiceType"],
+                "modality": practice.get("modality"),
+                "durationMinutes": practice.get("durationMinutes"),
+            },
+            success=feedback in {"good_fit", "helpful"},
+        )
+        return stored
+
     async def get_witness_state(
         self,
         *,
@@ -413,31 +785,207 @@ class CirculatioService:
             window_end=window_end,
             material_id=material_id,
         )
-        if snapshot is not None:
-            return snapshot
-        return {
-            "windowStart": window_start,
-            "windowEnd": window_end,
-            "source": "circulatio-backend",
+        return self._enrich_method_context_snapshot(
+            snapshot,
+            window_start=window_start,
+            window_end=window_end,
+        )
+
+    def _enrich_method_context_snapshot(
+        self,
+        snapshot: MethodContextSnapshot | None,
+        *,
+        window_start: str | None = None,
+        window_end: str | None = None,
+    ) -> MethodContextSnapshot:
+        enriched: MethodContextSnapshot = deepcopy(snapshot) if snapshot is not None else {}
+        if window_start and not enriched.get("windowStart"):
+            enriched["windowStart"] = window_start
+        if window_end and not enriched.get("windowEnd"):
+            enriched["windowEnd"] = window_end
+        enriched.setdefault("source", "circulatio-backend")
+        runtime_policy = derive_runtime_method_state_policy(enriched)
+        enriched["witnessState"] = self._build_witness_state_summary(
+            method_context=enriched,
+            runtime_policy=runtime_policy,
+        )
+        return enriched
+
+    def _build_witness_state_summary(
+        self,
+        *,
+        method_context: MethodContextSnapshot,
+        runtime_policy: dict[str, object],
+    ) -> WitnessStateSummary:
+        method_state = (
+            method_context.get("methodState")
+            if isinstance(method_context.get("methodState"), dict)
+            else {}
+        )
+        questioning_preference = (
+            method_state.get("questioningPreference")
+            if isinstance(method_state.get("questioningPreference"), dict)
+            else {}
+        )
+        typology_state = (
+            method_state.get("typologyMethodState")
+            if isinstance(method_state.get("typologyMethodState"), dict)
+            else {}
+        )
+        practice_constraints = (
+            runtime_policy.get("practiceConstraints")
+            if isinstance(runtime_policy.get("practiceConstraints"), dict)
+            else {}
+        )
+        stance = "paced_contact"
+        depth_level = str(runtime_policy.get("depthLevel") or "gentle").strip()
+        if depth_level == "grounding_only":
+            stance = "grounding_first"
+        elif depth_level == "standard":
+            stance = "symbolic_contact"
+        preferred_moves = [
+            str(item).strip()
+            for item in runtime_policy.get("preferredMoves", [])
+            if str(item).strip()
+        ]
+        preferred_question_styles = [
+            str(item).strip()
+            for item in questioning_preference.get("preferredQuestionStyles", [])
+            if str(item).strip()
+        ]
+        question_style = str(runtime_policy.get("questionStyle") or "").strip()
+        if question_style and question_style not in preferred_question_styles:
+            preferred_question_styles.append(question_style)
+        avoided_question_styles = [
+            str(item).strip()
+            for item in questioning_preference.get("avoidedQuestionStyles", [])
+            if str(item).strip()
+        ]
+        allowed_targets = {
+            "answer_only",
+            "body_state",
+            "conscious_attitude",
+            "goal",
+            "goal_tension",
+            "personal_amplification",
+            "reality_anchors",
+            "threshold_process",
+            "relational_scene",
+            "inner_outer_correspondence",
+            "numinous_encounter",
+            "aesthetic_resonance",
+            "consent_preference",
+            "interpretation_preference",
+            "typology_feedback",
         }
+        preferred_targets = [
+            str(item).strip()
+            for item in runtime_policy.get("preferredClarificationTargets", [])
+            if str(item).strip() in allowed_targets
+        ]
+        practice_frame_parts: list[str] = []
+        if bool(practice_constraints.get("preferLowIntensity")):
+            practice_frame_parts.append("Keep practices low intensity.")
+        max_duration = practice_constraints.get("maxDurationMinutes")
+        if isinstance(max_duration, int) and max_duration > 0:
+            practice_frame_parts.append(f"Keep practices within {max_duration} minutes.")
+        compensation_prompt = str(practice_constraints.get("compensationPrompt") or "").strip()
+        if compensation_prompt:
+            practice_frame_parts.append(compensation_prompt)
+        practice_bias = str(practice_constraints.get("practiceBias") or "").strip()
+        if practice_bias:
+            practice_frame_parts.append(practice_bias.replace("_", " "))
+        typology_frame = ""
+        prompt_bias = str(typology_state.get("promptBias") or "").strip()
+        balancing_function = str(typology_state.get("balancingFunction") or "").strip()
+        if prompt_bias or balancing_function:
+            fragments = []
+            if prompt_bias:
+                fragments.append(prompt_bias.replace("_", " "))
+            if balancing_function:
+                fragments.append(f"balance through {balancing_function}")
+            typology_frame = "; ".join(fragments)
+        stance_value = cast(
+            Literal["grounding_first", "paced_contact", "symbolic_contact"],
+            stance,
+        )
+        tone_value = cast(
+            Literal["grounded", "gentle", "direct", "spacious"],
+            str(runtime_policy.get("witnessTone") or "gentle").strip() or "gentle",
+        )
+        preferred_targets_value = cast(list[ClarificationCaptureTarget], preferred_targets)
+        updated_at = (
+            str(method_state.get("generatedAt") or "").strip()
+            or str(method_context.get("windowEnd") or "").strip()
+            or now_iso()
+        )
+        witness_state: WitnessStateSummary = {
+            "stance": stance_value,
+            "tone": tone_value,
+            "startingMove": preferred_moves[0]
+            if preferred_moves
+            else "grounding"
+            if stance == "grounding_first"
+            else "grounded_question"
+            if stance == "paced_contact"
+            else "association",
+            "maxQuestionsPerTurn": int(runtime_policy.get("maxClarifyingQuestions", 2) or 2),
+            "preferredQuestionStyles": preferred_question_styles,
+            "avoidedQuestionStyles": avoided_question_styles,
+            "preferredClarificationTargets": preferred_targets_value,
+            "blockedMoves": [
+                str(item).strip()
+                for item in runtime_policy.get("blockedMoves", [])
+                if str(item).strip()
+            ],
+            "avoidPhrasingPatterns": [
+                str(item).strip()
+                for item in runtime_policy.get("avoidPhrasingPatterns", [])
+                if str(item).strip()
+            ],
+            "reasons": [
+                str(item).strip() for item in runtime_policy.get("reasons", []) if str(item).strip()
+            ],
+            "updatedAt": updated_at,
+        }
+        witness_voice = str(runtime_policy.get("witnessVoice") or "").strip()
+        if witness_voice:
+            witness_state["witnessVoice"] = witness_voice
+        active_goal_frame = str(runtime_policy.get("activeGoalFrame") or "").strip()
+        if active_goal_frame:
+            witness_state["activeGoalFrame"] = active_goal_frame
+        if practice_frame_parts:
+            witness_state["practiceFrame"] = " ".join(practice_frame_parts[:3])
+        if typology_frame:
+            witness_state["typologyFrame"] = typology_frame
+        recent_locale = str(runtime_policy.get("recentLocale") or "").strip()
+        if recent_locale:
+            witness_state["recentLocale"] = recent_locale
+        return witness_state
 
     async def set_cultural_frame(
         self,
         input_data: SetCulturalFrameInput,
     ) -> CulturalFrameRecord:
         timestamp = now_iso()
-        frame_type = str(input_data.get("type") or "chosen")
-        status = str(input_data.get("status") or "enabled")
+        label = self._optional_str(input_data.get("label"))
+        if not label:
+            raise ValidationError("label is required")
+        frame_type = self._validate_cultural_frame_type(input_data.get("type"))
+        status = self._validate_cultural_frame_status(input_data.get("status"))
+        allowed_uses = self._normalize_cultural_frame_use_list(input_data.get("allowedUses"))
+        avoid_uses = self._normalize_cultural_frame_use_list(input_data.get("avoidUses"))
+        notes = self._optional_str(input_data.get("notes"))
         if input_data.get("culturalFrameId"):
             record = await self._repository.update_cultural_frame(
                 input_data["userId"],
                 input_data["culturalFrameId"],
                 {
-                    "label": input_data["label"],
+                    "label": label,
                     "frameType": frame_type,
-                    "allowedUses": list(input_data.get("allowedUses", [])),
-                    "avoidUses": list(input_data.get("avoidUses", [])),
-                    "notes": input_data.get("notes"),
+                    "allowedUses": allowed_uses,
+                    "avoidUses": avoid_uses,
+                    "notes": notes,
                     "status": status,
                     "updatedAt": timestamp,
                 },
@@ -447,11 +995,11 @@ class CirculatioService:
                 {
                     "id": create_id("cultural_frame"),
                     "userId": input_data["userId"],
-                    "label": input_data["label"],
+                    "label": label,
                     "frameType": frame_type,
-                    "allowedUses": list(input_data.get("allowedUses", [])),
-                    "avoidUses": list(input_data.get("avoidUses", [])),
-                    "notes": input_data.get("notes"),
+                    "allowedUses": allowed_uses,
+                    "avoidUses": avoid_uses,
+                    "notes": notes,
                     "status": status,
                     "createdAt": timestamp,
                     "updatedAt": timestamp,
@@ -481,6 +1029,7 @@ class CirculatioService:
                     "valueTags": list(input_data.get("valueTags", [])),
                     "linkedMaterialIds": list(input_data.get("linkedMaterialIds", [])),
                     "linkedSymbolIds": list(input_data.get("linkedSymbolIds", [])),
+                    "evidenceIds": list(input_data.get("evidenceIds", [])),
                     "updatedAt": timestamp,
                 },
             )
@@ -515,6 +1064,10 @@ class CirculatioService:
                             list(existing.get("linkedSymbolIds", [])),
                             list(input_data.get("linkedSymbolIds", [])),
                         ),
+                        "evidenceIds": self._merge_ids(
+                            list(existing.get("evidenceIds", [])),
+                            list(input_data.get("evidenceIds", [])),
+                        ),
                         "updatedAt": timestamp,
                     },
                 )
@@ -529,6 +1082,7 @@ class CirculatioService:
                         "valueTags": list(input_data.get("valueTags", [])),
                         "linkedMaterialIds": list(input_data.get("linkedMaterialIds", [])),
                         "linkedSymbolIds": list(input_data.get("linkedSymbolIds", [])),
+                        "evidenceIds": list(input_data.get("evidenceIds", [])),
                         "createdAt": timestamp,
                         "updatedAt": timestamp,
                     }
@@ -802,7 +1356,7 @@ class CirculatioService:
             "label": str(input_data.get("label") or "Reality anchors").strip() or "Reality anchors",
             "summary": summary,
             "confidence": "high",
-            "evidenceIds": [],
+            "evidenceIds": list(input_data.get("evidenceIds", [])),
             "relatedMaterialIds": list(input_data.get("relatedMaterialIds", [])),
             "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
             "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
@@ -884,7 +1438,7 @@ class CirculatioService:
                 "label": str(input_data.get("label") or threshold_name).strip() or threshold_name,
                 "summary": summary,
                 "confidence": "high",
-                "evidenceIds": [],
+                "evidenceIds": list(input_data.get("evidenceIds", [])),
                 "relatedMaterialIds": list(input_data.get("relatedMaterialIds", [])),
                 "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
                 "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
@@ -910,6 +1464,10 @@ class CirculatioService:
                     or existing.get("label", threshold_name),
                     "summary": summary,
                     "confidence": "high",
+                    "evidenceIds": self._merge_ids(
+                        list(existing.get("evidenceIds", [])),
+                        list(input_data.get("evidenceIds", [])),
+                    ),
                     "relatedMaterialIds": self._merge_ids(
                         list(existing.get("relatedMaterialIds", [])),
                         list(input_data.get("relatedMaterialIds", [])),
@@ -981,7 +1539,7 @@ class CirculatioService:
                 or "Relational scene",
                 "summary": summary,
                 "confidence": "high",
-                "evidenceIds": [],
+                "evidenceIds": list(input_data.get("evidenceIds", [])),
                 "relatedMaterialIds": list(input_data.get("relatedMaterialIds", [])),
                 "relatedSymbolIds": [],
                 "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
@@ -1100,7 +1658,7 @@ class CirculatioService:
                 or "Inner-outer correspondence",
                 "summary": summary,
                 "confidence": "high",
-                "evidenceIds": [],
+                "evidenceIds": list(input_data.get("evidenceIds", [])),
                 "relatedMaterialIds": [],
                 "relatedSymbolIds": list(input_data.get("symbolIds", [])),
                 "relatedGoalIds": [],
@@ -1145,6 +1703,10 @@ class CirculatioService:
                     ),
                     "summary": summary,
                     "confidence": "high",
+                    "evidenceIds": self._merge_ids(
+                        list(existing.get("evidenceIds", [])),
+                        list(input_data.get("evidenceIds", [])),
+                    ),
                     "relatedSymbolIds": self._merge_ids(
                         list(existing.get("relatedSymbolIds", [])),
                         list(input_data.get("symbolIds", [])),
@@ -1186,7 +1748,7 @@ class CirculatioService:
             or "Numinous encounter",
             "summary": summary,
             "confidence": "high",
-            "evidenceIds": [],
+            "evidenceIds": list(input_data.get("evidenceIds", [])),
             "relatedMaterialIds": list(input_data.get("relatedMaterialIds", [])),
             "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
             "relatedGoalIds": [],
@@ -1240,7 +1802,7 @@ class CirculatioService:
             or "Aesthetic resonance",
             "summary": summary,
             "confidence": "high",
-            "evidenceIds": [],
+            "evidenceIds": list(input_data.get("evidenceIds", [])),
             "relatedMaterialIds": list(input_data.get("relatedMaterialIds", [])),
             "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
             "relatedGoalIds": [],
@@ -1338,6 +1900,12 @@ class CirculatioService:
             run_id=run["id"],
             interpretation=interpretation,
         )
+        clarification_prompts = await self._ensure_clarification_prompt_for_run(
+            user_id=user_id,
+            material=material,
+            run_id=run["id"],
+            interpretation=interpretation,
+        )
         material_updates: dict[str, object] = {
             "latestInterpretationRunId": run["id"],
             "updatedAt": now_iso(),
@@ -1359,6 +1927,8 @@ class CirculatioService:
             "interpretation": interpretation,
             "pendingProposals": interpretation["memoryWritePlan"]["proposals"],
         }
+        if clarification_prompts:
+            result["pendingClarificationPrompts"] = clarification_prompts
         if context_snapshot is not None:
             result["contextSnapshot"] = context_snapshot
         if practice_session is not None:
@@ -1479,6 +2049,420 @@ class CirculatioService:
             signals={"count": len(proposals)},
         )
         return integration
+
+    async def get_method_state_capture_run(
+        self, *, user_id: Id, capture_run_id: Id
+    ) -> MethodStateCaptureRunRecord:
+        return await self._repository.get_method_state_capture_run(user_id, capture_run_id)
+
+    async def process_method_state_response(
+        self,
+        input_data: ProcessMethodStateResponseInput,
+    ) -> MethodStateWorkflowResult:
+        response_text = str(input_data.get("responseText") or "").strip()
+        if not response_text:
+            raise ValidationError("responseText is required")
+        user_id = input_data["userId"]
+        idempotency_key = str(input_data.get("idempotencyKey") or "").strip()
+        if not idempotency_key:
+            raise ValidationError("idempotencyKey is required")
+        source = str(input_data.get("source") or "").strip()
+        if not source:
+            raise ValidationError("source is required")
+        if source not in {
+            "clarifying_answer",
+            "freeform_followup",
+            "body_note",
+            "amplification_answer",
+            "relational_scene",
+            "dream_dynamics",
+            "goal_feedback",
+            "practice_feedback",
+            "consent_update",
+        }:
+            raise ValidationError(f"Unsupported method-state source: {source}")
+        anchor_refs = deepcopy(input_data.get("anchorRefs", {}))
+        if source not in {"body_note", "consent_update"} and not self._method_state_has_anchor(
+            anchor_refs
+        ):
+            raise ValidationError("anchorRefs are required for this method-state response")
+        existing_run = await self._repository.get_method_state_capture_run_by_idempotency_key(
+            user_id,
+            idempotency_key,
+        )
+        if existing_run is not None:
+            if existing_run.get("status") in {"completed", "no_capture"}:
+                return await self._materialize_method_state_result(existing_run)
+            raise ConflictError(
+                "Method-state response with idempotency key "
+                f"{idempotency_key} is already in progress."
+            )
+
+        observed_at = str(input_data.get("observedAt") or now_iso())
+        response_material = await self.create_material(
+            {
+                "userId": user_id,
+                "materialType": "reflection",
+                "text": response_text,
+                "materialDate": observed_at,
+                "privacyClass": input_data.get("privacyClass", "user_private"),
+                "source": "hermes_ui",
+                "tags": ["method-state", source],
+            }
+        )
+        anchors = await self._load_method_state_anchors(user_id=user_id, anchor_refs=anchor_refs)
+        expected_targets = self._resolve_expected_capture_targets(
+            source=source,
+            expected_targets=input_data.get("expectedTargets", []),
+            anchors=anchors,
+        )
+        capture_run_id = create_id("method_state_capture")
+        empty_plan: MemoryWritePlan = {
+            "runId": capture_run_id,
+            "proposals": [],
+            "evidenceItems": [],
+        }
+        await self._repository.create_method_state_capture_run(
+            {
+                "id": capture_run_id,
+                "userId": user_id,
+                "idempotencyKey": idempotency_key,
+                "source": source,
+                "status": "processing",
+                "anchorRefs": deepcopy(anchor_refs),
+                "responseMaterialId": response_material["id"],
+                "evidenceIds": [],
+                "expectedTargets": list(expected_targets),
+                "extractionResult": {},
+                "appliedEntityRefs": [],
+                "memoryWritePlan": deepcopy(empty_plan),
+                "proposalDecisions": [],
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
+            }
+        )
+
+        window_start, window_end = self._resolve_window(anchor=observed_at)
+        method_context = await self._repository.build_method_context_snapshot_from_records(
+            user_id,
+            window_start=window_start,
+            window_end=window_end,
+            material_id=str(anchor_refs.get("materialId") or response_material["id"]),
+        )
+        method_context = self._enrich_method_context_snapshot(
+            method_context,
+            window_start=window_start,
+            window_end=window_end,
+        )
+        runtime_policy = derive_runtime_method_state_policy(method_context)
+        life_context = deepcopy(input_data.get("lifeContextSnapshot"))
+        if life_context is None:
+            life_context = await self._repository.build_life_context_snapshot_from_records(
+                user_id,
+                window_start=window_start,
+                window_end=window_end,
+                exclude_material_id=response_material["id"],
+            )
+        hermes_memory = await self._repository.build_hermes_memory_context_from_records(
+            user_id,
+            max_items=20,
+        )
+        consent_preferences = (
+            list(method_context.get("consentPreferences", [])) if method_context else []
+        )
+        warnings: list[str] = []
+        routing_output: dict[str, object] = {
+            "answerSummary": "",
+            "evidenceSpans": [],
+            "captureCandidates": [],
+            "followUpPrompts": [],
+            "routingWarnings": [],
+        }
+        if expected_targets and self._method_state_llm is not None:
+            routing_output = await self._method_state_llm.route_method_state_response(
+                {
+                    "userId": user_id,
+                    "responseText": response_text,
+                    "source": source,
+                    "anchorRefs": deepcopy(anchor_refs),
+                    "expectedTargets": list(expected_targets),
+                    "clarificationIntent": deepcopy(anchors.get("clarificationIntent", {})),
+                    "methodContextSnapshot": deepcopy(method_context or {}),
+                    "lifeContextSnapshot": deepcopy(life_context or {}),
+                    "hermesMemoryContext": deepcopy(hermes_memory),
+                    "safetyContext": deepcopy(input_data.get("safetyContext", {})),
+                    "consentPreferences": deepcopy(consent_preferences),
+                    "recentPromptOrRunSummary": self._method_state_anchor_summary(anchors),
+                    "options": deepcopy(normalize_options(input_data.get("options"))),
+                }
+            )
+            warnings.extend(str(item) for item in routing_output.get("routingWarnings", []))
+        elif expected_targets:
+            warnings.append("method_state_routing_unavailable")
+
+        evidence_items = await self._create_method_state_evidence(
+            user_id=user_id,
+            response_material_id=response_material["id"],
+            response_text=response_text,
+            observed_at=observed_at,
+            privacy_class=str(input_data.get("privacyClass") or "user_private"),
+            spans=routing_output.get("evidenceSpans"),
+        )
+        evidence_ids_by_ref = {str(item.get("sourceId") or item["id"]): item["id"] for item in []}
+        for item in routing_output.get("evidenceSpans", []):
+            if not isinstance(item, dict):
+                continue
+            ref_key = str(item.get("refKey") or "").strip()
+            if not ref_key:
+                continue
+            matching = next(
+                (
+                    evidence["id"]
+                    for evidence in evidence_items
+                    if evidence.get("quoteOrSummary")
+                    == self._method_state_evidence_text(response_text=response_text, span=item)
+                ),
+                None,
+            )
+            if matching:
+                evidence_ids_by_ref[ref_key] = matching
+
+        pending_proposals: list[MemoryWriteProposal] = []
+        withheld_candidates: list[dict[str, object]] = []
+        applied_entity_refs: list[MethodStateAppliedEntityRef] = []
+        for raw_candidate in routing_output.get("captureCandidates", []):
+            if not isinstance(raw_candidate, dict):
+                continue
+            candidate = deepcopy(raw_candidate)
+            outcome = await self._apply_method_state_candidate(
+                user_id=user_id,
+                source=source,
+                response_material=response_material,
+                observed_at=observed_at,
+                expected_targets=expected_targets,
+                anchors=anchors,
+                candidate=candidate,
+                evidence_ids_by_ref=evidence_ids_by_ref,
+                consent_preferences=consent_preferences,
+                safety_context=input_data.get("safetyContext"),
+                runtime_policy=runtime_policy,
+                window_start=window_start,
+                window_end=window_end,
+            )
+            proposal = outcome.get("proposal")
+            if isinstance(proposal, dict):
+                pending_proposals.append(proposal)
+            applied_ref = outcome.get("appliedEntityRef")
+            if isinstance(applied_ref, dict):
+                applied_entity_refs.append(applied_ref)
+            withheld = outcome.get("withheld")
+            if isinstance(withheld, dict):
+                withheld_candidates.append(withheld)
+            warning = outcome.get("warning")
+            if warning:
+                warnings.append(str(warning))
+
+        warnings = list(dict.fromkeys(str(item) for item in warnings if str(item).strip()))
+        extraction_result = deepcopy(routing_output)
+        extraction_result["routingWarnings"] = warnings
+        extraction_result["withheldCandidates"] = deepcopy(withheld_candidates)
+        memory_write_plan: MemoryWritePlan = {
+            "runId": capture_run_id,
+            "proposals": deepcopy(pending_proposals),
+            "evidenceItems": deepcopy(evidence_items),
+        }
+        final_status = "completed" if (applied_entity_refs or pending_proposals) else "no_capture"
+        updated_run = await self._repository.update_method_state_capture_run(
+            user_id,
+            capture_run_id,
+            {
+                "status": final_status,
+                "evidenceIds": [item["id"] for item in evidence_items],
+                "extractionResult": extraction_result,
+                "appliedEntityRefs": deepcopy(applied_entity_refs),
+                "memoryWritePlan": deepcopy(memory_write_plan),
+                "proposalDecisions": self._proposal_decisions_from_memory_write_plan(
+                    memory_write_plan
+                ),
+                "updatedAt": now_iso(),
+            },
+        )
+        await self._record_adaptation_signal(
+            user_id=user_id,
+            event_type="method_state_response_processed",
+            signals={
+                "source": source,
+                "appliedCount": len(applied_entity_refs),
+                "proposalCount": len(pending_proposals),
+            },
+        )
+        adaptation_event_by_entity = {
+            "BodyState": "body_state_captured_from_response",
+            "PersonalAmplification": "amplification_answer_captured",
+            "PracticeSession": "practice_feedback_recorded",
+            "Goal": "goal_feedback_recorded",
+            "GoalTension": "goal_feedback_recorded",
+            "RelationalScene": "relational_scene_recorded",
+        }
+        for applied_ref in applied_entity_refs:
+            event_type = adaptation_event_by_entity.get(str(applied_ref.get("entityType") or ""))
+            if not event_type:
+                continue
+            await self._record_adaptation_signal(
+                user_id=user_id,
+                event_type=event_type,
+                signals={
+                    "source": source,
+                    "entityType": applied_ref.get("entityType"),
+                    "entityId": applied_ref.get("entityId"),
+                },
+            )
+        return {
+            "captureRun": updated_run,
+            "responseMaterial": response_material,
+            "evidence": evidence_items,
+            "appliedEntityRefs": applied_entity_refs,
+            "pendingProposals": pending_proposals,
+            "followUpPrompts": [
+                str(item) for item in routing_output.get("followUpPrompts", []) if str(item).strip()
+            ],
+            "withheldCandidates": withheld_candidates,
+            "warnings": warnings,
+        }
+
+    async def approve_method_state_capture_proposals(
+        self,
+        *,
+        user_id: Id,
+        capture_run_id: Id,
+        proposal_ids: list[Id],
+        integration_note: str | None = None,
+    ) -> MethodStateCaptureRunRecord:
+        capture_run = await self._repository.get_method_state_capture_run(user_id, capture_run_id)
+        plan = capture_run.get("memoryWritePlan")
+        if not plan:
+            raise ValidationError(
+                f"Method-state capture run {capture_run_id} has no memory write plan."
+            )
+        proposals = self._proposal_records_from_memory_write_plan(
+            memory_write_plan=plan,
+            proposal_ids=proposal_ids,
+            owner_label="method-state capture run",
+            owner_id=capture_run_id,
+        )
+        for proposal in proposals:
+            self._assert_transition_from_decisions(
+                capture_run.get("proposalDecisions", []),
+                proposal["id"],
+                "approved",
+            )
+        applied = await self._repository.apply_approved_proposals(
+            user_id=user_id,
+            memory_write_plan=plan,
+            approved_proposal_ids=[proposal["id"] for proposal in proposals],
+        )
+        timestamp = now_iso()
+        integration: IntegrationRecord = {
+            "id": create_id("integration"),
+            "userId": user_id,
+            "materialId": capture_run.get("responseMaterialId"),
+            "action": "approved_proposals",
+            "approvedProposalIds": list(applied["appliedProposalIds"]),
+            "rejectedProposalIds": [],
+            "suppressedHypothesisIds": [],
+            "affectedEntityIds": list(applied.get("affectedEntityIds", [])),
+            "createdAt": timestamp,
+        }
+        if integration_note:
+            integration["note"] = integration_note
+        await self._repository.create_integration_record(integration)
+        updated_run = await self._repository.update_method_state_capture_run(
+            user_id,
+            capture_run_id,
+            {
+                "proposalDecisions": self._merge_proposal_decisions(
+                    capture_run.get("proposalDecisions", []),
+                    [
+                        {
+                            "proposalId": proposal["id"],
+                            "action": proposal["action"],
+                            "entityType": proposal["entityType"],
+                            "status": "approved",
+                            "decidedAt": timestamp,
+                            "integrationRecordId": integration["id"],
+                        }
+                        for proposal in proposals
+                    ],
+                ),
+                "updatedAt": timestamp,
+            },
+        )
+        return updated_run
+
+    async def reject_method_state_capture_proposals(
+        self,
+        *,
+        user_id: Id,
+        capture_run_id: Id,
+        proposal_ids: list[Id],
+        reason: str | None = None,
+    ) -> MethodStateCaptureRunRecord:
+        capture_run = await self._repository.get_method_state_capture_run(user_id, capture_run_id)
+        plan = capture_run.get("memoryWritePlan")
+        if not plan:
+            raise ValidationError(
+                f"Method-state capture run {capture_run_id} has no memory write plan."
+            )
+        proposals = self._proposal_records_from_memory_write_plan(
+            memory_write_plan=plan,
+            proposal_ids=proposal_ids,
+            owner_label="method-state capture run",
+            owner_id=capture_run_id,
+        )
+        for proposal in proposals:
+            self._assert_transition_from_decisions(
+                capture_run.get("proposalDecisions", []),
+                proposal["id"],
+                "rejected",
+            )
+        timestamp = now_iso()
+        integration: IntegrationRecord = {
+            "id": create_id("integration"),
+            "userId": user_id,
+            "materialId": capture_run.get("responseMaterialId"),
+            "action": "rejected_proposals",
+            "approvedProposalIds": [],
+            "rejectedProposalIds": [proposal["id"] for proposal in proposals],
+            "suppressedHypothesisIds": [],
+            "affectedEntityIds": [],
+            "createdAt": timestamp,
+        }
+        if reason:
+            integration["note"] = reason
+        await self._repository.create_integration_record(integration)
+        updated_run = await self._repository.update_method_state_capture_run(
+            user_id,
+            capture_run_id,
+            {
+                "proposalDecisions": self._merge_proposal_decisions(
+                    capture_run.get("proposalDecisions", []),
+                    [
+                        {
+                            "proposalId": proposal["id"],
+                            "action": proposal["action"],
+                            "entityType": proposal["entityType"],
+                            "status": "rejected",
+                            "decidedAt": timestamp,
+                            "integrationRecordId": integration["id"],
+                            "reason": reason,
+                        }
+                        for proposal in proposals
+                    ],
+                ),
+                "updatedAt": timestamp,
+            },
+        )
+        return updated_run
 
     async def approve_living_myth_review_proposals(
         self,
@@ -1923,6 +2907,107 @@ class CirculatioService:
         if practice_session is not None:
             review["practiceSuggestionId"] = practice_session["id"]
         return await self._repository.create_weekly_review(review)
+
+    async def generate_discovery(
+        self,
+        input_data: GenerateDiscoveryInput,
+    ) -> DiscoveryResult:
+        resolved_start, resolved_end = self._resolve_window(
+            anchor=self._optional_str(input_data.get("windowEnd")),
+            fallback_start=self._optional_str(input_data.get("windowStart")),
+            fallback_end=self._optional_str(input_data.get("windowEnd")),
+        )
+        if self._parse_datetime(resolved_start) > self._parse_datetime(resolved_end):
+            raise ValidationError("Discovery windowStart cannot be after windowEnd.")
+        explicit_question = self._optional_str(input_data.get("explicitQuestion"))
+        max_items = min(max(int(input_data.get("maxItems", 5)), 1), 8)
+        memory_limit = min(max(max_items * 4, 12), 30)
+        graph_limit = min(max(max_items * 20, 40), 100)
+        memory_query: MemoryRetrievalQuery = {
+            "windowStart": resolved_start,
+            "windowEnd": resolved_end,
+            "rankingProfile": self._discovery_ranking_profile(input_data.get("rankingProfile")),
+            "limit": memory_limit,
+        }
+        text_query = self._optional_str(input_data.get("textQuery")) or explicit_question
+        if text_query:
+            memory_query["textQuery"] = text_query
+        raw_namespaces = input_data.get("memoryNamespaces")
+        if isinstance(raw_namespaces, list):
+            namespaces = [str(value) for value in raw_namespaces if str(value).strip()]
+            if namespaces:
+                memory_query["namespaces"] = namespaces  # type: ignore[typeddict-item]
+        method_context = await self._repository.build_method_context_snapshot_from_records(
+            input_data["userId"],
+            window_start=resolved_start,
+            window_end=resolved_end,
+        )
+        method_context = self._enrich_method_context_snapshot(
+            method_context,
+            window_start=resolved_start,
+            window_end=resolved_end,
+        )
+        dashboard = await self.get_dashboard_summary(user_id=input_data["userId"])
+        memory_snapshot = await self.build_memory_kernel_snapshot(
+            user_id=input_data["userId"],
+            query=memory_query,
+        )
+        root_node_ids = self._normalize_discovery_root_ids(input_data.get("rootNodeIds"))
+        if not root_node_ids:
+            root_node_ids = self._derive_discovery_root_ids(
+                dashboard=dashboard,
+                memory_snapshot=memory_snapshot,
+                method_context=method_context,
+            )
+        graph_query: GraphQuery = {
+            "maxDepth": 2,
+            "direction": "both",
+            "includeEvidence": True,
+            "limit": graph_limit,
+        }
+        if root_node_ids:
+            graph_query["rootNodeIds"] = root_node_ids
+        graph = await self.query_graph(user_id=input_data["userId"], query=graph_query)
+        sections = self._build_discovery_sections(
+            dashboard=dashboard,
+            memory_snapshot=memory_snapshot,
+            graph=graph,
+            method_context=method_context,
+            max_items=max_items,
+        )
+        warnings = [
+            str(value)
+            for value in graph.get("warnings", [])
+            if isinstance(value, str) and value.strip()
+        ]
+        source_counts: DiscoverySourceCounts = {
+            "recentMaterialCount": len(dashboard["recentMaterials"]),
+            "recurringSymbolCount": len(dashboard["recurringSymbols"]),
+            "activePatternCount": len(dashboard["activePatterns"]),
+            "pendingProposalCount": dashboard["pendingProposalCount"],
+            "memoryItemCount": len(memory_snapshot["items"]),
+            "graphNodeCount": len(graph["nodes"]),
+            "graphEdgeCount": len(graph["edges"]),
+        }
+        discovery: DiscoveryResult = {
+            "discoveryId": create_id("discovery"),
+            "userId": input_data["userId"],
+            "generatedAt": now_iso(),
+            "windowStart": resolved_start,
+            "windowEnd": resolved_end,
+            "sections": sections,
+            "sourceCounts": source_counts,
+            "fallbackText": self._render_discovery_fallback(
+                sections=sections,
+                window_start=resolved_start,
+                window_end=resolved_end,
+                explicit_question=explicit_question,
+            ),
+            "warnings": warnings,
+        }
+        if explicit_question:
+            discovery["explicitQuestion"] = explicit_question
+        return discovery
 
     async def generate_alive_today(
         self,
@@ -2399,9 +3484,10 @@ class CirculatioService:
             adapter_input["options"] = normalize_options(input_data["options"])
         practice_input = await self._context_adapter.build_practice_input(adapter_input)
         profile = await self._repository.get_adaptation_profile(input_data["userId"])
-        adaptation_hints = self._adaptation_engine.derive_practice_hints(profile=profile)
+        practice_hints = self._adaptation_engine.derive_practice_hints(profile=profile)
         practice_input = deepcopy(practice_input)
-        practice_input["adaptationHints"] = deepcopy(adaptation_hints)
+        practice_input["practiceHints"] = deepcopy(practice_hints)
+        practice_input["adaptationHints"] = deepcopy(practice_hints)
         llm_result = await self._core.generate_practice(practice_input)
         practice_session: PracticeSessionRecord | None = None
         if input_data.get("persist", True):
@@ -2537,6 +3623,7 @@ class CirculatioService:
                 "outcome": outcome["outcome"],
                 "activationBefore": outcome.get("activationBefore"),
                 "activationAfter": outcome.get("activationAfter"),
+                "outcomeEvidenceIds": list(outcome.get("outcomeEvidenceIds", [])),
                 "updatedAt": timestamp,
                 "completedAt": existing.get("completedAt", timestamp),
             }
@@ -2562,6 +3649,7 @@ class CirculatioService:
                     "outcome": outcome["outcome"],
                     "activationBefore": outcome.get("activationBefore"),
                     "activationAfter": outcome.get("activationAfter"),
+                    "outcomeEvidenceIds": list(outcome.get("outcomeEvidenceIds", [])),
                     "source": "manual",
                     "followUpCount": 0,
                     "createdAt": timestamp,
@@ -2615,6 +3703,12 @@ class CirculatioService:
         )
         summary_input = await self._repository.build_circulation_summary_input(
             input_data["userId"],
+            window_start=resolved_start,
+            window_end=resolved_end,
+        )
+        summary_input = deepcopy(summary_input)
+        summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            summary_input.get("methodContextSnapshot"),
             window_start=resolved_start,
             window_end=resolved_end,
         )
@@ -2869,6 +3963,1564 @@ class CirculatioService:
     async def get_dashboard_summary(self, *, user_id: Id) -> DashboardSummary:
         return await self._repository.get_dashboard_summary(user_id)
 
+    def _discovery_ranking_profile(self, value: object | None) -> str:
+        profile = str(value or "importance").strip() or "importance"
+        if profile not in {"default", "recency", "recurrence", "importance"}:
+            raise ValidationError(
+                "Discovery rankingProfile must be one of default, recency, recurrence, "
+                "or importance."
+            )
+        return profile
+
+    def _normalize_discovery_root_ids(self, raw_ids: object | None) -> list[Id]:
+        if not isinstance(raw_ids, list):
+            return []
+        root_ids: list[Id] = []
+        for value in raw_ids:
+            if not isinstance(value, str):
+                continue
+            candidate = value.strip()
+            if candidate:
+                root_ids = self._merge_ids(root_ids, [candidate])
+        return root_ids[:20]
+
+    def _derive_discovery_root_ids(
+        self,
+        *,
+        dashboard: DashboardSummary,
+        memory_snapshot: MemoryKernelSnapshot,
+        method_context: MethodContextSnapshot | None = None,
+    ) -> list[Id]:
+        root_ids: list[Id] = []
+        for record_id in self._discovery_root_ids_from_method_context(method_context):
+            root_ids = self._merge_ids(root_ids, [record_id])
+        for record in dashboard.get("recentMaterials", []):
+            record_id = self._optional_str(record.get("id"))
+            if record_id:
+                root_ids = self._merge_ids(root_ids, [record_id])
+        for record in dashboard.get("recurringSymbols", []):
+            record_id = self._optional_str(record.get("id"))
+            if record_id:
+                root_ids = self._merge_ids(root_ids, [record_id])
+        for record in dashboard.get("activePatterns", []):
+            record_id = self._optional_str(record.get("id"))
+            if record_id:
+                root_ids = self._merge_ids(root_ids, [record_id])
+        for item in memory_snapshot.get("items", []):
+            entity_id = self._optional_str(item.get("entityId"))
+            if entity_id:
+                root_ids = self._merge_ids(root_ids, [entity_id])
+            provenance = item.get("provenance")
+            if not isinstance(provenance, dict):
+                continue
+            source_id = self._optional_str(provenance.get("sourceId"))
+            material_id = self._optional_str(provenance.get("materialId"))
+            if source_id:
+                root_ids = self._merge_ids(root_ids, [source_id])
+            if material_id:
+                root_ids = self._merge_ids(root_ids, [material_id])
+        return root_ids[:20]
+
+    def _discovery_root_ids_from_method_context(
+        self, method_context: MethodContextSnapshot | None
+    ) -> list[Id]:
+        if not isinstance(method_context, dict):
+            return []
+        root_ids: list[Id] = []
+        for collection_name in (
+            "recentBodyStates",
+            "activeGoals",
+            "goalTensions",
+            "recentPracticeSessions",
+            "activeDreamSeries",
+        ):
+            for item in method_context.get(collection_name, []):
+                if not isinstance(item, dict):
+                    continue
+                record_id = self._optional_str(item.get("id"))
+                if record_id:
+                    root_ids = self._merge_ids(root_ids, [record_id])
+        for item in method_context.get("recentDreamDynamics", []):
+            if not isinstance(item, dict):
+                continue
+            record_id = self._optional_str(item.get("materialId"))
+            if record_id:
+                root_ids = self._merge_ids(root_ids, [record_id])
+        method_state = method_context.get("methodState")
+        if isinstance(method_state, dict):
+            for field_name in (
+                "containment",
+                "egoCapacity",
+                "egoRelationTrajectory",
+                "relationalField",
+                "questioningPreference",
+                "activeGoalTension",
+                "practiceLoop",
+                "typologyMethodState",
+            ):
+                section = method_state.get(field_name)
+                if not isinstance(section, dict):
+                    continue
+                record_id = self._optional_str(section.get("goalTensionId"))
+                if record_id:
+                    root_ids = self._merge_ids(root_ids, [record_id])
+                for ref in section.get("sourceRecordRefs", []):
+                    if not isinstance(ref, dict):
+                        continue
+                    record_id = self._optional_str(ref.get("recordId"))
+                    if record_id:
+                        root_ids = self._merge_ids(root_ids, [record_id])
+            for tendency in method_state.get("compensationTendencies", []):
+                if not isinstance(tendency, dict):
+                    continue
+                for ref in tendency.get("sourceRecordRefs", []):
+                    if not isinstance(ref, dict):
+                        continue
+                    record_id = self._optional_str(ref.get("recordId"))
+                    if record_id:
+                        root_ids = self._merge_ids(root_ids, [record_id])
+        individuation_context = method_context.get("individuationContext")
+        if isinstance(individuation_context, dict):
+            reality_anchor = individuation_context.get("realityAnchors")
+            if isinstance(reality_anchor, dict):
+                record_id = self._optional_str(reality_anchor.get("id"))
+                if record_id:
+                    root_ids = self._merge_ids(root_ids, [record_id])
+            for collection_name in (
+                "thresholdProcesses",
+                "relationalScenes",
+                "activeOppositions",
+                "emergentThirdSignals",
+                "bridgeMoments",
+                "projectionHypotheses",
+            ):
+                for item in individuation_context.get(collection_name, []):
+                    if not isinstance(item, dict):
+                        continue
+                    record_id = self._optional_str(item.get("id"))
+                    if record_id:
+                        root_ids = self._merge_ids(root_ids, [record_id])
+        living_myth_context = method_context.get("livingMythContext")
+        if isinstance(living_myth_context, dict):
+            for field_name in ("currentLifeChapter", "latestSymbolicWellbeing"):
+                item = living_myth_context.get(field_name)
+                if not isinstance(item, dict):
+                    continue
+                record_id = self._optional_str(item.get("id"))
+                if record_id:
+                    root_ids = self._merge_ids(root_ids, [record_id])
+            for collection_name in (
+                "activeMythicQuestions",
+                "recentThresholdMarkers",
+                "complexEncounters",
+            ):
+                for item in living_myth_context.get(collection_name, []):
+                    if not isinstance(item, dict):
+                        continue
+                    record_id = self._optional_str(item.get("id"))
+                    if record_id:
+                        root_ids = self._merge_ids(root_ids, [record_id])
+        clarification_state = method_context.get("clarificationState")
+        if isinstance(clarification_state, dict):
+            for item in clarification_state.get("pendingPrompts", []):
+                if not isinstance(item, dict):
+                    continue
+                record_id = self._optional_str(item.get("id"))
+                if record_id:
+                    root_ids = self._merge_ids(root_ids, [record_id])
+        return root_ids[:20]
+
+    def _build_discovery_sections(
+        self,
+        *,
+        dashboard: DashboardSummary,
+        memory_snapshot: MemoryKernelSnapshot,
+        graph: GraphQueryResult,
+        method_context: MethodContextSnapshot | None,
+        max_items: int,
+    ) -> list[DiscoverySection]:
+        candidates = self._discovery_candidates(
+            dashboard=dashboard,
+            memory_snapshot=memory_snapshot,
+            graph=graph,
+            method_context=method_context,
+        )
+        recurring = self._build_recurring_discovery_section(
+            candidates=candidates,
+            max_items=max_items,
+        )
+        dream_body_event_links = self._build_dream_body_event_discovery_section(
+            graph=graph,
+            max_items=max_items,
+        )
+        ripe_to_revisit = self._build_revisit_discovery_section(
+            candidates=candidates,
+            max_items=max_items,
+        )
+        conscious_attitude = self._build_conscious_attitude_discovery_section(
+            candidates=candidates,
+            max_items=max_items,
+        )
+        body_states = self._build_body_states_discovery_section(
+            candidates=candidates,
+            max_items=max_items,
+        )
+        method_state = self._build_method_state_discovery_section(
+            candidates=candidates,
+            max_items=max_items,
+        )
+        journey_threads = self._build_journey_threads_discovery_section(
+            candidates=candidates,
+            max_items=max_items,
+        )
+        held_for_now = self._build_held_for_now_discovery_section(
+            dashboard=dashboard,
+            used_material_ids=self._discovery_material_ids_from_sections(
+                [
+                    recurring,
+                    dream_body_event_links,
+                    ripe_to_revisit,
+                    conscious_attitude,
+                    body_states,
+                    method_state,
+                    journey_threads,
+                ]
+            ),
+            max_items=max_items,
+        )
+        return [
+            recurring,
+            dream_body_event_links,
+            ripe_to_revisit,
+            conscious_attitude,
+            body_states,
+            method_state,
+            journey_threads,
+            held_for_now,
+        ]
+
+    def _discovery_candidates(
+        self,
+        *,
+        dashboard: DashboardSummary,
+        memory_snapshot: MemoryKernelSnapshot,
+        graph: GraphQueryResult,
+        method_context: MethodContextSnapshot | None,
+    ) -> dict[str, dict[str, object]]:
+        candidates: dict[str, dict[str, object]] = {}
+        degree_by_node_id = self._discovery_graph_degree_map(graph)
+        for symbol in dashboard.get("recurringSymbols", []):
+            symbol_id = self._optional_str(symbol.get("id"))
+            if not symbol_id:
+                continue
+            recurrence_count = int(symbol.get("recurrenceCount", 0) or 0)
+            criteria = ["dashboard_recurring_symbol"]
+            if recurrence_count > 0:
+                criteria.append(f"symbol_recurrence_count:{recurrence_count}")
+            self._add_discovery_candidate(
+                candidates,
+                key=f"symbol:{symbol_id}",
+                label=str(symbol.get("canonicalName") or "Symbol"),
+                summary=(
+                    f"Recurring symbol with {recurrence_count} appearance(s)."
+                    if recurrence_count > 0
+                    else "Recurring symbol surfaced in the dashboard."
+                ),
+                criteria=criteria,
+                source_kind="dashboard",
+                entity_refs={"symbols": [symbol_id]},
+                evidence_ids=[],
+                graph_degree=degree_by_node_id.get(symbol_id, 0),
+                recurrence_count=recurrence_count,
+            )
+        for pattern in dashboard.get("activePatterns", []):
+            pattern_id = self._optional_str(pattern.get("id"))
+            if not pattern_id:
+                continue
+            self._add_discovery_candidate(
+                candidates,
+                key=f"pattern:{pattern_id}",
+                label=str(pattern.get("label") or "Pattern"),
+                summary=self._optional_str(pattern.get("formulation"))
+                or "Active pattern surfaced in the dashboard.",
+                criteria=["dashboard_active_pattern"],
+                source_kind="dashboard",
+                entity_refs={"patterns": [pattern_id]},
+                evidence_ids=[
+                    str(value)
+                    for value in pattern.get("evidenceIds", [])
+                    if isinstance(value, str) and value
+                ],
+                graph_degree=degree_by_node_id.get(pattern_id, 0),
+                active_pattern=True,
+            )
+        for item in memory_snapshot.get("items", []):
+            entity_id = self._optional_str(item.get("entityId")) or self._optional_str(
+                item.get("id")
+            )
+            if not entity_id:
+                continue
+            entity_type = str(item.get("entityType") or "Entity")
+            importance = item.get("importance") if isinstance(item.get("importance"), dict) else {}
+            provenance = item.get("provenance") if isinstance(item.get("provenance"), dict) else {}
+            recurrence_count = int(importance.get("recurrenceCount", 0) or 0)
+            user_confirmed = bool(importance.get("userConfirmed"))
+            criteria = ["memory_kernel_match"]
+            if recurrence_count > 1:
+                criteria.append(f"memory_recurrence_count:{recurrence_count}")
+            if user_confirmed:
+                criteria.append("user_confirmed_memory")
+            self._add_discovery_candidate(
+                candidates,
+                key=self._discovery_entity_key(entity_type=entity_type, entity_id=entity_id),
+                label=str(item.get("label") or entity_type),
+                summary=self._optional_str(item.get("summary"))
+                or f"Approved {entity_type} surfaced in memory.",
+                criteria=criteria,
+                source_kind="memory_kernel",
+                entity_refs=self._discovery_entity_refs(
+                    entity_type=entity_type, entity_id=entity_id
+                ),
+                evidence_ids=[
+                    str(value)
+                    for value in provenance.get("evidenceIds", [])
+                    if isinstance(value, str) and value
+                ],
+                graph_degree=degree_by_node_id.get(entity_id, 0),
+                recurrence_count=recurrence_count,
+                user_confirmed=user_confirmed,
+            )
+        self._add_method_context_discovery_candidates(
+            candidates,
+            method_context=method_context,
+            degree_by_node_id=degree_by_node_id,
+        )
+        return candidates
+
+    def _add_method_context_discovery_candidates(
+        self,
+        candidates: dict[str, dict[str, object]],
+        *,
+        method_context: MethodContextSnapshot | None,
+        degree_by_node_id: dict[Id, int],
+    ) -> None:
+        if not isinstance(method_context, dict):
+            return
+        conscious_attitude = method_context.get("consciousAttitude")
+        if isinstance(conscious_attitude, dict):
+            attitude_id = self._optional_str(conscious_attitude.get("id"))
+            stance_summary = self._optional_str(conscious_attitude.get("stanceSummary"))
+            if attitude_id and stance_summary:
+                self._add_discovery_candidate(
+                    candidates,
+                    key=f"conscious_attitude:{attitude_id}",
+                    label="Conscious attitude",
+                    summary=stance_summary,
+                    criteria=["method_context_conscious_attitude"],
+                    source_kind="method_context",
+                    entity_refs={"entities": [attitude_id]},
+                    evidence_ids=[
+                        str(value)
+                        for value in conscious_attitude.get("evidenceIds", [])
+                        if isinstance(value, str) and value
+                    ],
+                    graph_degree=degree_by_node_id.get(attitude_id, 0),
+                    longitudinal_context=True,
+                )
+        for body_state in method_context.get("recentBodyStates", [])[:5]:
+            if not isinstance(body_state, dict):
+                continue
+            body_state_id = self._optional_str(body_state.get("id"))
+            if not body_state_id:
+                continue
+            sensation = str(body_state.get("sensation") or "Body state")
+            body_region = self._optional_str(body_state.get("bodyRegion"))
+            label = f"{sensation} ({body_region})" if body_region else sensation
+            summary = (
+                self._optional_str(body_state.get("tone"))
+                or self._optional_str(body_state.get("activation"))
+                or f"Recent body state: {sensation}."
+            )
+            self._add_discovery_candidate(
+                candidates,
+                key=f"body_state:{body_state_id}",
+                label=label,
+                summary=summary,
+                criteria=["method_context_recent_body_state"],
+                source_kind="method_context",
+                entity_refs={"bodyStates": [body_state_id]},
+                evidence_ids=[
+                    str(value)
+                    for value in body_state.get("evidenceIds", [])
+                    if isinstance(value, str) and value
+                ],
+                graph_degree=degree_by_node_id.get(body_state_id, 0),
+                longitudinal_context=True,
+            )
+        method_state = method_context.get("methodState")
+        if isinstance(method_state, dict):
+            method_state_summary = self._method_state_discovery_summary(method_state)
+            if method_state_summary:
+                method_state_ref_ids = self._method_state_discovery_ref_ids(method_state)
+                self._add_discovery_candidate(
+                    candidates,
+                    key="method_state:current",
+                    label="Method state",
+                    summary=method_state_summary,
+                    criteria=["method_context_method_state"],
+                    source_kind="method_context",
+                    entity_refs=(
+                        {"entities": method_state_ref_ids} if method_state_ref_ids else {}
+                    ),
+                    evidence_ids=self._method_state_discovery_evidence_ids(method_state),
+                    graph_degree=max(
+                        [degree_by_node_id.get(ref_id, 0) for ref_id in method_state_ref_ids],
+                        default=0,
+                    ),
+                    longitudinal_context=True,
+                )
+            active_goal_tension = (
+                method_state.get("activeGoalTension")
+                if isinstance(method_state.get("activeGoalTension"), dict)
+                else {}
+            )
+            active_goal_tension_id = self._optional_str(active_goal_tension.get("goalTensionId"))
+            if active_goal_tension_id:
+                self._add_discovery_candidate(
+                    candidates,
+                    key=f"method_state_goal_tension:{active_goal_tension_id}",
+                    label="Active goal tension",
+                    summary=self._optional_str(active_goal_tension.get("balancingDirection"))
+                    or "A current goal tension is shaping pacing and reflection.",
+                    criteria=["method_state_active_goal_tension"],
+                    source_kind="method_context",
+                    entity_refs={"entities": [active_goal_tension_id]},
+                    evidence_ids=[
+                        str(value)
+                        for value in active_goal_tension.get("evidenceIds", [])
+                        if isinstance(value, str) and value
+                    ],
+                    graph_degree=degree_by_node_id.get(active_goal_tension_id, 0),
+                    longitudinal_context=True,
+                )
+            practice_loop = (
+                method_state.get("practiceLoop")
+                if isinstance(method_state.get("practiceLoop"), dict)
+                else {}
+            )
+            practice_loop_summary = self._optional_str(practice_loop.get("recentOutcomeTrend"))
+            if practice_loop_summary:
+                practice_loop_ref_ids = [
+                    self._optional_str(ref.get("recordId"))
+                    for ref in practice_loop.get("sourceRecordRefs", [])
+                    if isinstance(ref, dict)
+                ]
+                practice_loop_ref_ids = [item for item in practice_loop_ref_ids if item]
+                self._add_discovery_candidate(
+                    candidates,
+                    key="method_state_practice_loop:current",
+                    label="Practice loop",
+                    summary=(f"Practice arc: {practice_loop_summary.replace('_', ' ')}."),
+                    criteria=["method_state_practice_loop"],
+                    source_kind="method_context",
+                    entity_refs={"entities": practice_loop_ref_ids},
+                    evidence_ids=[
+                        str(value)
+                        for value in practice_loop.get("evidenceIds", [])
+                        if isinstance(value, str) and value
+                    ],
+                    graph_degree=max(
+                        [degree_by_node_id.get(ref_id, 0) for ref_id in practice_loop_ref_ids],
+                        default=0,
+                    ),
+                    longitudinal_context=True,
+                )
+        for journey in method_context.get("activeJourneys", [])[:5]:
+            if not isinstance(journey, dict):
+                continue
+            journey_id = self._optional_str(journey.get("id"))
+            if not journey_id:
+                continue
+            self._add_discovery_candidate(
+                candidates,
+                key=f"journey:{journey_id}",
+                label=str(journey.get("label") or "Journey thread"),
+                summary=self._optional_str(journey.get("currentQuestion"))
+                or self._optional_str(journey.get("description"))
+                or "An active journey thread remains open in the current context.",
+                criteria=["method_context_active_journey"],
+                source_kind="method_context",
+                entity_refs={"journeys": [journey_id]},
+                evidence_ids=[],
+                graph_degree=degree_by_node_id.get(journey_id, 0),
+                longitudinal_context=True,
+            )
+        for goal in method_context.get("activeGoals", [])[:5]:
+            if not isinstance(goal, dict):
+                continue
+            goal_id = self._optional_str(goal.get("id"))
+            if not goal_id:
+                continue
+            label = str(goal.get("label") or "Goal")
+            self._add_discovery_candidate(
+                candidates,
+                key=f"goal:{goal_id}",
+                label=label,
+                summary=self._optional_str(goal.get("description")) or f"Active goal: {label}.",
+                criteria=["method_context_active_goal"],
+                source_kind="method_context",
+                entity_refs={"goals": [goal_id]},
+                evidence_ids=[],
+                graph_degree=degree_by_node_id.get(goal_id, 0),
+                longitudinal_context=True,
+            )
+        for tension in method_context.get("goalTensions", [])[:5]:
+            if not isinstance(tension, dict):
+                continue
+            tension_id = self._optional_str(tension.get("id"))
+            if not tension_id:
+                continue
+            goal_ids = [
+                str(item) for item in tension.get("goalIds", []) if isinstance(item, str) and item
+            ]
+            graph_degree = max(
+                [
+                    degree_by_node_id.get(tension_id, 0),
+                    *[degree_by_node_id.get(item, 0) for item in goal_ids],
+                ]
+            )
+            self._add_discovery_candidate(
+                candidates,
+                key=f"goal_tension:{tension_id}",
+                label="Goal tension",
+                summary=self._optional_str(tension.get("tensionSummary"))
+                or "A live goal tension remains active in the current context.",
+                criteria=["method_context_goal_tension"],
+                source_kind="method_context",
+                entity_refs={"entities": [tension_id], "goals": goal_ids},
+                evidence_ids=[
+                    str(value)
+                    for value in tension.get("evidenceIds", [])
+                    if isinstance(value, str) and value
+                ],
+                graph_degree=graph_degree,
+                longitudinal_context=True,
+            )
+        for practice in method_context.get("recentPracticeSessions", [])[:5]:
+            if not isinstance(practice, dict):
+                continue
+            practice_id = self._optional_str(practice.get("id"))
+            if not practice_id:
+                continue
+            practice_type = str(practice.get("practiceType") or "Practice").replace("_", " ")
+            self._add_discovery_candidate(
+                candidates,
+                key=f"practice_session:{practice_id}",
+                label=practice_type.title(),
+                summary=self._optional_str(practice.get("outcome"))
+                or "Recent practice outcome remains part of the current longitudinal context.",
+                criteria=["method_context_recent_practice"],
+                source_kind="method_context",
+                entity_refs={"practiceSessions": [practice_id]},
+                evidence_ids=[],
+                graph_degree=degree_by_node_id.get(practice_id, 0),
+                longitudinal_context=True,
+            )
+        individuation_context = method_context.get("individuationContext")
+        if isinstance(individuation_context, dict):
+            reality_anchor = individuation_context.get("realityAnchors")
+            if isinstance(reality_anchor, dict):
+                anchor_id = self._optional_str(reality_anchor.get("id"))
+                if anchor_id:
+                    self._add_discovery_candidate(
+                        candidates,
+                        key=f"reality_anchor:{anchor_id}",
+                        label=str(reality_anchor.get("label") or "Reality anchors"),
+                        summary=self._optional_str(reality_anchor.get("anchorSummary"))
+                        or self._optional_str(reality_anchor.get("summary"))
+                        or "Reality anchors are part of the current containment context.",
+                        criteria=["method_context_reality_anchor"],
+                        source_kind="method_context",
+                        entity_refs={"entities": [anchor_id]},
+                        evidence_ids=[
+                            str(value)
+                            for value in reality_anchor.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                        graph_degree=degree_by_node_id.get(anchor_id, 0),
+                        longitudinal_context=True,
+                    )
+            for threshold in individuation_context.get("thresholdProcesses", [])[:5]:
+                if not isinstance(threshold, dict):
+                    continue
+                threshold_id = self._optional_str(threshold.get("id"))
+                if not threshold_id:
+                    continue
+                self._add_discovery_candidate(
+                    candidates,
+                    key=f"threshold_process:{threshold_id}",
+                    label=str(threshold.get("label") or "Threshold process"),
+                    summary=self._optional_str(threshold.get("summary"))
+                    or self._optional_str(threshold.get("whatIsEnding"))
+                    or "An active threshold process remains in the current window.",
+                    criteria=["method_context_threshold_process"],
+                    source_kind="method_context",
+                    entity_refs={"entities": [threshold_id]},
+                    evidence_ids=[
+                        str(value)
+                        for value in threshold.get("evidenceIds", [])
+                        if isinstance(value, str) and value
+                    ],
+                    graph_degree=degree_by_node_id.get(threshold_id, 0),
+                    longitudinal_context=True,
+                )
+            for scene in individuation_context.get("relationalScenes", [])[:5]:
+                if not isinstance(scene, dict):
+                    continue
+                scene_id = self._optional_str(scene.get("id"))
+                if not scene_id:
+                    continue
+                self._add_discovery_candidate(
+                    candidates,
+                    key=f"relational_scene:{scene_id}",
+                    label=str(scene.get("label") or "Relational scene"),
+                    summary=self._optional_str(scene.get("sceneSummary"))
+                    or self._optional_str(scene.get("summary"))
+                    or "A relational scene remains active in the current context.",
+                    criteria=["method_context_relational_scene"],
+                    source_kind="method_context",
+                    entity_refs={"entities": [scene_id]},
+                    evidence_ids=[
+                        str(value)
+                        for value in scene.get("evidenceIds", [])
+                        if isinstance(value, str) and value
+                    ],
+                    graph_degree=degree_by_node_id.get(scene_id, 0),
+                    longitudinal_context=True,
+                )
+            for collection_name, key_prefix, label, criteria in (
+                (
+                    "activeOppositions",
+                    "active_opposition",
+                    "Active opposition",
+                    "method_context_active_opposition",
+                ),
+                (
+                    "emergentThirdSignals",
+                    "emergent_third",
+                    "Emergent third",
+                    "method_context_emergent_third",
+                ),
+                ("bridgeMoments", "bridge_moment", "Bridge moment", "method_context_bridge_moment"),
+                (
+                    "projectionHypotheses",
+                    "projection_hypothesis",
+                    "Projection hypothesis",
+                    "method_context_projection_hypothesis",
+                ),
+            ):
+                for item in individuation_context.get(collection_name, [])[:5]:
+                    if not isinstance(item, dict):
+                        continue
+                    item_id = self._optional_str(item.get("id"))
+                    if not item_id:
+                        continue
+                    self._add_discovery_candidate(
+                        candidates,
+                        key=f"{key_prefix}:{item_id}",
+                        label=self._optional_str(item.get("label")) or label,
+                        summary=self._optional_str(item.get("summary"))
+                        or self._optional_str(item.get("claim"))
+                        or f"{label} remains active in the current context.",
+                        criteria=[criteria],
+                        source_kind="method_context",
+                        entity_refs={"entities": [item_id]},
+                        evidence_ids=[
+                            str(value)
+                            for value in item.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                        graph_degree=degree_by_node_id.get(item_id, 0),
+                        longitudinal_context=True,
+                    )
+        living_myth_context = method_context.get("livingMythContext")
+        if isinstance(living_myth_context, dict):
+            life_chapter = living_myth_context.get("currentLifeChapter")
+            if isinstance(life_chapter, dict):
+                chapter_id = self._optional_str(life_chapter.get("id"))
+                if chapter_id:
+                    self._add_discovery_candidate(
+                        candidates,
+                        key=f"life_chapter:{chapter_id}",
+                        label=str(
+                            life_chapter.get("chapterLabel")
+                            or life_chapter.get("label")
+                            or "Life chapter"
+                        ),
+                        summary=self._optional_str(life_chapter.get("chapterSummary"))
+                        or self._optional_str(life_chapter.get("summary"))
+                        or "A life chapter remains active in the current longitudinal context.",
+                        criteria=["living_myth_current_chapter"],
+                        source_kind="method_context",
+                        entity_refs={"entities": [chapter_id]},
+                        evidence_ids=[
+                            str(value)
+                            for value in life_chapter.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                        graph_degree=degree_by_node_id.get(chapter_id, 0),
+                        longitudinal_context=True,
+                    )
+            symbolic_wellbeing = living_myth_context.get("latestSymbolicWellbeing")
+            if isinstance(symbolic_wellbeing, dict):
+                wellbeing_id = self._optional_str(symbolic_wellbeing.get("id"))
+                if wellbeing_id:
+                    self._add_discovery_candidate(
+                        candidates,
+                        key=f"symbolic_wellbeing:{wellbeing_id}",
+                        label=str(symbolic_wellbeing.get("label") or "Symbolic wellbeing"),
+                        summary=self._optional_str(symbolic_wellbeing.get("capacitySummary"))
+                        or self._optional_str(symbolic_wellbeing.get("summary"))
+                        or "A recent symbolic wellbeing snapshot remains active.",
+                        criteria=["living_myth_symbolic_wellbeing"],
+                        source_kind="method_context",
+                        entity_refs={"entities": [wellbeing_id]},
+                        evidence_ids=[
+                            str(value)
+                            for value in symbolic_wellbeing.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                        graph_degree=degree_by_node_id.get(wellbeing_id, 0),
+                        longitudinal_context=True,
+                    )
+            for collection_name, key_prefix, label, criteria in (
+                (
+                    "activeMythicQuestions",
+                    "mythic_question",
+                    "Mythic question",
+                    "living_myth_active_question",
+                ),
+                (
+                    "recentThresholdMarkers",
+                    "threshold_marker",
+                    "Threshold marker",
+                    "living_myth_threshold_marker",
+                ),
+                (
+                    "complexEncounters",
+                    "complex_encounter",
+                    "Complex encounter",
+                    "living_myth_complex_encounter",
+                ),
+            ):
+                for item in living_myth_context.get(collection_name, [])[:5]:
+                    if not isinstance(item, dict):
+                        continue
+                    item_id = self._optional_str(item.get("id"))
+                    if not item_id:
+                        continue
+                    self._add_discovery_candidate(
+                        candidates,
+                        key=f"{key_prefix}:{item_id}",
+                        label=self._optional_str(item.get("label")) or label,
+                        summary=self._optional_str(item.get("summary"))
+                        or self._optional_str(item.get("questionText"))
+                        or f"{label} remains active in the current longitudinal context.",
+                        criteria=[criteria],
+                        source_kind="method_context",
+                        entity_refs={"entities": [item_id]},
+                        evidence_ids=[
+                            str(value)
+                            for value in item.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                        graph_degree=degree_by_node_id.get(item_id, 0),
+                        longitudinal_context=True,
+                    )
+        clarification_state = method_context.get("clarificationState")
+        if isinstance(clarification_state, dict):
+            for prompt in clarification_state.get("pendingPrompts", [])[:5]:
+                if not isinstance(prompt, dict):
+                    continue
+                prompt_id = self._optional_str(prompt.get("id"))
+                if not prompt_id:
+                    continue
+                self._add_discovery_candidate(
+                    candidates,
+                    key=f"clarification_prompt:{prompt_id}",
+                    label="Pending clarification",
+                    summary=self._optional_str(prompt.get("questionText"))
+                    or "A clarification prompt is still open in the current context.",
+                    criteria=["clarification_state_pending_prompt"],
+                    source_kind="method_context",
+                    entity_refs={"entities": [prompt_id]},
+                    evidence_ids=[],
+                    graph_degree=degree_by_node_id.get(prompt_id, 0),
+                    longitudinal_context=True,
+                )
+
+    def _add_discovery_candidate(
+        self,
+        candidates: dict[str, dict[str, object]],
+        *,
+        key: str,
+        label: str,
+        summary: str,
+        criteria: list[str],
+        source_kind: str,
+        entity_refs: dict[str, list[Id]],
+        evidence_ids: list[Id],
+        graph_degree: int = 0,
+        recurrence_count: int = 0,
+        user_confirmed: bool = False,
+        active_pattern: bool = False,
+        longitudinal_context: bool = False,
+    ) -> None:
+        candidate = candidates.setdefault(
+            key,
+            {
+                "label": label,
+                "summary": summary,
+                "criteria": [],
+                "sourceKinds": [],
+                "entityRefs": {},
+                "evidenceIds": [],
+                "graphDegree": 0,
+                "recurrenceCount": 0,
+                "userConfirmed": False,
+                "activePattern": False,
+                "longitudinalContext": False,
+            },
+        )
+        existing_label = self._optional_str(candidate.get("label"))
+        if not existing_label or existing_label.lower() in {
+            "dream",
+            "reflection",
+            "charged_event",
+            "charged event",
+            "material",
+        }:
+            candidate["label"] = label
+        existing_summary = self._optional_str(candidate.get("summary"))
+        if not existing_summary:
+            candidate["summary"] = summary
+        candidate["criteria"] = self._merge_tags(
+            list(candidate.get("criteria", [])),
+            [value for value in criteria if value],
+        )
+        candidate["sourceKinds"] = self._merge_tags(
+            list(candidate.get("sourceKinds", [])),
+            [source_kind],
+        )
+        candidate["entityRefs"] = self._discovery_merge_entity_refs(
+            candidate.get("entityRefs"),
+            entity_refs,
+        )
+        candidate["evidenceIds"] = self._merge_ids(
+            list(candidate.get("evidenceIds", [])),
+            [value for value in evidence_ids if value],
+        )
+        candidate["graphDegree"] = max(int(candidate.get("graphDegree", 0) or 0), graph_degree)
+        candidate["recurrenceCount"] = max(
+            int(candidate.get("recurrenceCount", 0) or 0),
+            recurrence_count,
+        )
+        candidate["userConfirmed"] = bool(candidate.get("userConfirmed")) or user_confirmed
+        candidate["activePattern"] = bool(candidate.get("activePattern")) or active_pattern
+        candidate["longitudinalContext"] = bool(candidate.get("longitudinalContext")) or bool(
+            longitudinal_context
+        )
+        if int(candidate.get("graphDegree", 0) or 0) > 0:
+            candidate["sourceKinds"] = self._merge_tags(
+                list(candidate.get("sourceKinds", [])),
+                ["graph"],
+            )
+            candidate["criteria"] = self._merge_tags(
+                list(candidate.get("criteria", [])),
+                [f"graph_connection_count:{int(candidate['graphDegree'])}"],
+            )
+
+    def _build_recurring_discovery_section(
+        self,
+        *,
+        candidates: dict[str, dict[str, object]],
+        max_items: int,
+    ) -> DiscoverySection:
+        recurring_candidates = [
+            candidate
+            for candidate in candidates.values()
+            if bool(candidate.get("activePattern"))
+            or bool(candidate.get("userConfirmed"))
+            or int(candidate.get("recurrenceCount", 0) or 0) > 1
+            or "dashboard_recurring_symbol" in candidate.get("criteria", [])
+        ]
+        items = [
+            self._candidate_to_discovery_item(candidate)
+            for candidate in sorted(recurring_candidates, key=self._discovery_item_sort_key)[
+                :max_items
+            ]
+        ]
+        summary = (
+            "Structural recurrences surfaced from dashboard and approved memory."
+            if items
+            else (
+                "No recurring approved symbol or pattern surfaced in this bounded discovery digest."
+            )
+        )
+        return {
+            "key": "recurring",
+            "title": "Recurring",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_dream_body_event_discovery_section(
+        self,
+        *,
+        graph: GraphQueryResult,
+        max_items: int,
+    ) -> DiscoverySection:
+        nodes_by_id = {
+            str(node["id"]): node
+            for node in graph.get("nodes", [])
+            if isinstance(node, dict) and isinstance(node.get("id"), str)
+        }
+        edges = [edge for edge in graph.get("edges", []) if isinstance(edge, dict)]
+        adjacency: dict[Id, set[Id]] = {}
+        pair_items: list[tuple[tuple[int, int, str], DiscoveryDigestItem]] = []
+        triad_items: list[tuple[tuple[int, int, str], DiscoveryDigestItem]] = []
+        seen_pair_keys: set[tuple[str, str, str]] = set()
+        seen_cluster_keys: set[tuple[str, ...]] = set()
+
+        def add_material_ref(refs: dict[str, list[Id]], node_id: Id, category: str | None) -> None:
+            if category == "body":
+                refs["bodyStates"] = self._merge_ids(refs.get("bodyStates", []), [node_id])
+                return
+            refs["materials"] = self._merge_ids(refs.get("materials", []), [node_id])
+
+        for edge in edges:
+            from_node_id = self._optional_str(edge.get("fromNodeId"))
+            to_node_id = self._optional_str(edge.get("toNodeId"))
+            if not from_node_id or not to_node_id:
+                continue
+            if from_node_id not in nodes_by_id or to_node_id not in nodes_by_id:
+                continue
+            adjacency.setdefault(from_node_id, set()).add(to_node_id)
+            adjacency.setdefault(to_node_id, set()).add(from_node_id)
+            from_category = self._discovery_node_category(nodes_by_id[from_node_id])
+            to_category = self._discovery_node_category(nodes_by_id[to_node_id])
+            categories = sorted(
+                {category for category in (from_category, to_category) if category is not None}
+            )
+            if len(categories) < 2:
+                continue
+            edge_type = str(edge.get("type") or "graph_link")
+            pair_key = tuple(sorted((from_node_id, to_node_id, edge_type)))
+            if pair_key in seen_pair_keys:
+                continue
+            seen_pair_keys.add(pair_key)
+            entity_refs: dict[str, list[Id]] = {}
+            add_material_ref(entity_refs, from_node_id, from_category)
+            add_material_ref(entity_refs, to_node_id, to_category)
+            evidence_ids = [
+                str(value)
+                for value in edge.get("evidenceIds", [])
+                if isinstance(value, str) and value
+            ]
+            label = " / ".join(category.title() for category in categories) + " link"
+            summary = (
+                f"{self._discovery_display_label(nodes_by_id[from_node_id])} and "
+                f"{self._discovery_display_label(nodes_by_id[to_node_id])} "
+                f"are connected by {edge_type}."
+            )
+            pair_items.append(
+                (
+                    (-len(categories), -len(evidence_ids), label.lower()),
+                    {
+                        "label": label,
+                        "summary": self._compact_page_text(summary, max_length=180),
+                        "criteria": [
+                            f"graph_edge:{edge_type}",
+                            f"cross_source_categories:{'+'.join(categories)}",
+                        ],
+                        "sourceKinds": ["graph"],
+                        "entityRefs": entity_refs,
+                        "evidenceIds": evidence_ids,
+                    },
+                )
+            )
+        for node_id, node in nodes_by_id.items():
+            category = self._discovery_node_category(node)
+            if category is None:
+                continue
+            cluster_ids = {node_id}
+            for neighbor_id in adjacency.get(node_id, set()):
+                neighbor = nodes_by_id.get(neighbor_id)
+                if neighbor is None:
+                    continue
+                if self._discovery_node_category(neighbor) is not None:
+                    cluster_ids.add(neighbor_id)
+            cluster_categories = sorted(
+                {
+                    cluster_category
+                    for cluster_id in cluster_ids
+                    for cluster_category in [self._discovery_node_category(nodes_by_id[cluster_id])]
+                    if cluster_category is not None
+                }
+            )
+            if len(cluster_categories) < 3:
+                continue
+            cluster_key = tuple(sorted(cluster_ids))
+            if cluster_key in seen_cluster_keys:
+                continue
+            seen_cluster_keys.add(cluster_key)
+            entity_refs: dict[str, list[Id]] = {}
+            evidence_ids: list[Id] = []
+            for cluster_id in cluster_key:
+                add_material_ref(
+                    entity_refs,
+                    cluster_id,
+                    self._discovery_node_category(nodes_by_id[cluster_id]),
+                )
+            for edge in edges:
+                from_node_id = self._optional_str(edge.get("fromNodeId"))
+                to_node_id = self._optional_str(edge.get("toNodeId"))
+                if from_node_id not in cluster_ids or to_node_id not in cluster_ids:
+                    continue
+                evidence_ids = self._merge_ids(
+                    evidence_ids,
+                    [
+                        str(value)
+                        for value in edge.get("evidenceIds", [])
+                        if isinstance(value, str) and value
+                    ],
+                )
+            triad_items.append(
+                (
+                    (
+                        -len(cluster_categories),
+                        -len(evidence_ids),
+                        "dream / body / event neighborhood",
+                    ),
+                    {
+                        "label": "Dream / body / event neighborhood",
+                        "summary": (
+                            "Dream, body, and event nodes appear in the same bounded "
+                            "graph neighborhood."
+                        ),
+                        "criteria": [
+                            "graph_bounded_neighborhood",
+                            f"cross_source_categories:{'+'.join(cluster_categories)}",
+                        ],
+                        "sourceKinds": ["graph"],
+                        "entityRefs": entity_refs,
+                        "evidenceIds": evidence_ids,
+                    },
+                )
+            )
+        items = [item for _, item in sorted(triad_items + pair_items)[:max_items]]
+        summary = (
+            "Bounded graph links surfaced between dream, body, and event-adjacent records."
+            if items
+            else "No approved dream/body/event cross-link surfaced in this bounded graph view."
+        )
+        return {
+            "key": "dream_body_event_links",
+            "title": "Dream / body / event links",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_revisit_discovery_section(
+        self,
+        *,
+        candidates: dict[str, dict[str, object]],
+        max_items: int,
+    ) -> DiscoverySection:
+        revisit_candidates: list[dict[str, object]] = []
+        for candidate in candidates.values():
+            source_count = len(candidate.get("sourceKinds", []))
+            qualifies = (
+                source_count >= 2
+                or int(candidate.get("recurrenceCount", 0) or 0) > 1
+                or bool(candidate.get("userConfirmed"))
+                or int(candidate.get("graphDegree", 0) or 0) > 1
+                or bool(candidate.get("activePattern"))
+                or bool(candidate.get("longitudinalContext"))
+            )
+            if not qualifies:
+                continue
+            prepared = deepcopy(candidate)
+            if source_count >= 2:
+                prepared["criteria"] = self._merge_tags(
+                    list(prepared.get("criteria", [])),
+                    [f"source_category_count:{source_count}"],
+                )
+            revisit_candidates.append(prepared)
+        items = [
+            self._candidate_to_discovery_item(candidate)
+            for candidate in sorted(revisit_candidates, key=self._discovery_item_sort_key)[
+                :max_items
+            ]
+        ]
+        summary = (
+            "These appear across multiple approved sources and may be worth revisiting."
+            if items
+            else "No multi-source revisit candidate surfaced in this bounded discovery digest."
+        )
+        return {
+            "key": "ripe_to_revisit",
+            "title": "Ripe to revisit",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_conscious_attitude_discovery_section(
+        self,
+        *,
+        candidates: dict[str, dict[str, object]],
+        max_items: int,
+    ) -> DiscoverySection:
+        attitude_candidates = [
+            candidate
+            for candidate in candidates.values()
+            if "method_context_conscious_attitude" in candidate.get("criteria", [])
+        ]
+        items = [
+            self._candidate_to_discovery_item(candidate)
+            for candidate in sorted(attitude_candidates, key=self._discovery_item_sort_key)[
+                :max_items
+            ]
+        ]
+        summary = (
+            "Current conscious attitude snapshots that shape how symbolic material can be met."
+            if items
+            else "No conscious-attitude snapshot surfaced in this bounded discovery digest."
+        )
+        return {
+            "key": "conscious_attitude",
+            "title": "Conscious attitude",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_body_states_discovery_section(
+        self,
+        *,
+        candidates: dict[str, dict[str, object]],
+        max_items: int,
+    ) -> DiscoverySection:
+        body_state_candidates = [
+            candidate
+            for candidate in candidates.values()
+            if "method_context_recent_body_state" in candidate.get("criteria", [])
+        ]
+        items = [
+            self._candidate_to_discovery_item(candidate)
+            for candidate in sorted(body_state_candidates, key=self._discovery_item_sort_key)[
+                :max_items
+            ]
+        ]
+        summary = (
+            "Recent body states that remain symbolically or practically relevant right now."
+            if items
+            else "No recent body-state signal surfaced in this bounded discovery digest."
+        )
+        return {
+            "key": "body_states",
+            "title": "Body states",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_method_state_discovery_section(
+        self,
+        *,
+        candidates: dict[str, dict[str, object]],
+        max_items: int,
+    ) -> DiscoverySection:
+        method_state_criteria = {
+            "method_context_method_state",
+            "method_state_active_goal_tension",
+            "method_state_practice_loop",
+            "method_context_goal_tension",
+            "method_context_reality_anchor",
+            "method_context_threshold_process",
+            "clarification_state_pending_prompt",
+        }
+        method_state_candidates = [
+            candidate
+            for candidate in candidates.values()
+            if any(
+                criterion in method_state_criteria
+                for criterion in cast(list[str], candidate.get("criteria", []))
+            )
+        ]
+        items = [
+            self._candidate_to_discovery_item(candidate)
+            for candidate in sorted(method_state_candidates, key=self._discovery_item_sort_key)[
+                :max_items
+            ]
+        ]
+        summary = (
+            "Containment, threshold, and open clarification signals shaping current pacing."
+            if items
+            else "No method-state pacing signal surfaced in this bounded discovery digest."
+        )
+        return {
+            "key": "method_state",
+            "title": "Method state",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_journey_threads_discovery_section(
+        self,
+        *,
+        candidates: dict[str, dict[str, object]],
+        max_items: int,
+    ) -> DiscoverySection:
+        journey_candidates = [
+            candidate
+            for candidate in candidates.values()
+            if "method_context_active_journey" in candidate.get("criteria", [])
+        ]
+        items = [
+            self._candidate_to_discovery_item(candidate)
+            for candidate in sorted(journey_candidates, key=self._discovery_item_sort_key)[
+                :max_items
+            ]
+        ]
+        summary = (
+            "Active journeys that still organize the current symbolic field."
+            if items
+            else "No active journey thread surfaced in this bounded discovery digest."
+        )
+        return {
+            "key": "journey_threads",
+            "title": "Journey threads",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _build_held_for_now_discovery_section(
+        self,
+        *,
+        dashboard: DashboardSummary,
+        used_material_ids: list[Id],
+        max_items: int,
+    ) -> DiscoverySection:
+        items: list[DiscoveryDigestItem] = []
+        for material in dashboard.get("recentMaterials", []):
+            material_id = self._optional_str(material.get("id"))
+            if not material_id or material_id in used_material_ids:
+                continue
+            items.append(
+                {
+                    "label": self._discovery_material_label(material),
+                    "summary": (
+                        "Recent material with no additional approved cross-link in "
+                        "this bounded digest."
+                    ),
+                    "criteria": ["recent_material_without_cross_source_link"],
+                    "sourceKinds": ["dashboard"],
+                    "entityRefs": {"materials": [material_id]},
+                    "evidenceIds": [],
+                }
+            )
+            if len(items) >= max_items:
+                break
+        summary = (
+            "Recent held material with no additional approved cross-source link in "
+            "this bounded digest."
+            if items
+            else "No held recent material remained outside the other bounded discovery sections."
+        )
+        return {
+            "key": "held_for_now",
+            "title": "Held for now",
+            "summary": summary,
+            "items": items,
+        }
+
+    def _candidate_to_discovery_item(self, candidate: dict[str, object]) -> DiscoveryDigestItem:
+        item: DiscoveryDigestItem = {
+            "label": str(candidate.get("label") or "Discovery item"),
+            "criteria": list(candidate.get("criteria", [])),
+            "sourceKinds": list(candidate.get("sourceKinds", [])),
+            "entityRefs": deepcopy(candidate.get("entityRefs", {})),
+            "evidenceIds": list(candidate.get("evidenceIds", [])),
+        }
+        summary = self._optional_str(candidate.get("summary"))
+        if summary:
+            item["summary"] = self._compact_page_text(summary, max_length=180)
+        return item
+
+    def _discovery_item_sort_key(
+        self, candidate: dict[str, object]
+    ) -> tuple[int, int, int, int, int, str]:
+        return (
+            -int(bool(candidate.get("longitudinalContext"))),
+            -len(candidate.get("sourceKinds", [])),
+            -int(bool(candidate.get("activePattern"))),
+            -int(bool(candidate.get("userConfirmed"))),
+            -int(candidate.get("recurrenceCount", 0) or 0),
+            -int(candidate.get("graphDegree", 0) or 0),
+            str(candidate.get("label") or "").lower(),
+        )
+
+    def _discovery_graph_degree_map(self, graph: GraphQueryResult) -> dict[Id, int]:
+        degree_by_node_id: dict[Id, int] = {}
+        for edge in graph.get("edges", []):
+            if not isinstance(edge, dict):
+                continue
+            from_node_id = self._optional_str(edge.get("fromNodeId"))
+            to_node_id = self._optional_str(edge.get("toNodeId"))
+            if from_node_id:
+                degree_by_node_id[from_node_id] = degree_by_node_id.get(from_node_id, 0) + 1
+            if to_node_id:
+                degree_by_node_id[to_node_id] = degree_by_node_id.get(to_node_id, 0) + 1
+        return degree_by_node_id
+
+    def _discovery_entity_key(self, *, entity_type: str, entity_id: Id) -> str:
+        if entity_type == "PersonalSymbol":
+            return f"symbol:{entity_id}"
+        if entity_type in {"ComplexCandidate", "Theme"}:
+            return f"pattern:{entity_id}"
+        if entity_type in {"MaterialEntry", "DreamEntry", "ReflectionEntry", "ChargedEventNote"}:
+            return f"material:{entity_id}"
+        if entity_type == "BodyState":
+            return f"body_state:{entity_id}"
+        if entity_type == "Journey":
+            return f"journey:{entity_id}"
+        if entity_type == "Goal":
+            return f"goal:{entity_id}"
+        if entity_type == "PracticeSession":
+            return f"practice_session:{entity_id}"
+        if entity_type == "InterpretationRun":
+            return f"run:{entity_id}"
+        return f"{entity_type.lower()}:{entity_id}"
+
+    def _discovery_entity_refs(self, *, entity_type: str, entity_id: Id) -> dict[str, list[Id]]:
+        if entity_type == "PersonalSymbol":
+            return {"symbols": [entity_id]}
+        if entity_type in {"ComplexCandidate", "Theme"}:
+            return {"patterns": [entity_id]}
+        if entity_type in {"MaterialEntry", "DreamEntry", "ReflectionEntry", "ChargedEventNote"}:
+            return {"materials": [entity_id]}
+        if entity_type == "BodyState":
+            return {"bodyStates": [entity_id]}
+        if entity_type == "Journey":
+            return {"journeys": [entity_id]}
+        if entity_type == "Goal":
+            return {"goals": [entity_id]}
+        if entity_type == "PracticeSession":
+            return {"practiceSessions": [entity_id]}
+        if entity_type == "InterpretationRun":
+            return {"runs": [entity_id]}
+        if entity_type == "EvidenceItem":
+            return {"evidence": [entity_id]}
+        return {"entities": [entity_id]}
+
+    def _discovery_merge_entity_refs(
+        self,
+        existing: object,
+        updates: dict[str, list[Id]],
+    ) -> dict[str, list[Id]]:
+        merged: dict[str, list[Id]] = {}
+        if isinstance(existing, dict):
+            for key, values in existing.items():
+                if isinstance(values, list):
+                    merged[str(key)] = [str(value) for value in values if isinstance(value, str)]
+        for key, values in updates.items():
+            merged[key] = self._merge_ids(merged.get(key, []), list(values))
+        return merged
+
+    def _discovery_material_ids_from_sections(self, sections: list[DiscoverySection]) -> list[Id]:
+        material_ids: list[Id] = []
+        for section in sections:
+            for item in section.get("items", []):
+                entity_refs = item.get("entityRefs")
+                if not isinstance(entity_refs, dict):
+                    continue
+                values = entity_refs.get("materials")
+                if not isinstance(values, list):
+                    continue
+                material_ids = self._merge_ids(
+                    material_ids,
+                    [str(value) for value in values if isinstance(value, str)],
+                )
+        return material_ids
+
+    def _discovery_node_category(self, node: dict[str, object]) -> str | None:
+        node_type = str(node.get("type") or "")
+        metadata = node.get("metadata") if isinstance(node.get("metadata"), dict) else {}
+        material_type = str(metadata.get("materialType") or "")
+        if node_type == "BodyState":
+            return "body"
+        if node_type == "DreamEntry" or material_type == "dream":
+            return "dream"
+        if node_type == "ChargedEventNote" or material_type == "charged_event":
+            return "event"
+        return None
+
+    def _discovery_display_label(self, node: dict[str, object]) -> str:
+        label = self._optional_str(node.get("label"))
+        summary = self._optional_str(node.get("summary"))
+        if label and label.lower() not in {"dream", "reflection", "charged_event", "charged event"}:
+            return self._compact_page_text(label, max_length=60)
+        if summary:
+            return self._compact_page_text(summary, max_length=60)
+        return self._compact_page_text(str(node.get("type") or "record"), max_length=60)
+
+    def _discovery_material_label(self, material: MaterialRecord) -> str:
+        if material.get("title"):
+            return self._compact_page_text(material["title"], max_length=60)
+        if material.get("summary"):
+            return self._compact_page_text(material["summary"], max_length=60)
+        return f"{str(material.get('materialType') or 'material').replace('_', ' ').title()} entry"
+
+    def _method_state_discovery_summary(self, method_state: dict[str, object]) -> str | None:
+        fragments: list[str] = []
+        containment = method_state.get("containment")
+        if isinstance(containment, dict):
+            grounding_need = self._optional_str(containment.get("groundingNeed"))
+            if grounding_need:
+                fragments.append(f"Containment: {grounding_need.replace('_', ' ')}.")
+        ego_capacity = method_state.get("egoCapacity")
+        if isinstance(ego_capacity, dict):
+            reflective_capacity = self._optional_str(ego_capacity.get("reflectiveCapacity"))
+            if reflective_capacity:
+                fragments.append(f"Reflective capacity: {reflective_capacity.replace('_', ' ')}.")
+        relational_field = method_state.get("relationalField")
+        if isinstance(relational_field, dict):
+            relationship_contact = self._optional_str(relational_field.get("relationshipContact"))
+            if relationship_contact:
+                fragments.append(f"Relational contact: {relationship_contact.replace('_', ' ')}.")
+            isolation_risk = self._optional_str(relational_field.get("isolationRisk"))
+            if isolation_risk:
+                fragments.append(f"Isolation risk: {isolation_risk.replace('_', ' ')}.")
+        questioning_preference = method_state.get("questioningPreference")
+        if isinstance(questioning_preference, dict):
+            depth_pacing = self._optional_str(questioning_preference.get("depthPacing"))
+            if depth_pacing:
+                fragments.append(f"Question pacing: {depth_pacing.replace('_', ' ')}.")
+        active_goal_tension = method_state.get("activeGoalTension")
+        if isinstance(active_goal_tension, dict):
+            balancing_direction = self._optional_str(active_goal_tension.get("balancingDirection"))
+            if balancing_direction:
+                fragments.append(balancing_direction)
+        practice_loop = method_state.get("practiceLoop")
+        if isinstance(practice_loop, dict):
+            outcome_trend = self._optional_str(practice_loop.get("recentOutcomeTrend"))
+            if outcome_trend:
+                fragments.append(f"Practice trend: {outcome_trend.replace('_', ' ')}.")
+        typology_state = method_state.get("typologyMethodState")
+        if isinstance(typology_state, dict):
+            practice_bias = self._optional_str(typology_state.get("practiceBias"))
+            if practice_bias and practice_bias != "neutral":
+                fragments.append(f"Typology frame: {practice_bias.replace('_', ' ')}.")
+        if not fragments:
+            return None
+        return " ".join(fragments)
+
+    def _method_state_discovery_ref_ids(self, method_state: dict[str, object]) -> list[Id]:
+        ref_ids: list[Id] = []
+        for field_name in (
+            "containment",
+            "egoCapacity",
+            "egoRelationTrajectory",
+            "relationalField",
+            "questioningPreference",
+            "activeGoalTension",
+            "practiceLoop",
+            "typologyMethodState",
+        ):
+            section = method_state.get(field_name)
+            if not isinstance(section, dict):
+                continue
+            record_id = self._optional_str(section.get("goalTensionId"))
+            if record_id:
+                ref_ids = self._merge_ids(ref_ids, [record_id])
+            for ref in section.get("sourceRecordRefs", []):
+                if not isinstance(ref, dict):
+                    continue
+                record_id = self._optional_str(ref.get("recordId"))
+                if record_id:
+                    ref_ids = self._merge_ids(ref_ids, [record_id])
+        for tendency in method_state.get("compensationTendencies", []):
+            if not isinstance(tendency, dict):
+                continue
+            for ref in tendency.get("sourceRecordRefs", []):
+                if not isinstance(ref, dict):
+                    continue
+                record_id = self._optional_str(ref.get("recordId"))
+                if record_id:
+                    ref_ids = self._merge_ids(ref_ids, [record_id])
+        return ref_ids
+
+    def _method_state_discovery_evidence_ids(self, method_state: dict[str, object]) -> list[Id]:
+        evidence_ids: list[Id] = []
+        for field_name in (
+            "containment",
+            "egoCapacity",
+            "egoRelationTrajectory",
+            "relationalField",
+            "questioningPreference",
+            "activeGoalTension",
+            "practiceLoop",
+            "typologyMethodState",
+        ):
+            section = method_state.get(field_name)
+            if not isinstance(section, dict):
+                continue
+            evidence_ids = self._merge_ids(
+                evidence_ids,
+                [
+                    str(value)
+                    for value in section.get("evidenceIds", [])
+                    if isinstance(value, str) and value
+                ],
+            )
+        for tendency in method_state.get("compensationTendencies", []):
+            if not isinstance(tendency, dict):
+                continue
+            evidence_ids = self._merge_ids(
+                evidence_ids,
+                [
+                    str(value)
+                    for value in tendency.get("evidenceIds", [])
+                    if isinstance(value, str) and value
+                ],
+            )
+        return evidence_ids
+
+    def _render_discovery_fallback(
+        self,
+        *,
+        sections: list[DiscoverySection],
+        window_start: str,
+        window_end: str,
+        explicit_question: str | None,
+    ) -> str:
+        lines = ["Discovery digest", f"Window: {window_start} -> {window_end}"]
+        if explicit_question:
+            lines.append(f"Focus: {explicit_question}")
+        for section in sections:
+            lines.append("")
+            lines.append(section["title"])
+            items = section.get("items", [])
+            if not items:
+                lines.append(section["summary"])
+                continue
+            for item in items:
+                summary = self._optional_str(item.get("summary"))
+                if summary:
+                    lines.append(f"- {item['label']} - {summary}")
+                    continue
+                lines.append(f"- {item['label']}")
+        return "\n".join(lines)
+
     async def _build_ephemeral_circulation_summary(
         self,
         *,
@@ -2882,8 +5534,13 @@ class CirculatioService:
             window_start=window_start,
             window_end=window_end,
         )
+        summary_input = deepcopy(summary_input)
+        summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
+            summary_input.get("methodContextSnapshot"),
+            window_start=window_start,
+            window_end=window_end,
+        )
         if explicit_question:
-            summary_input = deepcopy(summary_input)
             summary_input["explicitQuestion"] = explicit_question
         return summary_input, await self._core.generate_circulation_summary(summary_input)
 
@@ -3558,6 +6215,1262 @@ class CirculatioService:
         text = str(value).strip()
         return text or None
 
+    def _validate_cultural_frame_type(self, value: object | None) -> str:
+        frame_type = self._optional_str(value) or "chosen"
+        if frame_type not in {"alchemical", "mythic", "religious", "literary", "family", "chosen"}:
+            raise ValidationError(f"Unsupported cultural frame type: {frame_type}")
+        return frame_type
+
+    def _validate_cultural_frame_status(self, value: object | None) -> str:
+        status = self._optional_str(value) or "enabled"
+        if status not in {"enabled", "disabled", "deleted"}:
+            raise ValidationError(f"Unsupported cultural frame status: {status}")
+        return status
+
+    def _normalize_cultural_frame_use_list(self, value: object | None) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValidationError("Cultural frame uses must be a list of strings.")
+        return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+
+    async def _ensure_clarification_prompt_for_run(
+        self,
+        *,
+        user_id: Id,
+        material: MaterialRecord,
+        run_id: Id,
+        interpretation: InterpretationResult,
+    ) -> list[ClarificationPromptRecord]:
+        plan = interpretation.get("clarificationPlan")
+        if not isinstance(plan, dict):
+            return []
+        question_text = self._optional_str(plan.get("questionText"))
+        if not question_text:
+            return []
+        question_key = self._optional_str(
+            plan.get("questionKey")
+        ) or self._clarification_question_key(question_text)
+        existing = await self._repository.list_clarification_prompts(
+            user_id,
+            run_id=run_id,
+            limit=20,
+        )
+        for item in existing:
+            if question_key and item.get("questionKey") == question_key:
+                return [item]
+            if item.get("questionText") == question_text and item.get("status") == "pending":
+                return [item]
+        timestamp = now_iso()
+        routing_hints = (
+            deepcopy(plan.get("routingHints")) if isinstance(plan.get("routingHints"), dict) else {}
+        )
+        anchor_refs = plan.get("anchorRefs")
+        if isinstance(anchor_refs, dict) and anchor_refs:
+            routing_hints["anchorRefs"] = deepcopy(anchor_refs)
+        record: ClarificationPromptRecord = {
+            "id": create_id("clarification_prompt"),
+            "userId": user_id,
+            "materialId": material["id"],
+            "runId": run_id,
+            "questionText": question_text,
+            "questionKey": question_key,
+            "intent": str(plan.get("intent") or "other"),
+            "captureTarget": str(plan.get("captureTarget") or "answer_only"),
+            "expectedAnswerKind": str(plan.get("expectedAnswerKind") or "free_text"),
+            "status": "pending",
+            "privacyClass": str(material.get("privacyClass") or "session_only"),
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
+        }
+        if isinstance(plan.get("answerSlots"), dict) and plan["answerSlots"]:
+            record["answerSlots"] = deepcopy(plan["answerSlots"])
+        if routing_hints:
+            record["routingHints"] = routing_hints
+        supporting_refs = [
+            str(item) for item in plan.get("supportingRefs", []) if str(item).strip()
+        ]
+        if supporting_refs:
+            record["supportingRefs"] = supporting_refs[:8]
+        created = await self._repository.create_clarification_prompt(record)
+        await self._record_adaptation_signal(
+            user_id=user_id,
+            event_type="clarification_prompt_created",
+            signals={
+                "intent": created["intent"],
+                "captureTarget": created["captureTarget"],
+                "expectedAnswerKind": created["expectedAnswerKind"],
+            },
+        )
+        return [created]
+
+    async def _clarification_window(
+        self,
+        *,
+        user_id: Id,
+        prompt: ClarificationPromptRecord | None,
+        answer: ClarificationAnswerRecord,
+    ) -> tuple[str, str]:
+        run_id = self._optional_str(answer.get("runId")) or (
+            self._optional_str(prompt.get("runId")) if prompt else None
+        )
+        if run_id:
+            run = await self._repository.get_interpretation_run(user_id, run_id)
+            snapshot_id = self._optional_str(run.get("inputSnapshotId"))
+            if snapshot_id:
+                snapshot = await self._repository.get_context_snapshot(user_id, snapshot_id)
+                return (
+                    str(snapshot.get("windowStart") or snapshot.get("createdAt") or now_iso()),
+                    str(snapshot.get("windowEnd") or snapshot.get("createdAt") or now_iso()),
+                )
+        material_id = self._optional_str(answer.get("materialId")) or (
+            self._optional_str(prompt.get("materialId")) if prompt else None
+        )
+        anchor = None
+        if material_id:
+            material = await self._repository.get_material(user_id, material_id)
+            anchor = str(material.get("materialDate") or material.get("createdAt") or now_iso())
+        return self._resolve_window(anchor=anchor)
+
+    async def _route_clarification_answer(
+        self,
+        *,
+        user_id: Id,
+        prompt: ClarificationPromptRecord | None,
+        answer: ClarificationAnswerRecord,
+        capture_target: ClarificationCaptureTarget,
+        payload: dict[str, object],
+    ) -> tuple[list[dict[str, str]], dict[str, object]]:
+        routed_record: dict[str, object]
+        record_type: str
+        material_id = self._optional_str(answer.get("materialId")) or (
+            self._optional_str(prompt.get("materialId")) if prompt else None
+        )
+        run_id = self._optional_str(answer.get("runId")) or (
+            self._optional_str(prompt.get("runId")) if prompt else None
+        )
+        routing_hints = (
+            deepcopy(prompt.get("routingHints"))
+            if prompt is not None and isinstance(prompt.get("routingHints"), dict)
+            else {}
+        )
+        if capture_target == "body_state":
+            sensation = self._optional_str(payload.get("sensation"))
+            if not sensation:
+                raise ValidationError("Body-state clarification answers require payload.sensation.")
+            result = await self.store_body_state(
+                {
+                    "userId": user_id,
+                    "sensation": sensation,
+                    "observedAt": self._optional_str(payload.get("observedAt")) or now_iso(),
+                    "bodyRegion": self._optional_str(payload.get("bodyRegion")),
+                    "activation": payload.get("activation"),
+                    "tone": self._optional_str(payload.get("tone")),
+                    "temporalContext": self._optional_str(payload.get("temporalContext")),
+                    "linkedGoalIds": list(payload.get("linkedGoalIds", [])),
+                    "linkedMaterialIds": [material_id] if material_id else [],
+                    "privacyClass": answer.get("privacyClass", "session_only"),
+                    "evidenceIds": [],
+                }
+            )
+            routed_record = result["bodyState"]
+            record_type = "BodyState"
+        elif capture_target == "conscious_attitude":
+            stance_summary = self._optional_str(payload.get("stanceSummary"))
+            if not stance_summary:
+                raise ValidationError(
+                    "Conscious-attitude clarification answers require payload.stanceSummary."
+                )
+            window_start, window_end = await self._clarification_window(
+                user_id=user_id,
+                prompt=prompt,
+                answer=answer,
+            )
+            routed_record = await self.capture_conscious_attitude(
+                {
+                    "userId": user_id,
+                    "windowStart": window_start,
+                    "windowEnd": window_end,
+                    "stanceSummary": stance_summary,
+                    "activeValues": list(payload.get("activeValues", [])),
+                    "activeConflicts": list(payload.get("activeConflicts", [])),
+                    "avoidedThemes": list(payload.get("avoidedThemes", [])),
+                    "emotionalTone": self._optional_str(payload.get("emotionalTone")),
+                    "egoPosition": self._optional_str(payload.get("egoPosition")),
+                    "confidence": self._optional_str(payload.get("confidence")) or "medium",
+                    "relatedMaterialIds": [material_id] if material_id else [],
+                    "relatedGoalIds": list(payload.get("relatedGoalIds", [])),
+                    "privacyClass": answer.get("privacyClass", "session_only"),
+                    "source": "reflection",
+                    "status": "candidate",
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "ConsciousAttitudeSnapshot"
+        elif capture_target == "personal_amplification":
+            canonical_name = self._optional_str(payload.get("canonicalName")) or self._optional_str(
+                routing_hints.get("canonicalName")
+            )
+            surface_text = self._optional_str(payload.get("surfaceText")) or self._optional_str(
+                routing_hints.get("surfaceText")
+            )
+            if not canonical_name or not surface_text:
+                raise ValidationError(
+                    "Personal amplification clarification answers require "
+                    "canonicalName and surfaceText."
+                )
+            routed_record = await self.answer_amplification_prompt(
+                {
+                    "userId": user_id,
+                    "promptId": self._optional_str(routing_hints.get("amplificationPromptId")),
+                    "materialId": material_id,
+                    "runId": run_id,
+                    "symbolId": self._optional_str(payload.get("symbolId"))
+                    or self._optional_str(routing_hints.get("symbolId")),
+                    "canonicalName": canonical_name,
+                    "surfaceText": surface_text,
+                    "associationText": self._optional_str(payload.get("associationText"))
+                    or answer["answerText"],
+                    "feelingTone": self._optional_str(payload.get("feelingTone")),
+                    "bodySensations": list(payload.get("bodySensations", [])),
+                    "memoryRefs": list(payload.get("memoryRefs", [])),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "PersonalAmplification"
+        elif capture_target == "consent_preference":
+            scope = self._optional_str(payload.get("scope"))
+            status = self._optional_str(payload.get("status"))
+            if not scope or not status:
+                raise ValidationError("Consent clarification answers require scope and status.")
+            routed_record = await self.set_consent_preference(
+                {
+                    "userId": user_id,
+                    "scope": scope,
+                    "status": status,
+                    "note": self._optional_str(payload.get("note")) or answer["answerText"],
+                    "source": "clarification_answer",
+                }
+            )
+            record_type = "ConsentPreference"
+        elif capture_target == "goal":
+            label = self._optional_str(payload.get("label"))
+            if not label:
+                raise ValidationError("Goal clarification answers require payload.label.")
+            routed_record = await self.upsert_goal(
+                {
+                    "userId": user_id,
+                    "goalId": self._optional_str(payload.get("goalId")),
+                    "label": label,
+                    "description": self._optional_str(payload.get("description")),
+                    "status": self._optional_str(payload.get("status")) or "active",
+                    "valueTags": list(payload.get("valueTags", [])),
+                    "linkedMaterialIds": [material_id] if material_id else [],
+                    "linkedSymbolIds": list(payload.get("linkedSymbolIds", [])),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "Goal"
+        elif capture_target == "goal_tension":
+            tension_summary = self._optional_str(payload.get("tensionSummary"))
+            goal_ids = list(payload.get("goalIds", []))
+            if not tension_summary or not goal_ids:
+                raise ValidationError(
+                    "Goal-tension clarification answers require tensionSummary and goalIds."
+                )
+            routed_record = await self.upsert_goal_tension(
+                {
+                    "userId": user_id,
+                    "tensionId": self._optional_str(payload.get("tensionId")),
+                    "goalIds": goal_ids,
+                    "tensionSummary": tension_summary,
+                    "polarityLabels": list(payload.get("polarityLabels", [])),
+                    "status": self._optional_str(payload.get("status")) or "candidate",
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "GoalTension"
+        elif capture_target == "reality_anchors":
+            routed_record = await self.capture_reality_anchors(
+                {
+                    "userId": user_id,
+                    **deepcopy(payload),
+                    "relatedMaterialIds": self._merge_ids(
+                        list(payload.get("relatedMaterialIds", [])),
+                        [material_id] if material_id else [],
+                    ),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "RealityAnchorSummary"
+        elif capture_target == "threshold_process":
+            routed_record = await self.upsert_threshold_process(
+                {
+                    "userId": user_id,
+                    **deepcopy(payload),
+                    "relatedMaterialIds": self._merge_ids(
+                        list(payload.get("relatedMaterialIds", [])),
+                        [material_id] if material_id else [],
+                    ),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "ThresholdProcess"
+        elif capture_target == "relational_scene":
+            routed_record = await self.record_relational_scene(
+                {
+                    "userId": user_id,
+                    **deepcopy(payload),
+                    "relatedMaterialIds": self._merge_ids(
+                        list(payload.get("relatedMaterialIds", [])),
+                        [material_id] if material_id else [],
+                    ),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "RelationalScene"
+        elif capture_target == "inner_outer_correspondence":
+            routed_record = await self.record_inner_outer_correspondence(
+                {
+                    "userId": user_id,
+                    **deepcopy(payload),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "InnerOuterCorrespondence"
+        elif capture_target == "numinous_encounter":
+            routed_record = await self.record_numinous_encounter(
+                {
+                    "userId": user_id,
+                    **deepcopy(payload),
+                    "relatedMaterialIds": self._merge_ids(
+                        list(payload.get("relatedMaterialIds", [])),
+                        [material_id] if material_id else [],
+                    ),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "NuminousEncounter"
+        elif capture_target == "aesthetic_resonance":
+            routed_record = await self.record_aesthetic_resonance(
+                {
+                    "userId": user_id,
+                    **deepcopy(payload),
+                    "relatedMaterialIds": self._merge_ids(
+                        list(payload.get("relatedMaterialIds", [])),
+                        [material_id] if material_id else [],
+                    ),
+                    "privacyClass": answer.get("privacyClass", "user_private"),
+                    "evidenceIds": [],
+                }
+            )
+            record_type = "AestheticResonance"
+        elif capture_target == "interpretation_preference":
+            preferences = {
+                key: deepcopy(payload[key])
+                for key in ("depthPreference", "modalityBias")
+                if key in payload
+            }
+            if not preferences:
+                raise ValidationError(
+                    "Interpretation-preference clarification answers require depthPreference "
+                    "or modalityBias."
+                )
+            routed_record = await self.set_adaptation_preferences(
+                user_id=user_id,
+                scope="interpretation",
+                preferences=preferences,
+            )
+            record_type = "AdaptationProfile"
+        elif capture_target == "typology_feedback":
+            routed_record = await self._store_typology_feedback_record(
+                user_id=user_id,
+                payload=payload,
+                material_id=material_id,
+            )
+            record_type = "TypologyLens"
+        else:
+            raise ValidationError(f"Clarification target '{capture_target}' is not routable yet.")
+        return ([{"recordType": record_type, "id": str(routed_record["id"])}], routed_record)
+
+    async def _store_typology_feedback_record(
+        self,
+        *,
+        user_id: Id,
+        payload: dict[str, object],
+        material_id: Id | None,
+    ) -> TypologyLensRecord:
+        allowed_roles = {"dominant", "auxiliary", "tertiary", "inferior", "compensation_link"}
+        allowed_functions = {"thinking", "feeling", "sensation", "intuition"}
+        allowed_statuses = {"candidate", "user_refined", "disconfirmed"}
+        lens_id = self._optional_str(payload.get("lensId"))
+        existing: TypologyLensRecord | None = None
+        if lens_id:
+            existing = await self._repository.get_typology_lens(user_id, lens_id)
+        claim = self._optional_str(payload.get("claim"))
+        if existing is None and claim:
+            existing = next(
+                (
+                    item
+                    for item in await self._repository.list_typology_lenses(
+                        user_id, include_deleted=False, limit=50
+                    )
+                    if str(item.get("claim") or "").strip().lower() == claim.lower()
+                ),
+                None,
+            )
+        role = self._optional_str(payload.get("role")) or (
+            self._optional_str(existing.get("role")) if existing else None
+        )
+        function = self._optional_str(payload.get("function")) or (
+            self._optional_str(existing.get("function")) if existing else None
+        )
+        claim = claim or (self._optional_str(existing.get("claim")) if existing else None)
+        user_test_prompt = self._optional_str(payload.get("userTestPrompt")) or (
+            self._optional_str(existing.get("userTestPrompt")) if existing else None
+        )
+        if (
+            role not in allowed_roles
+            or function not in allowed_functions
+            or not claim
+            or not user_test_prompt
+        ):
+            raise ValidationError(
+                "Typology-feedback clarification answers require valid role, function, claim, "
+                "and userTestPrompt fields."
+            )
+        confidence = self._optional_str(payload.get("confidence")) or (
+            self._optional_str(existing.get("confidence")) if existing else "low"
+        )
+        if confidence == "high":
+            confidence = "medium"
+        if confidence not in {"low", "medium"}:
+            raise ValidationError("Typology feedback confidence must be low or medium.")
+        status = self._optional_str(payload.get("status")) or (
+            self._optional_str(existing.get("status")) if existing else "user_refined"
+        )
+        if status not in allowed_statuses:
+            raise ValidationError(
+                "Typology feedback status must be candidate, user_refined, or disconfirmed."
+            )
+        linked_material_ids = self._merge_ids(
+            list(existing.get("linkedMaterialIds", [])) if existing else [],
+            [material_id] if material_id else [],
+        )
+        linked_material_ids = self._merge_ids(
+            linked_material_ids,
+            [str(item) for item in payload.get("linkedMaterialIds", []) if str(item).strip()],
+        )
+        counterevidence_ids = self._merge_ids(
+            list(existing.get("counterevidenceIds", [])) if existing else [],
+            [str(item) for item in payload.get("counterevidenceIds", []) if str(item).strip()],
+        )
+        now = now_iso()
+        role_value = cast(
+            Literal["dominant", "auxiliary", "tertiary", "inferior", "compensation_link"],
+            role,
+        )
+        function_value = cast(
+            Literal["thinking", "feeling", "sensation", "intuition"],
+            function,
+        )
+        confidence_value = cast(Literal["low", "medium"], confidence)
+        status_value = cast(Literal["candidate", "user_refined", "disconfirmed"], status)
+        if existing is not None:
+            return await self._repository.update_typology_lens(
+                user_id,
+                existing["id"],
+                {
+                    "role": role_value,
+                    "function": function_value,
+                    "claim": claim,
+                    "confidence": confidence_value,
+                    "status": status_value,
+                    "counterevidenceIds": counterevidence_ids,
+                    "userTestPrompt": user_test_prompt,
+                    "linkedMaterialIds": linked_material_ids,
+                    "updatedAt": now,
+                    "lastSeen": now,
+                },
+            )
+        return await self._repository.create_typology_lens(
+            {
+                "id": create_id("typology_lens"),
+                "userId": user_id,
+                "role": role_value,
+                "function": function_value,
+                "claim": claim,
+                "confidence": confidence_value,
+                "status": status_value,
+                "evidenceIds": [],
+                "counterevidenceIds": counterevidence_ids,
+                "userTestPrompt": user_test_prompt,
+                "linkedMaterialIds": linked_material_ids,
+                "createdAt": now,
+                "updatedAt": now,
+                "lastSeen": now,
+            }
+        )
+
+    def _clarification_question_key(self, question_text: str) -> str:
+        compact = re.sub(r"[^a-z0-9]+", "_", question_text.lower()).strip("_")
+        return compact[:80] or create_id("clarification_key")
+
+    def _method_state_has_anchor(self, anchor_refs: dict[str, object]) -> bool:
+        return any(str(value).strip() for value in anchor_refs.values() if value is not None)
+
+    async def _materialize_method_state_result(
+        self,
+        capture_run: MethodStateCaptureRunRecord,
+    ) -> MethodStateWorkflowResult:
+        response_material = await self._repository.get_material(
+            capture_run["userId"],
+            capture_run["responseMaterialId"],
+        )
+        evidence_items = [
+            await self._repository.get_evidence_item(capture_run["userId"], evidence_id)
+            for evidence_id in capture_run.get("evidenceIds", [])
+        ]
+        plan = capture_run.get("memoryWritePlan", {"proposals": []})
+        return {
+            "captureRun": capture_run,
+            "responseMaterial": response_material,
+            "evidence": evidence_items,
+            "appliedEntityRefs": deepcopy(capture_run.get("appliedEntityRefs", [])),
+            "pendingProposals": deepcopy(plan.get("proposals", [])),
+            "followUpPrompts": [
+                str(item)
+                for item in capture_run.get("extractionResult", {}).get("followUpPrompts", [])
+                if str(item).strip()
+            ],
+            "withheldCandidates": deepcopy(
+                capture_run.get("extractionResult", {}).get("withheldCandidates", [])
+            ),
+            "warnings": [
+                str(item)
+                for item in capture_run.get("extractionResult", {}).get("routingWarnings", [])
+                if str(item).strip()
+            ],
+        }
+
+    async def _load_method_state_anchors(
+        self,
+        *,
+        user_id: Id,
+        anchor_refs: dict[str, object],
+    ) -> dict[str, object]:
+        anchors: dict[str, object] = {}
+        if anchor_refs.get("materialId"):
+            anchors["material"] = await self._repository.get_material(
+                user_id, str(anchor_refs["materialId"])
+            )
+        if anchor_refs.get("runId"):
+            run = await self._repository.get_interpretation_run(user_id, str(anchor_refs["runId"]))
+            anchors["run"] = run
+            if anchor_refs.get("clarificationRefKey"):
+                intent = run.get("result", {}).get("clarificationIntent")
+                if not isinstance(intent, dict) or str(intent.get("refKey") or "") != str(
+                    anchor_refs["clarificationRefKey"]
+                ):
+                    raise ValidationError("clarificationRefKey does not match the anchored run.")
+                anchors["clarificationIntent"] = deepcopy(intent)
+            if "material" not in anchors:
+                anchors["material"] = await self._repository.get_material(
+                    user_id, run["materialId"]
+                )
+        if anchor_refs.get("promptId"):
+            anchors["prompt"] = await self._repository.get_amplification_prompt(
+                user_id,
+                str(anchor_refs["promptId"]),
+            )
+        if anchor_refs.get("practiceSessionId"):
+            anchors["practiceSession"] = await self._repository.get_practice_session(
+                user_id,
+                str(anchor_refs["practiceSessionId"]),
+            )
+        if anchor_refs.get("goalId"):
+            anchors["goal"] = await self._repository.get_goal(user_id, str(anchor_refs["goalId"]))
+        return anchors
+
+    def _resolve_expected_capture_targets(
+        self,
+        *,
+        source: str,
+        expected_targets: list[MethodStateCaptureTargetKind],
+        anchors: dict[str, object],
+    ) -> list[MethodStateCaptureTargetKind]:
+        resolved: list[MethodStateCaptureTargetKind] = list(expected_targets)
+        prompt = anchors.get("prompt")
+        if isinstance(prompt, dict):
+            resolved.append("personal_amplification")
+        clarification_intent = anchors.get("clarificationIntent")
+        if isinstance(clarification_intent, dict):
+            for item in clarification_intent.get("expectedTargets", []):
+                if isinstance(item, str):
+                    resolved.append(item)  # type: ignore[arg-type]
+        source_defaults: dict[str, list[MethodStateCaptureTargetKind]] = {
+            "body_note": ["body_state"],
+            "practice_feedback": ["practice_outcome", "practice_preference"],
+            "goal_feedback": ["goal", "goal_tension"],
+            "relational_scene": ["relational_scene"],
+            "dream_dynamics": ["dream_dynamics", "body_state"],
+            "amplification_answer": ["personal_amplification"],
+            "consent_update": ["consent_preference"],
+        }
+        resolved.extend(source_defaults.get(source, []))
+        deduped: list[MethodStateCaptureTargetKind] = []
+        for item in resolved:
+            if item not in deduped:
+                deduped.append(item)
+        return deduped
+
+    def _method_state_anchor_summary(self, anchors: dict[str, object]) -> str | None:
+        prompt = anchors.get("prompt")
+        if isinstance(prompt, dict):
+            return self._optional_str(prompt.get("promptText"))
+        run = anchors.get("run")
+        if isinstance(run, dict):
+            return self._optional_str(run.get("result", {}).get("userFacingResponse"))
+        return None
+
+    def _method_state_evidence_text(
+        self,
+        *,
+        response_text: str,
+        span: dict[str, object],
+    ) -> str:
+        quote = str(span.get("quote") or "").strip()
+        if quote and quote in response_text:
+            return quote
+        summary = str(span.get("summary") or "").strip()
+        if summary:
+            return summary
+        return self._compact_page_text(response_text, max_length=200)
+
+    async def _create_method_state_evidence(
+        self,
+        *,
+        user_id: Id,
+        response_material_id: Id,
+        response_text: str,
+        observed_at: str,
+        privacy_class: str,
+        spans: object,
+    ) -> list[EvidenceItem]:
+        if not isinstance(spans, list):
+            return []
+        items: list[EvidenceItem] = []
+        for span in spans:
+            if not isinstance(span, dict):
+                continue
+            items.append(
+                {
+                    "id": create_id("evidence"),
+                    "type": "method_state_response",
+                    "sourceId": response_material_id,
+                    "quoteOrSummary": self._method_state_evidence_text(
+                        response_text=response_text,
+                        span=span,
+                    ),
+                    "timestamp": observed_at,
+                    "privacyClass": privacy_class,
+                    "reliability": "high"
+                    if str(span.get("quote") or "").strip() in response_text
+                    else "medium",
+                }
+            )
+        if not items:
+            return []
+        return await self._repository.store_evidence_items(user_id, items)
+
+    def _method_state_requires_proposal(self, target_kind: str) -> bool:
+        return target_kind in {
+            "projection_hypothesis",
+            "inner_outer_correspondence",
+            "typology_lens",
+            "living_myth_question",
+        }
+
+    def _method_state_candidate_withheld_reason(
+        self,
+        *,
+        candidate: MethodStateCaptureCandidate,
+        consent_preferences: list[dict[str, object]],
+        safety_context: SafetyContext | None,
+        runtime_policy: dict[str, object] | None,
+    ) -> str | None:
+        target_kind = str(candidate.get("targetKind") or "").strip()
+        policy = runtime_policy if isinstance(runtime_policy, dict) else {}
+        if (
+            policy.get("depthLevel") == "grounding_only"
+            and target_kind in _METHOD_STATE_GROUNDING_ONLY_BLOCKED_TARGETS
+        ):
+            return f"method_state_policy_grounding_only:{target_kind}"
+        for blocked_move in policy.get("blockedMoves", []):
+            move = str(blocked_move).strip()
+            if target_kind in _METHOD_STATE_POLICY_TARGETS_BY_BLOCKED_MOVE.get(move, ()):
+                return f"method_state_policy_blocked_move:{move}"
+        consent_scopes = [
+            str(item) for item in candidate.get("consentScopes", []) if str(item).strip()
+        ]
+        for scope in consent_scopes:
+            if self._consent_status(consent_preferences, scope) not in {None, "allow"}:
+                return f"consent_required:{scope}"
+        if (
+            safety_context
+            and safety_context.get("userReportedActivation") == "overwhelming"
+            and candidate.get("targetKind")
+            in {
+                "projection_hypothesis",
+                "inner_outer_correspondence",
+                "typology_lens",
+                "living_myth_question",
+                "threshold_process",
+                "numinous_encounter",
+            }
+        ):
+            return "grounding_only_withheld"
+        return None
+
+    def _method_state_candidate_to_proposal(
+        self,
+        *,
+        candidate: MethodStateCaptureCandidate,
+        evidence_ids: list[Id],
+    ) -> MemoryWriteProposal | None:
+        target_kind = str(candidate.get("targetKind") or "")
+        action_by_target = {
+            "projection_hypothesis": ("upsert_projection_hypothesis", "ProjectionHypothesis"),
+            "inner_outer_correspondence": (
+                "upsert_inner_outer_correspondence",
+                "InnerOuterCorrespondence",
+            ),
+            "typology_lens": ("store_typology_lens", "TypologyLens"),
+            "living_myth_question": ("upsert_mythic_question", "MythicQuestion"),
+            "threshold_process": ("upsert_threshold_process", "ThresholdProcess"),
+            "numinous_encounter": ("create_numinous_encounter", "NuminousEncounter"),
+            "aesthetic_resonance": ("create_aesthetic_resonance", "AestheticResonance"),
+            "relational_scene": ("upsert_relational_scene", "RelationalScene"),
+        }
+        mapping = action_by_target.get(target_kind)
+        if mapping is None:
+            return None
+        action, entity_type = mapping
+        payload = deepcopy(candidate.get("payload", {}))
+        if target_kind == "typology_lens":
+            payload["confidence"] = (
+                "medium"
+                if payload.get("confidence") == "high"
+                else str(payload.get("confidence") or "low")
+            )
+            payload.setdefault("status", "candidate")
+            payload["evidenceIds"] = list(evidence_ids)
+        return {
+            "id": create_id("proposal"),
+            "action": action,
+            "entityType": entity_type,
+            "payload": payload,
+            "evidenceIds": list(evidence_ids),
+            "reason": str(candidate.get("reason") or "Method-state connector proposal."),
+            "requiresUserApproval": True,
+            "status": "pending_user_approval",
+        }
+
+    async def _apply_method_state_candidate(
+        self,
+        *,
+        user_id: Id,
+        source: str,
+        response_material: MaterialRecord,
+        observed_at: str,
+        expected_targets: list[MethodStateCaptureTargetKind],
+        anchors: dict[str, object],
+        candidate: MethodStateCaptureCandidate,
+        evidence_ids_by_ref: dict[str, Id],
+        consent_preferences: list[dict[str, object]],
+        safety_context: SafetyContext | None,
+        runtime_policy: dict[str, object] | None,
+        window_start: str,
+        window_end: str,
+    ) -> dict[str, object]:
+        target_kind = str(candidate.get("targetKind") or "")
+        application = str(candidate.get("application") or "ignore")
+        if target_kind not in expected_targets and source != "freeform_followup":
+            return {
+                "withheld": {
+                    "targetKind": target_kind,
+                    "reason": "unexpected_target_for_anchor",
+                }
+            }
+        if application in {"ignore", "needs_clarification", "withheld"}:
+            return {
+                "withheld": {
+                    "targetKind": target_kind,
+                    "reason": str(candidate.get("reason") or application),
+                }
+            }
+        withheld_reason = self._method_state_candidate_withheld_reason(
+            candidate=candidate,
+            consent_preferences=consent_preferences,
+            safety_context=safety_context,
+            runtime_policy=runtime_policy,
+        )
+        if withheld_reason:
+            return {
+                "withheld": {
+                    "targetKind": target_kind,
+                    "reason": withheld_reason,
+                }
+            }
+        evidence_ids = [
+            evidence_ids_by_ref[ref]
+            for ref in candidate.get("supportingEvidenceRefs", [])
+            if ref in evidence_ids_by_ref
+        ]
+        if self._method_state_requires_proposal(target_kind) or application == "approval_proposal":
+            proposal = self._method_state_candidate_to_proposal(
+                candidate=candidate,
+                evidence_ids=evidence_ids,
+            )
+            if proposal is None:
+                return {"warning": f"unsupported_method_state_proposal:{target_kind}"}
+            return {"proposal": proposal}
+        payload = deepcopy(candidate.get("payload", {}))
+        if target_kind == "body_state":
+            if not str(payload.get("sensation") or "").strip():
+                return {"warning": "body_state_missing_sensation"}
+            stored = await self.store_body_state(
+                {
+                    "userId": user_id,
+                    "sensation": str(payload.get("sensation") or "").strip(),
+                    "observedAt": str(payload.get("observedAt") or observed_at),
+                    "bodyRegion": self._optional_str(payload.get("bodyRegion")),
+                    "activation": payload.get("activation"),
+                    "tone": self._optional_str(payload.get("tone")),
+                    "temporalContext": self._optional_str(payload.get("temporalContext")),
+                    "linkedMaterialIds": self._merge_ids(
+                        [response_material["id"]],
+                        list(payload.get("linkedMaterialIds", [])),
+                    ),
+                    "linkedGoalIds": list(payload.get("linkedGoalIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "BodyState",
+                    "entityId": stored["bodyState"]["id"],
+                }
+            }
+        if target_kind == "personal_amplification":
+            prompt = anchors.get("prompt") if isinstance(anchors.get("prompt"), dict) else {}
+            canonical_name = str(
+                payload.get("canonicalName") or prompt.get("canonicalName") or ""
+            ).strip()
+            surface_text = str(
+                payload.get("surfaceText") or prompt.get("surfaceText") or ""
+            ).strip()
+            association_text = str(payload.get("associationText") or "").strip()
+            if not canonical_name or not surface_text or not association_text:
+                return {"warning": "personal_amplification_missing_required_fields"}
+            created = await self.answer_amplification_prompt(
+                {
+                    "userId": user_id,
+                    "promptId": prompt.get("id"),
+                    "materialId": response_material["id"],
+                    "runId": anchors.get("run", {}).get("id")
+                    if isinstance(anchors.get("run"), dict)
+                    else None,
+                    "symbolId": payload.get("symbolId") or prompt.get("symbolId"),
+                    "canonicalName": canonical_name,
+                    "surfaceText": surface_text,
+                    "associationText": association_text,
+                    "feelingTone": self._optional_str(payload.get("feelingTone")),
+                    "bodySensations": list(payload.get("bodySensations", [])),
+                    "memoryRefs": list(payload.get("memoryRefs", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "PersonalAmplification",
+                    "entityId": created["id"],
+                }
+            }
+        if target_kind == "conscious_attitude":
+            stance_summary = str(payload.get("stanceSummary") or "").strip()
+            if not stance_summary:
+                return {"warning": "conscious_attitude_missing_stance_summary"}
+            created = await self.capture_conscious_attitude(
+                {
+                    "userId": user_id,
+                    "windowStart": window_start,
+                    "windowEnd": window_end,
+                    "stanceSummary": stance_summary,
+                    "activeValues": list(payload.get("activeValues", [])),
+                    "activeConflicts": list(payload.get("activeConflicts", [])),
+                    "avoidedThemes": list(payload.get("avoidedThemes", [])),
+                    "emotionalTone": self._optional_str(payload.get("emotionalTone")),
+                    "egoPosition": self._optional_str(payload.get("egoPosition")),
+                    "confidence": str(
+                        payload.get("confidence") or candidate.get("confidence") or "low"
+                    ),
+                    "relatedMaterialIds": [response_material["id"]],
+                    "relatedGoalIds": list(payload.get("relatedGoalIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "source": "reflection",
+                    "status": "candidate" if application == "candidate_write" else "user_confirmed",
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "ConsciousAttitude",
+                    "entityId": created["id"],
+                }
+            }
+        if target_kind == "goal":
+            label = str(payload.get("label") or "").strip()
+            if not label:
+                return {"warning": "goal_missing_label"}
+            anchored_goal = anchors.get("goal") if isinstance(anchors.get("goal"), dict) else {}
+            goal = await self.upsert_goal(
+                {
+                    "userId": user_id,
+                    "goalId": payload.get("goalId") or anchored_goal.get("id"),
+                    "label": label,
+                    "description": self._optional_str(payload.get("description")),
+                    "status": str(payload.get("status") or "active"),
+                    "valueTags": list(payload.get("valueTags", [])),
+                    "linkedMaterialIds": [response_material["id"]],
+                    "linkedSymbolIds": list(payload.get("linkedSymbolIds", [])),
+                    "evidenceIds": evidence_ids,
+                }
+            )
+            return {"appliedEntityRef": {"entityType": "Goal", "entityId": goal["id"]}}
+        if target_kind == "goal_tension":
+            goal_ids = [str(item) for item in payload.get("goalIds", []) if str(item).strip()]
+            if not goal_ids or not str(payload.get("tensionSummary") or "").strip():
+                return {"warning": "goal_tension_missing_required_fields"}
+            tension = await self.upsert_goal_tension(
+                {
+                    "userId": user_id,
+                    "tensionId": payload.get("tensionId"),
+                    "goalIds": goal_ids,
+                    "tensionSummary": str(payload.get("tensionSummary") or "").strip(),
+                    "polarityLabels": list(payload.get("polarityLabels", [])),
+                    "evidenceIds": evidence_ids,
+                    "status": "candidate"
+                    if application == "candidate_write"
+                    else str(payload.get("status") or "active"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "GoalTension",
+                    "entityId": tension["id"],
+                }
+            }
+        if target_kind == "practice_outcome":
+            practice_session = (
+                anchors.get("practiceSession")
+                if isinstance(anchors.get("practiceSession"), dict)
+                else {}
+            )
+            practice_type = str(
+                payload.get("practiceType") or practice_session.get("practiceType") or ""
+            ).strip()
+            outcome_text = str(payload.get("outcome") or "").strip()
+            if not practice_type or not outcome_text:
+                return {"warning": "practice_outcome_missing_required_fields"}
+            practice = await self.record_practice_outcome(
+                user_id=user_id,
+                practice_session_id=practice_session.get("id"),
+                material_id=response_material["id"],
+                outcome={
+                    "practiceType": practice_type,
+                    "target": self._optional_str(
+                        payload.get("target") or practice_session.get("target")
+                    ),
+                    "outcome": outcome_text,
+                    "activationBefore": payload.get("activationBefore"),
+                    "activationAfter": payload.get("activationAfter"),
+                    "outcomeEvidenceIds": evidence_ids,
+                },
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "PracticeSession",
+                    "entityId": practice["id"],
+                }
+            }
+        if target_kind == "practice_preference":
+            preferences = {
+                key: deepcopy(payload[key])
+                for key in ("preferredModalities", "avoidedModalities", "maxDurationMinutes")
+                if key in payload
+            }
+            if not preferences:
+                return {"warning": "practice_preference_missing_required_fields"}
+            try:
+                profile = await self.set_adaptation_preferences(
+                    user_id=user_id,
+                    scope="practice",
+                    preferences=preferences,
+                )
+            except ValidationError:
+                return {"warning": "practice_preference_invalid_payload"}
+            return {
+                "appliedEntityRef": {
+                    "entityType": "AdaptationProfile",
+                    "entityId": profile["id"],
+                }
+            }
+        if target_kind == "reality_anchors":
+            summary = str(payload.get("summary") or "").strip()
+            anchor_summary = str(payload.get("anchorSummary") or "").strip()
+            if not summary or not anchor_summary:
+                return {"warning": "reality_anchors_missing_required_fields"}
+            record = await self.capture_reality_anchors(
+                {
+                    "userId": user_id,
+                    "summary": summary,
+                    "anchorSummary": anchor_summary,
+                    "workDailyLifeContinuity": str(
+                        payload.get("workDailyLifeContinuity") or "unknown"
+                    ),
+                    "sleepBodyRegulation": str(payload.get("sleepBodyRegulation") or "unknown"),
+                    "relationshipContact": str(payload.get("relationshipContact") or "unknown"),
+                    "reflectiveCapacity": str(payload.get("reflectiveCapacity") or "unknown"),
+                    "groundingRecommendation": str(
+                        payload.get("groundingRecommendation") or "pace_gently"
+                    ),
+                    "reasons": list(payload.get("reasons", [])),
+                    "relatedMaterialIds": self._merge_ids(
+                        [response_material["id"]],
+                        list(payload.get("relatedMaterialIds", [])),
+                    ),
+                    "relatedSymbolIds": list(payload.get("relatedSymbolIds", [])),
+                    "relatedGoalIds": list(payload.get("relatedGoalIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "RealityAnchorSummary",
+                    "entityId": record["id"],
+                }
+            }
+        if target_kind == "threshold_process":
+            threshold_name = str(payload.get("thresholdName") or "").strip()
+            summary = str(payload.get("summary") or "").strip()
+            if not threshold_name or not summary:
+                return {"warning": "threshold_process_missing_required_fields"}
+            normalized_key = str(payload.get("normalizedThresholdKey") or "").strip()
+            if not normalized_key:
+                normalized_key = re.sub(r"[^a-z0-9]+", "-", threshold_name.lower()).strip("-")
+            if not normalized_key:
+                return {"warning": "threshold_process_missing_required_fields"}
+            record = await self.upsert_threshold_process(
+                {
+                    "userId": user_id,
+                    "thresholdId": payload.get("thresholdId"),
+                    "label": self._optional_str(payload.get("label")),
+                    "summary": summary,
+                    "thresholdName": threshold_name,
+                    "phase": str(payload.get("phase") or "unknown"),
+                    "whatIsEnding": str(payload.get("whatIsEnding") or "").strip(),
+                    "notYetBegun": str(payload.get("notYetBegun") or "").strip(),
+                    "bodyCarrying": self._optional_str(payload.get("bodyCarrying")),
+                    "groundingStatus": str(payload.get("groundingStatus") or "unknown"),
+                    "symbolicLens": self._optional_str(payload.get("symbolicLens")),
+                    "invitationReadiness": str(payload.get("invitationReadiness") or "ask"),
+                    "normalizedThresholdKey": normalized_key,
+                    "relatedMaterialIds": self._merge_ids(
+                        [response_material["id"]],
+                        list(payload.get("relatedMaterialIds", [])),
+                    ),
+                    "relatedSymbolIds": list(payload.get("relatedSymbolIds", [])),
+                    "relatedGoalIds": list(payload.get("relatedGoalIds", [])),
+                    "relatedDreamSeriesIds": list(payload.get("relatedDreamSeriesIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "ThresholdProcess",
+                    "entityId": record["id"],
+                }
+            }
+        if target_kind == "relational_scene":
+            summary = str(payload.get("summary") or "").strip()
+            scene_summary = str(payload.get("sceneSummary") or "").strip()
+            normalized_key = str(payload.get("normalizedSceneKey") or "").strip()
+            if not summary or not scene_summary or not normalized_key:
+                return {"warning": "relational_scene_missing_required_fields"}
+            scene = await self.record_relational_scene(
+                {
+                    "userId": user_id,
+                    "summary": summary,
+                    "sceneSummary": scene_summary,
+                    "normalizedSceneKey": normalized_key,
+                    "chargedRoles": list(payload.get("chargedRoles", [])),
+                    "recurringAffect": list(payload.get("recurringAffect", [])),
+                    "recurrenceContexts": list(payload.get("recurrenceContexts", [])),
+                    "relatedMaterialIds": [response_material["id"]],
+                    "relatedGoalIds": list(payload.get("relatedGoalIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "RelationalScene",
+                    "entityId": scene["id"],
+                }
+            }
+        if target_kind == "consent_preference":
+            scope = str(payload.get("scope") or "").strip()
+            status = str(payload.get("status") or "").strip()
+            if not scope or not status:
+                return {"warning": "consent_preference_missing_required_fields"}
+            preference = await self.set_consent_preference(
+                {
+                    "userId": user_id,
+                    "scope": scope,
+                    "status": status,
+                    "note": self._optional_str(
+                        payload.get("note") or response_material.get("summary")
+                    ),
+                    "source": "response_followup",
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "ConsentPreference",
+                    "entityId": preference["id"],
+                }
+            }
+        if target_kind == "dream_dynamics":
+            material = (
+                anchors.get("material") if isinstance(anchors.get("material"), dict) else None
+            )
+            if material is None or material.get("materialType") != "dream":
+                return {"warning": "dream_dynamics_requires_dream_anchor"}
+            updated_material = await self._append_dream_dynamics_observation(
+                material=material,
+                observed_at=observed_at,
+                payload=payload,
+                evidence_ids=evidence_ids,
+                source=source,
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "DreamEntry",
+                    "entityId": updated_material["id"],
+                }
+            }
+        if target_kind == "numinous_encounter":
+            summary = str(payload.get("summary") or "").strip()
+            interpretation_constraint = str(payload.get("interpretationConstraint") or "").strip()
+            if not summary or not interpretation_constraint:
+                return {"warning": "numinous_encounter_missing_required_fields"}
+            record = await self.record_numinous_encounter(
+                {
+                    "userId": user_id,
+                    "summary": summary,
+                    "encounterMedium": str(payload.get("encounterMedium") or "unknown"),
+                    "affectTone": str(payload.get("affectTone") or "").strip(),
+                    "containmentNeed": str(payload.get("containmentNeed") or "ordinary_reflection"),
+                    "interpretationConstraint": interpretation_constraint,
+                    "relatedMaterialIds": [response_material["id"]],
+                    "relatedSymbolIds": list(payload.get("relatedSymbolIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "NuminousEncounter",
+                    "entityId": record["id"],
+                }
+            }
+        if target_kind == "aesthetic_resonance":
+            summary = str(payload.get("summary") or "").strip()
+            resonance_summary = str(payload.get("resonanceSummary") or "").strip()
+            if not summary or not resonance_summary:
+                return {"warning": "aesthetic_resonance_missing_required_fields"}
+            record = await self.record_aesthetic_resonance(
+                {
+                    "userId": user_id,
+                    "summary": summary,
+                    "medium": str(payload.get("medium") or "unknown"),
+                    "objectDescription": str(payload.get("objectDescription") or "").strip(),
+                    "resonanceSummary": resonance_summary,
+                    "feelingTone": self._optional_str(payload.get("feelingTone")),
+                    "bodySensations": list(payload.get("bodySensations", [])),
+                    "relatedMaterialIds": [response_material["id"]],
+                    "relatedSymbolIds": list(payload.get("relatedSymbolIds", [])),
+                    "evidenceIds": evidence_ids,
+                    "privacyClass": response_material.get("privacyClass", "user_private"),
+                }
+            )
+            return {
+                "appliedEntityRef": {
+                    "entityType": "AestheticResonance",
+                    "entityId": record["id"],
+                }
+            }
+        return {"warning": f"unsupported_method_state_target:{target_kind}"}
+
+    async def _append_dream_dynamics_observation(
+        self,
+        *,
+        material: MaterialRecord,
+        observed_at: str,
+        payload: dict[str, object],
+        evidence_ids: list[Id],
+        source: str,
+    ) -> MaterialRecord:
+        dream_structure = deepcopy(material.get("dreamStructure", {}))
+        dynamics = [deepcopy(item) for item in dream_structure.get("methodDynamics", [])]
+        dynamics.insert(
+            0,
+            {
+                "id": create_id("dream_dynamics"),
+                "source": "clarifying_answer" if source == "clarifying_answer" else "user_reported",
+                "observedAt": observed_at,
+                "egoStance": str(payload.get("egoStance") or "").strip(),
+                "actionSummary": str(payload.get("actionSummary") or "").strip(),
+                "affectBefore": str(payload.get("affectBefore") or "").strip(),
+                "affectAfter": str(payload.get("affectAfter") or "").strip(),
+                "bodySensations": list(payload.get("bodySensations", [])),
+                "lysisSummary": str(payload.get("lysisSummary") or "").strip(),
+                "relationalStance": str(payload.get("relationalStance") or "").strip(),
+                "evidenceIds": list(evidence_ids),
+                "createdAt": now_iso(),
+            },
+        )
+        dream_structure["methodDynamics"] = dynamics[:20]
+        return await self._repository.update_material(
+            material["userId"],
+            material["id"],
+            {
+                "dreamStructure": dream_structure,
+                "updatedAt": now_iso(),
+            },
+        )
+
     async def _ensure_amplification_prompts_for_run(
         self,
         *,
@@ -3627,20 +7540,55 @@ class CirculatioService:
         if sample_weight is not None:
             event["sampleWeight"] = sample_weight
         updated = self._adaptation_engine.record_event(profile=profile, event=event)
+        await self._persist_adaptation_profile(user_id=user_id, current=current, updated=updated)
+
+    async def _persist_adaptation_profile(
+        self,
+        *,
+        user_id: Id,
+        current: dict[str, object] | None,
+        updated: dict[str, object],
+    ) -> None:
         if current is None:
             await self._repository.upsert_adaptation_profile(user_id, updated)
             return
         await self._repository.update_adaptation_profile(
             user_id,
-            current["id"],
+            str(current["id"]),
             {
                 "explicitPreferences": deepcopy(updated.get("explicitPreferences", {})),
                 "learnedSignals": deepcopy(updated.get("learnedSignals", {})),
                 "sampleCounts": deepcopy(updated.get("sampleCounts", {})),
-                "updatedAt": updated["updatedAt"],
+                "updatedAt": str(updated["updatedAt"]),
                 "status": str(updated.get("status", "active")),
             },
         )
+
+    def _validate_interpretation_feedback(
+        self, feedback: InterpretationInteractionFeedback
+    ) -> None:
+        allowed = {
+            "too_much",
+            "too_vague",
+            "too_abstract",
+            "good_level",
+            "helpful",
+            "not_helpful",
+        }
+        if feedback not in allowed:
+            raise ValidationError(f"Invalid interpretation feedback: {feedback}")
+
+    def _validate_practice_feedback(self, feedback: PracticeInteractionFeedback) -> None:
+        allowed = {
+            "good_fit",
+            "not_for_me",
+            "too_intense",
+            "too_long",
+            "helpful",
+            "not_helpful",
+        }
+        if feedback not in allowed:
+            raise ValidationError(f"Invalid practice feedback: {feedback}")
 
     async def _build_material_input(
         self,
@@ -3696,6 +7644,21 @@ class CirculatioService:
             material_input["culturalOrigins"] = deepcopy(cultural_origins)
         if safety_context:
             material_input["safetyContext"] = deepcopy(safety_context)
+        adaptation_profile = await self._repository.get_adaptation_profile(material["userId"])
+        communication_hints = self._adaptation_engine.derive_communication_hints(
+            profile=adaptation_profile
+        )
+        interpretation_hints = self._adaptation_engine.derive_interpretation_hints(
+            profile=adaptation_profile
+        )
+        practice_hints = self._adaptation_engine.derive_practice_hints(profile=adaptation_profile)
+        material_input["communicationHints"] = deepcopy(communication_hints)
+        material_input["interpretationHints"] = deepcopy(interpretation_hints)
+        material_input["practiceHints"] = deepcopy(practice_hints)
+        if self._trusted_amplification_sources:
+            material_input["trustedAmplificationSources"] = deepcopy(
+                self._trusted_amplification_sources
+            )
         window_start, window_end = self._resolve_window(
             anchor=material.get("materialDate", material.get("createdAt")),
             fallback_start=life_context_snapshot.get("windowStart")
@@ -3711,7 +7674,13 @@ class CirculatioService:
             material_id=material["id"],
         )
         if method_context is not None:
-            material_input["methodContextSnapshot"] = deepcopy(method_context)
+            material_input["methodContextSnapshot"] = deepcopy(
+                self._enrich_method_context_snapshot(
+                    method_context,
+                    window_start=window_start,
+                    window_end=window_end,
+                )
+            )
         return material_input
 
     async def _store_context_snapshot(

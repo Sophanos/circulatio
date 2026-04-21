@@ -15,11 +15,13 @@ from ..domain.practices import (
 )
 from ..domain.types import (
     DepthReadinessAssessment,
+    MethodContextSnapshot,
     MethodGateResult,
     PracticeAdaptationHints,
     PracticeOutcomeWritePayload,
     PracticePlan,
     PracticeTriggerSummary,
+    RuntimeHintSource,
     SafetyDisposition,
 )
 from .interpretation_fallbacks import _GROUNDING_FALLBACK, _JOURNALING_FALLBACK
@@ -34,31 +36,37 @@ class PracticeEngine:
         profile: UserAdaptationProfileRecord | None,
     ) -> PracticeAdaptationHints:
         if profile is None:
-            return {"maturity": "insufficient_data", "notes": ["No adaptation profile yet."]}
+            return {"maturity": "default", "source": "default"}
+        explicit = profile.get("explicitPreferences", {}).get("practice", {})
+        learned = profile.get("learnedSignals", {}).get("practicePolicy", {})
+        explicit_scope = explicit if isinstance(explicit, dict) else {}
+        learned_scope = learned if isinstance(learned, dict) else {}
+        total = int(profile.get("sampleCounts", {}).get("total", 0))
         hints: PracticeAdaptationHints = {
-            "maturity": "mature"
-            if int(profile.get("sampleCounts", {}).get("total", 0)) >= 20
-            else "learning",
-            "notes": [],
+            "maturity": "mature" if total >= 20 else "learning" if total > 0 else "default",
+            "source": self._hint_source(explicit_scope=explicit_scope, learned_scope=learned_scope),
         }
-        practice_preferences = profile.get("explicitPreferences", {}).get("practice", {})
-        if isinstance(practice_preferences, dict):
-            preferred_modalities = practice_preferences.get("preferredModalities")
-            if isinstance(preferred_modalities, list):
-                hints["preferredModalities"] = [
-                    str(item) for item in preferred_modalities if str(item).strip()
-                ]
-            max_duration = practice_preferences.get("maxDurationMinutes")
-            if isinstance(max_duration, int) and max_duration > 0:
-                hints["maxDurationMinutes"] = max_duration
-            preferred_duration = practice_preferences.get("preferredDurationMinutes")
-            if isinstance(preferred_duration, int) and preferred_duration > 0:
-                hints["preferredDurationMinutes"] = preferred_duration
-            intensity = str(practice_preferences.get("intensityPreference") or "").strip()
-            if intensity == "low":
-                hints["intensityPreference"] = "low"
-            elif intensity == "moderate":
-                hints["intensityPreference"] = "moderate"
+        preferred = self._resolve_string_list(
+            explicit_scope=explicit_scope,
+            learned_scope=learned_scope,
+            key="preferredModalities",
+        )
+        avoided = self._resolve_string_list(
+            explicit_scope=explicit_scope,
+            learned_scope=learned_scope,
+            key="avoidedModalities",
+        )
+        if preferred:
+            hints["preferredModalities"] = preferred
+        if avoided:
+            hints["avoidedModalities"] = [item for item in avoided if item not in preferred]
+        max_duration = self._resolve_value(
+            explicit_scope=explicit_scope,
+            learned_scope=learned_scope,
+            key="maxDurationMinutes",
+        )
+        if isinstance(max_duration, int) and max_duration > 0:
+            hints["maxDurationMinutes"] = max_duration
         return hints
 
     def reconcile_llm_practice(
@@ -69,19 +77,51 @@ class PracticeEngine:
         method_gate: MethodGateResult | None,
         depth_readiness: DepthReadinessAssessment | None,
         consent_preferences: list[dict[str, object]],
+        practice_hints: PracticeAdaptationHints | None = None,
         adaptation_hints: PracticeAdaptationHints | None = None,
+        goal_tensions: list[dict[str, object]] | None = None,
+        body_states: list[dict[str, object]] | None = None,
+        method_context: MethodContextSnapshot | None = None,
+        runtime_policy: dict[str, object] | None = None,
         fallback_reason: str | None = None,
     ) -> PracticePlan:
         notes: list[str] = []
+        resolved_goal_tensions = goal_tensions or []
+        resolved_body_states = body_states or []
+        if practice_hints is not None:
+            resolved_hints: PracticeAdaptationHints = practice_hints
+        elif adaptation_hints is not None:
+            resolved_hints = adaptation_hints
+        else:
+            resolved_hints = {"maturity": "default", "source": "default"}
+
+        def finalize(candidate: PracticePlan, extra_notes: list[str]) -> PracticePlan:
+            framed = self._with_notes(candidate, extra_notes)
+            framed = self._apply_method_state_practice_frame(
+                framed,
+                method_context=method_context,
+                runtime_policy=runtime_policy,
+            )
+            return self._annotate_target_refs(
+                framed,
+                goal_tensions=resolved_goal_tensions,
+                body_states=resolved_body_states,
+            )
+
         if not safety["depthWorkAllowed"]:
             plan = self._fallback_plan("grounding")
             notes.append("safety_blocked_grounding_fallback")
-            return self._with_notes(plan, notes)
+            return finalize(plan, notes)
+
+        if method_gate and method_gate.get("depthLevel") == "grounding_only" and practice is None:
+            plan = self._fallback_plan("grounding")
+            notes.append("method_state_grounding_first_fallback")
+            return finalize(plan, notes)
 
         if practice is None:
             plan = self._fallback_plan("journaling")
             notes.append(fallback_reason or "llm_missing_practice_fallback_to_journaling")
-            return self._with_notes(plan, notes)
+            return finalize(plan, notes)
 
         plan = deepcopy(practice)
         plan.setdefault("id", create_id("practice"))
@@ -92,6 +132,10 @@ class PracticeEngine:
         notes.extend([str(item) for item in plan.get("adaptationNotes", []) if str(item).strip()])
 
         practice_type = str(plan.get("type") or "journaling")
+        if method_gate and method_gate.get("depthLevel") == "grounding_only":
+            if practice_type not in {"grounding", "body_checkin", "somatic_tracking"}:
+                notes.append("method_state_grounding_first_fallback")
+                return finalize(self._fallback_plan("grounding"), notes)
         blocked_moves = set(method_gate.get("blockedMoves", []) if method_gate else [])
         allowed_moves = depth_readiness.get("allowedMoves", {}) if depth_readiness else {}
         consent_status = {
@@ -105,23 +149,228 @@ class PracticeEngine:
             or allowed_moves.get("active_imagination") not in {None, "allow", "ask_consent"}
         ):
             notes.append("active_imagination_blocked_by_method_fallback_to_journaling")
-            return self._with_notes(self._fallback_plan("journaling"), notes)
+            return finalize(self._fallback_plan("journaling"), notes)
         if required_scope and required_scope in blocked_moves:
             notes.append(f"{required_scope}_blocked_by_method_fallback_to_journaling")
-            return self._with_notes(self._fallback_plan("journaling"), notes)
+            return finalize(self._fallback_plan("journaling"), notes)
         if required_scope and consent_status.get(required_scope) in {"declined", "revoked"}:
             notes.append(f"{required_scope}_blocked_by_consent_fallback_to_journaling")
-            return self._with_notes(self._fallback_plan("journaling"), notes)
+            return finalize(self._fallback_plan("journaling"), notes)
         if plan.get("requiresConsent") and required_scope:
             if consent_status.get(required_scope) == "ask_each_time":
                 notes.append(f"{required_scope}_requires_explicit_acceptance")
-        max_duration = adaptation_hints.get("maxDurationMinutes") if adaptation_hints else None
+        max_duration = resolved_hints.get("maxDurationMinutes")
         if isinstance(max_duration, int) and max_duration > 0:
             current_duration = int(plan.get("durationMinutes") or 0)
             if current_duration > max_duration:
                 plan["durationMinutes"] = max_duration
                 notes.append("duration_clamped_to_explicit_preference")
-        return self._with_notes(plan, notes)
+        return finalize(
+            plan,
+            notes,
+        )
+
+    def _resolve_value(
+        self,
+        *,
+        explicit_scope: dict[str, object],
+        learned_scope: dict[str, object],
+        key: str,
+    ) -> object | None:
+        if key in explicit_scope:
+            return explicit_scope.get(key)
+        return learned_scope.get(key)
+
+    def _resolve_string_list(
+        self,
+        *,
+        explicit_scope: dict[str, object],
+        learned_scope: dict[str, object],
+        key: str,
+    ) -> list[str]:
+        raw = self._resolve_value(
+            explicit_scope=explicit_scope, learned_scope=learned_scope, key=key
+        )
+        if not isinstance(raw, list):
+            return []
+        return list(dict.fromkeys(str(item).strip() for item in raw if str(item).strip()))
+
+    def _hint_source(
+        self,
+        *,
+        explicit_scope: dict[str, object],
+        learned_scope: dict[str, object],
+    ) -> RuntimeHintSource:
+        keys = {"preferredModalities", "avoidedModalities", "maxDurationMinutes"}
+        explicit_hits = any(key in explicit_scope for key in keys)
+        learned_hits = any(key in learned_scope for key in keys)
+        if explicit_hits and learned_hits:
+            return "mixed"
+        if explicit_hits:
+            return "explicit"
+        if learned_hits:
+            return "learned"
+        return "default"
+
+    def _annotate_target_refs(
+        self,
+        plan: PracticePlan,
+        *,
+        goal_tensions: list[dict[str, object]],
+        body_states: list[dict[str, object]],
+    ) -> PracticePlan:
+        tension_id = next(
+            (
+                str(item.get("id"))
+                for item in goal_tensions
+                if isinstance(item, dict) and str(item.get("id") or "").strip()
+            ),
+            None,
+        )
+        if tension_id:
+            plan["targetedTensionId"] = tension_id
+        body_state_id = next(
+            (
+                str(item.get("id"))
+                for item in body_states
+                if isinstance(item, dict) and str(item.get("id") or "").strip()
+            ),
+            None,
+        )
+        if body_state_id:
+            plan["targetedBodyStateId"] = body_state_id
+        return plan
+
+    def _apply_method_state_practice_frame(
+        self,
+        plan: PracticePlan,
+        *,
+        method_context: MethodContextSnapshot | None,
+        runtime_policy: dict[str, object] | None,
+    ) -> PracticePlan:
+        if not isinstance(method_context, dict):
+            return plan
+        result = deepcopy(plan)
+        method_state_value = method_context.get("methodState")
+        method_state: dict[str, object] = (
+            dict(method_state_value) if isinstance(method_state_value, dict) else {}
+        )
+        runtime_policy_dict: dict[str, object] = (
+            runtime_policy if isinstance(runtime_policy, dict) else {}
+        )
+        runtime_constraints_value = runtime_policy_dict.get("practiceConstraints")
+        runtime_constraints: dict[str, object] = (
+            dict(runtime_constraints_value) if isinstance(runtime_constraints_value, dict) else {}
+        )
+        active_goal_tension_value = method_state.get("activeGoalTension")
+        active_goal_tension: dict[str, object] = (
+            dict(active_goal_tension_value) if isinstance(active_goal_tension_value, dict) else {}
+        )
+        practice_loop_value = method_state.get("practiceLoop")
+        practice_loop: dict[str, object] = (
+            dict(practice_loop_value) if isinstance(practice_loop_value, dict) else {}
+        )
+        compensation_tendencies_value = method_state.get("compensationTendencies")
+        compensation_tendencies: list[dict[str, object]] = (
+            [item for item in compensation_tendencies_value if isinstance(item, dict)]
+            if isinstance(compensation_tendencies_value, list)
+            else []
+        )
+        notes = [str(item) for item in result.get("adaptationNotes", []) if str(item).strip()]
+        instructions = [str(item) for item in result.get("instructions", []) if str(item).strip()]
+        practice_type = str(result.get("type") or "journaling")
+        current_modality = str(result.get("modality") or "").strip().lower()
+
+        max_duration = runtime_constraints.get("maxDurationMinutes")
+        if not isinstance(max_duration, int):
+            max_duration = practice_loop.get("maxDurationMinutes")
+        if isinstance(max_duration, int) and max_duration > 0:
+            current_duration = int(result.get("durationMinutes") or 0)
+            if current_duration <= 0 or current_duration > max_duration:
+                result["durationMinutes"] = max_duration
+                notes.append("duration_clamped_to_method_state_loop")
+
+        if (
+            runtime_constraints.get("preferLowIntensity")
+            or practice_loop.get("recommendedIntensity") == "low"
+        ):
+            if int(result.get("durationMinutes") or 0) > 6:
+                result["durationMinutes"] = 6
+                notes.append("duration_shortened_for_low_intensity")
+            if str(result.get("intensity") or "").strip() not in {"", "low"}:
+                result["intensity"] = "low"
+                notes.append("intensity_downgraded_by_method_state")
+
+        preferred_modalities = self._resolve_string_list(
+            explicit_scope=runtime_constraints,
+            learned_scope=practice_loop,
+            key="preferredModalities",
+        )
+        avoided_modalities = [
+            item
+            for item in self._resolve_string_list(
+                explicit_scope=runtime_constraints,
+                learned_scope=practice_loop,
+                key="avoidedModalities",
+            )
+            if item not in preferred_modalities
+        ]
+        if (
+            current_modality
+            and current_modality in avoided_modalities
+            and current_modality not in preferred_modalities
+        ):
+            if current_modality == "imaginal" and practice_type == "active_imagination":
+                result = self._fallback_plan("journaling")
+                instructions = [
+                    str(item) for item in result.get("instructions", []) if str(item).strip()
+                ]
+                notes.append("avoided_imaginal_modality_fallback_to_journaling")
+                practice_type = str(result.get("type") or "journaling")
+            else:
+                notes.append("current_modality_marked_as_avoided")
+
+        goal_frame = str(runtime_policy_dict.get("activeGoalFrame") or "").strip()
+        if not goal_frame and active_goal_tension:
+            goal_frame = str(active_goal_tension.get("balancingDirection") or "").strip()
+        goal_tension_id = str(active_goal_tension.get("goalTensionId") or "").strip()
+        if goal_tension_id:
+            result["targetedTensionId"] = goal_tension_id
+        if goal_frame and goal_frame not in instructions:
+            instructions.append(goal_frame)
+            notes.append("goal_tension_frame_added")
+
+        compensation_prompt = str(runtime_constraints.get("compensationPrompt") or "").strip()
+        if not compensation_prompt:
+            first_compensation = compensation_tendencies[0] if compensation_tendencies else None
+            if isinstance(first_compensation, dict):
+                compensation_prompt = str(first_compensation.get("userTestPrompt") or "").strip()
+        if compensation_prompt and compensation_prompt not in instructions:
+            instructions.append(compensation_prompt)
+            notes.append("compensation_prompt_added_from_method_state")
+
+        practice_bias = str(runtime_constraints.get("practiceBias") or "").strip()
+        bias_instruction_map = {
+            "sensation_grounding": "Start with the body before explaining the pattern.",
+            "image_tracking": "Name the strongest image before interpreting it.",
+            "value_discernment": "Let each side of the value tension speak in its own words.",
+            "pattern_noting": "Note the repeating pattern before deciding what it means.",
+        }
+        bias_instruction = bias_instruction_map.get(practice_bias, "")
+        if bias_instruction and bias_instruction not in instructions:
+            instructions.append(bias_instruction)
+            notes.append("practice_bias_instruction_added")
+
+        if practice_type in {
+            "journaling",
+            "active_imagination",
+            "body_checkin",
+            "somatic_tracking",
+        }:
+            result["instructions"] = instructions[:6]
+        if notes:
+            result["adaptationNotes"] = list(dict.fromkeys(notes))[:8]
+        return result
 
     def derive_lifecycle_defaults(
         self,

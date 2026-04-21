@@ -1,9 +1,7 @@
-# Circulatio Product Roadmap
-## Use Cases, User Value, And What We Are Building
+# Circulatio Roadmap
+## Toward an Individuation OS
 
 This is the single source of truth for what Circulatio does and why it matters. If you are an engineer, read this first, then go to `ENGINEERING_GUIDE.md`. If you are a user, this is for you.
-
----
 
 ## The One-Sentence Promise
 
@@ -12,6 +10,18 @@ This is the single source of truth for what Circulatio does and why it matters. 
 Hermes connects the days. Circulatio connects the depths. Together they build **soul + soma + spirit** — the whole person, not the optimized one.
 
 It helps you build a living relationship with your own unconscious through your dreams, your body, and the patterns that shape your life. It is not a therapist, not a chatbot, not a wellness tracker. It is a collaborative witness that remembers what you forget, sees what you cannot yet see, and stays with you while you do the work.
+
+## Builder Note (April 2026)
+
+The repo now includes an offline Evolution OS for method artifacts:
+
+- prompt policy fragments in `src/circulatio/llm/prompt_fragments.py`
+- the Hermes Circulatio host skill in `src/circulatio_hermes_plugin/skills/circulation/SKILL.md`
+- tool descriptions in `src/circulatio_hermes_plugin/schemas.py`
+
+The current layer can evaluate baselines and candidate bundles, stage manual review packages, emit manifests/diffs/reports under `artifacts/self_evolution/runs/`, and enforce immutable guardrails before merge. See `docs/SELF_EVOLUTION_OS.md` for the exact mutation boundary and review flow.
+
+This tooling is still offline-only. It is not a runtime loop, does not mutate weights, and does not bypass human review or Circulatio's approval, safety, or consent boundaries. Reflection/pareto strategies and provider-backed execution or judge evals remain later work.
 
 ---
 
@@ -304,12 +314,13 @@ Circulatio prepares a bounded packet:
 The core backend/runtime described through the individuation and living-myth layers is now in place. The remaining open work is mainly packaging, presentation, and refinement:
 
 - **Depth refinement before feature breadth** → deepen method quality, pacing, evidence discipline, and symbolic containment before widening the delivery surface
-- **Discovery surface built from existing reads** → add a bounded `discovery` workflow or tool that combines graph query, memory-kernel retrieval, and dashboard summary into one ripe-pattern digest for browsing symbolic life without requiring the user to ask the right low-level question first
+- **Discovery digest refinement** → the bounded `discovery` workflow now combines graph query, memory-kernel retrieval, and dashboard summary into one read-only browsing surface; remaining work is tuning section quality, host presentation, and defaults without turning it into an interpretive shortcut
 - **Standalone local runtime and product packaging** → deferred distribution track
 - **Optional local semantic/vector recall** → keep as a supplementary, provenance-bound retrieval seam only (for example SQLite-local extensions or embedded vector engines), never as Circulatio's primary symbolic truth layer
 - **Embodied presentation / ritual media layer** → later host/runtime work
 - **Optional ritual daily surfaces** → later host-rendered outputs such as spoken `alive_today` reflections, brief meditations, 3-5 affirmation sets, short reflective audio or podcast-style scripts, and journaling/reflection prompts derived from dreams, reflections, or charged events
 - **Broader validation and refinement** → wider test coverage, multi-host usage, and polish beyond the targeted backend slices now implemented
+- **Evolution OS expansion** → add reflection/pareto candidate generation, optional execution/judge gates, stronger holdout governance, and tighter release discipline without introducing live prompt mutation
 - **Soft adaptation learning expansion** → continue extending the implicit-learning layer without overriding explicit consent or turning it into a heuristic meaning engine
 
 ---
@@ -369,7 +380,7 @@ This roadmap should be read through **user value first**, not architecture first
 
 **Value:** Personal meaning stays primary, and deeper or collective readings can come later.
 
-- **Move toward longitudinal companionship.** The runtime now supports dream-series confirmation, richer practice follow-up, gentle proactive surfacing, threshold/chapter/return/bridge invitations, and bounded analysis packets.
+- **Move toward longitudinal companionship.** The runtime now supports dream-series confirmation, richer practice follow-up, gentle proactive surfacing, threshold/chapter/return/bridge invitations, bounded analysis packets, and a bounded discovery digest over approved memory/graph/dashboard reads.
 
 **Value:** Circulatio becomes a witness across time, not just a one-shot interpreter.
 
@@ -507,7 +518,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 
 ### Phase 6: Proactive Runtime ✅
 
-**Implementation status (April 2026):** The embedded Hermes/backend runtime now includes `alive_today`, read-mostly journey pages, low-risk autonomous journey-container writes through Hermes tool exposure, explicit `/circulation journey ...` lifecycle commands for QA/debug/demo, label-based journey resolution for lightweight host writes, weekly review cadence, rhythmic briefs, and a repo-owned external Hermes-host smoke harness. Durable journey containers are organizational records, not symbolic truth claims; interpretation-derived symbolic memory remains approval-gated.
+**Implementation status (April 2026):** The embedded Hermes/backend runtime now includes `alive_today`, the bounded read-only `discovery` digest, read-mostly journey pages, low-risk autonomous journey-container writes through Hermes tool exposure, explicit `/circulation journey ...` lifecycle commands for QA/debug/demo, label-based journey resolution for lightweight host writes, weekly review cadence, rhythmic briefs, and a repo-owned external Hermes-host smoke harness. Durable journey containers are organizational records, not symbolic truth claims; interpretation-derived symbolic memory remains approval-gated.
 
 **Goal:** Move from reactive interpretation to living rhythm.
 
@@ -516,6 +527,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 **What gets built:**
 - Daily briefing
 - "What is alive today?" synthesis
+- A bounded `discovery` digest that lets Hermes or QA browse approved dashboard, memory-kernel, and graph state without triggering interpretation or writes
 - Durable journey containers that Hermes can create, update, and re-status autonomously as lightweight ongoing-thread records
 - Read-mostly journey pages that assemble opener, review surface, invitations, practice, and bounded analysis preview
 - Label-based journey resolution so Hermes can target an existing journey by human label without exposing internal ids
@@ -547,6 +559,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - User receives pattern surfacing, not spam
 - The system becomes longitudinal and rhythmic
 - The user feels accompanied, not chased
+- Hermes can browse approved symbolic state through one bounded discovery digest without silently escalating it into interpretation
 - Hermes can hold an ongoing thread as a named journey without silently escalating it into interpretation
 - A repeatable external Hermes-host smoke path can verify plugin load, tool availability, `/circulation journey` rendering, and journey persistence before shipping
 - Hermes-agent and later hosts can ask for bounded context by purpose rather than receiving undifferentiated history blobs

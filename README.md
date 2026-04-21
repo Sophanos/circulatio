@@ -1,11 +1,15 @@
 # Circulatio
 
-> *A soul OS for soul-making.*
+> A Soul OS for Soul-Making.
 >
 > Hermes connects the days. Circulatio connects the depths.
 > Together they build soul + soma + spirit — the whole person, not the optimized one.
 
 Circulatio is the symbolic backend that turns a host agent like Hermes into an individuation companion. It holds your dreams, body-states, reflections, charged events, and threshold material across time, then interprets them through a Jungian depth lens when *you* decide the moment is right.
+
+<p align="center">
+  <img src="docs/diagram.svg" alt="Minimal overview diagram describing Circulatio as the first individuation OS, holding dreams, body states, reflections, and charged events across time to surface pattern, depth, and individuation." width="100%" />
+</p>
 
 It does not chase you. It does not gamify you. It does not collapse your symbols into productivity tips.
 
@@ -76,8 +80,9 @@ You → Hermes (routing, rhythm, gateway)
 The embedded Hermes/backend runtime now substantially covers the implemented backend surface through Phases 1–9. The primary deferred track is **Phase 7 standalone distribution**.
 
 - **Implemented:** hold-first capture, memory kernel, derived graph projections, native context derivation, LLM-first interpretation, soma/goal/culture layers, proactive rhythms, journey containers, threshold review, living myth review, bounded analysis packets, and approval-gated symbolic writes.
-- **Best next user-facing addition:** a bounded `discovery` surface that combines graph, memory-kernel, and dashboard reads into one ripe-pattern digest.
-- **Deferred:** standalone local packaging, broader presentation surfaces, and a more polished product shell outside the Hermes embedding.
+- **Builder tooling:** an offline Evolution OS now lives in `tools/self_evolution/`, covering prompt fragments, the Hermes skill, and tool descriptions with eval fixtures in `tests/evals/circulatio_method/`, candidate-bundle evaluation in `scripts/evaluate_circulatio_method.py`, and manual review-package staging in `scripts/evolve_circulatio_method.py`.
+- **Best next user-facing work:** refine discovery/journey presentation quality, deepen practice and rhythm polish, and keep tightening method quality before widening the surface area.
+- **Deferred:** standalone local packaging, broader presentation surfaces, reflective/pareto candidate generation, and a more polished product shell outside the Hermes embedding.
 - **Source of truth:** `docs/ROADMAP.md` and `docs/ENGINEERING_GUIDE.md` track the current phase status and implementation scope in more detail than this README.
 
 ## Docs
@@ -86,6 +91,7 @@ The embedded Hermes/backend runtime now substantially covers the implemented bac
 - **Technical spec:** `docs/ENGINEERING_GUIDE.md`
 - **Hermeneutic method:** `docs/INTERPRETATION_ENGINE_SPEC.md`
 - **Operations & safety:** `docs/RUNBOOK.md`
+- **Offline Evolution OS:** `docs/SELF_EVOLUTION_OS.md`
 - **Embodied presentation track:** `docs/EMBODIED_PRESENTATION_PLAN.md`
 - **Agent guide:** `AGENTS.md`
 - **What success feels like:** `docs/SUCCESS_VISION.md`
@@ -97,7 +103,22 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 python -m pytest tests/
+.venv/bin/python scripts/evaluate_circulatio_method.py --strict
+# optional: stage a manual candidate review package
+.venv/bin/python scripts/evolve_circulatio_method.py --target prompt_fragments --strategy manual --prompt-fragments src/circulatio/llm/prompt_fragments.py
 ```
+
+## The Bottom Line
+
+Circulatio is not a wellness tracker, a therapy chatbot, or a productivity optimizer.  
+It is a **symbolic memory system for people doing inner work**.
+
+While other apps interpret immediately or never at all, Circulatio **holds first**—storing your dreams, body-states, and charged events with patience. Over weeks and months, it surfaces **longitudinal patterns** across your own material, offering depth interpretation only when the moment is ripe and only with your explicit approval.
+
+It treats your body as symbolic intelligence, your conflicts as meaningful tensions, and your unconscious as having its own timing. It does not gamify, diagnose, or chase retention. Its goal is simple: **to help you become your own witness**.
+
+If you want an AI that optimizes your day, look elsewhere.  
+If you want a companion that remembers what you forget and sees what you cannot yet hold alone, you are in the right place.
 
 ## License
 

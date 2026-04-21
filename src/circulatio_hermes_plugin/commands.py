@@ -176,6 +176,7 @@ def _usage_text() -> str:
             "Examples:",
             '- /circulation dream "I walked through a house and found a snake in the cellar."',
             "- /circulation journey",
+            '- /circulation discovery --query "snake and chest tension" --limit 4',
             (
                 '- /circulation journey create --label "Laundry return" --question '
                 '"Why does this keep returning?"'

@@ -151,6 +151,64 @@ class ContextBuilderTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_goals_appear_in_life_context_snapshot(self) -> None:
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            await repository.create_goal(
+                {
+                    "id": "goal_directness",
+                    "userId": "user_1",
+                    "label": "Speak more directly",
+                    "status": "active",
+                    "valueTags": ["truth"],
+                    "linkedMaterialIds": [],
+                    "linkedSymbolIds": [],
+                    "createdAt": "2026-04-12T09:00:00Z",
+                    "updatedAt": "2026-04-12T09:00:00Z",
+                }
+            )
+            await repository.create_goal(
+                {
+                    "id": "goal_regulation",
+                    "userId": "user_1",
+                    "label": "Protect regulation",
+                    "status": "active",
+                    "valueTags": ["stability"],
+                    "linkedMaterialIds": [],
+                    "linkedSymbolIds": [],
+                    "createdAt": "2026-04-12T09:05:00Z",
+                    "updatedAt": "2026-04-12T09:05:00Z",
+                }
+            )
+            await repository.create_goal_tension(
+                {
+                    "id": "tension_directness_regulation",
+                    "userId": "user_1",
+                    "goalIds": ["goal_directness", "goal_regulation"],
+                    "tensionSummary": "Directness and regulation are both active right now.",
+                    "polarityLabels": ["truth", "stability"],
+                    "evidenceIds": [],
+                    "status": "active",
+                    "createdAt": "2026-04-12T10:00:00Z",
+                    "updatedAt": "2026-04-12T10:00:00Z",
+                }
+            )
+            builder = CirculatioLifeContextBuilder(repository)
+            snapshot = await builder.build_life_context_snapshot(
+                user_id="user_1",
+                window_start="2026-04-12T00:00:00Z",
+                window_end="2026-04-19T00:00:00Z",
+            )
+            self.assertIsNotNone(snapshot)
+            assert snapshot is not None
+            self.assertEqual(snapshot["activeGoals"][0]["label"], "Protect regulation")
+            self.assertEqual(
+                snapshot["goalTensions"][0]["tensionSummary"],
+                "Directness and regulation are both active right now.",
+            )
+
+        asyncio.run(run())
+
     def test_context_adapter_prefers_native_context_over_hermes(self) -> None:
         async def run() -> None:
             repository = InMemoryCirculatioRepository()

@@ -19,6 +19,7 @@ from ..domain.errors import (
 from ..domain.ids import create_id
 from ..domain.interpretations import InterpretationRunRecord
 from ..domain.living_myth import LivingMythReviewRecord
+from ..domain.method_state import MethodStateCaptureRunRecord
 from ..domain.types import Id
 from .agent_bridge_contracts import (
     BridgeError,
@@ -244,10 +245,16 @@ class CirculatioAgentBridge:
             return await self.generate_practice(request)
         if operation == "circulatio.practice.respond":
             return await self.respond_practice(request)
+        if operation == "circulatio.feedback.interpretation":
+            return await self.record_interpretation_feedback(request)
+        if operation == "circulatio.feedback.practice":
+            return await self.record_practice_feedback(request)
         if operation == "circulatio.briefs.generate":
             return await self.generate_briefs(request)
         if operation == "circulatio.briefs.respond":
             return await self.respond_brief(request)
+        if operation == "circulatio.method_state.respond":
+            return await self.process_method_state_response(request)
         if operation == "circulatio.proposals.approve":
             return await self.approve_proposals(request)
         if operation == "circulatio.proposals.reject":
@@ -270,6 +277,8 @@ class CirculatioAgentBridge:
             return await self.memory_kernel(request)
         if operation == "circulatio.dashboard.summary":
             return await self.dashboard_summary(request)
+        if operation == "circulatio.discovery":
+            return await self.discovery(request)
         if operation == "circulatio.summary.alive_today":
             return await self.alive_today(request)
         if operation == "circulatio.journey.page":
@@ -483,6 +492,65 @@ class CirculatioAgentBridge:
             affected_entity_ids=[workflow["material"]["id"], run["id"]],
         )
 
+    async def process_method_state_response(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        workflow = await self._service.process_method_state_response(
+            {
+                "userId": request["userId"],
+                "idempotencyKey": request["idempotencyKey"],
+                "source": str(payload.get("source") or ""),
+                "responseText": str(payload.get("responseText") or ""),
+                **self._method_state_kwargs(payload),
+            }
+        )
+        capture_run = workflow["captureRun"]
+        pending: list[BridgePendingProposal] = []
+        if workflow["pendingProposals"]:
+            await self._proposal_alias_index.record_capture_run(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run_id=capture_run["id"],
+                proposals=workflow["pendingProposals"],
+            )
+            pending = await self._pending_capture_proposals(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run=capture_run,
+            )
+        message = "Method-state response was processed without durable capture."
+        if workflow["pendingProposals"]:
+            message = (
+                "Method-state response was processed; approval-gated proposals remain pending."
+            )
+        elif workflow["appliedEntityRefs"]:
+            message = "Method-state response was processed and durable method state was updated."
+        elif workflow["followUpPrompts"]:
+            message = str(workflow["followUpPrompts"][0])
+        affected_entity_ids = [workflow["responseMaterial"]["id"], capture_run["id"]]
+        affected_entity_ids.extend(
+            str(item.get("entityId") or "")
+            for item in workflow["appliedEntityRefs"]
+            if str(item.get("entityId") or "").strip()
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message=message,
+            result={
+                "captureRunId": capture_run["id"],
+                "responseMaterialId": workflow["responseMaterial"]["id"],
+                "evidenceIds": [item["id"] for item in workflow["evidence"]],
+                "appliedEntityRefs": deepcopy(workflow["appliedEntityRefs"]),
+                "followUpPrompts": deepcopy(workflow["followUpPrompts"]),
+                "withheldCandidates": deepcopy(workflow["withheldCandidates"]),
+                "warnings": deepcopy(workflow["warnings"]),
+            },
+            pending_proposals=pending,
+            affected_entity_ids=list(dict.fromkeys(affected_entity_ids)),
+        )
+
     async def generate_practice(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         command_result = await self._router.practice(
             user_id=request["userId"],
@@ -637,6 +705,68 @@ class CirculatioAgentBridge:
             affected_entity_ids=command_result.get("affectedEntityIds", []),
         )
 
+    async def record_interpretation_feedback(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        run_id = self._optional_string(payload.get("runId"))
+        feedback = self._optional_string(payload.get("feedback"))
+        if run_id is None:
+            raise ValidationError("runId is required.")
+        if feedback is None:
+            raise ValidationError("feedback is required.")
+        record = await self._service.record_interpretation_feedback(
+            user_id=request["userId"],
+            run_id=run_id,
+            feedback=feedback,
+            note=self._optional_string(payload.get("note")),
+            locale=self._optional_string(payload.get("locale")),
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message="Recorded interpretation feedback.",
+            result={
+                "feedbackId": record["id"],
+                "runId": record["targetId"],
+                "feedback": record["feedback"],
+                "domain": record["domain"],
+                "locale": record.get("locale"),
+            },
+            affected_entity_ids=[record["id"]],
+        )
+
+    async def record_practice_feedback(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        practice_session_id = self._optional_string(payload.get("practiceSessionId"))
+        feedback = self._optional_string(payload.get("feedback"))
+        if practice_session_id is None:
+            raise ValidationError("practiceSessionId is required.")
+        if feedback is None:
+            raise ValidationError("feedback is required.")
+        record = await self._service.record_practice_feedback(
+            user_id=request["userId"],
+            practice_session_id=practice_session_id,
+            feedback=feedback,
+            note=self._optional_string(payload.get("note")),
+            locale=self._optional_string(payload.get("locale")),
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message="Recorded practice feedback.",
+            result={
+                "feedbackId": record["id"],
+                "practiceSessionId": record["targetId"],
+                "feedback": record["feedback"],
+                "domain": record["domain"],
+                "locale": record.get("locale"),
+            },
+            affected_entity_ids=[record["id"]],
+        )
+
     async def generate_briefs(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         command_result = await self._router.brief(
             user_id=request["userId"],
@@ -676,6 +806,50 @@ class CirculatioAgentBridge:
 
     async def approve_proposals(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
+        capture_run_id = self._optional_string(payload.get("captureRunId"))
+        if capture_run_id is not None:
+            capture_run = await self._service.get_method_state_capture_run(
+                user_id=request["userId"],
+                capture_run_id=capture_run_id,
+            )
+            plan = capture_run.get("memoryWritePlan") or {"proposals": []}
+            pending_ids = self._pending_capture_proposal_ids(capture_run)
+            await self._proposal_alias_index.record_capture_run(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run_id=capture_run_id,
+                proposals=plan.get("proposals", []),
+            )
+            proposal_ids = await self._proposal_alias_index.resolve_capture_proposal_refs(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run_id=capture_run_id,
+                proposal_refs=[str(item) for item in payload.get("proposalRefs", [])],
+                pending_proposal_ids=pending_ids,
+            )
+            updated_capture_run = await self._service.approve_method_state_capture_proposals(
+                user_id=request["userId"],
+                capture_run_id=capture_run_id,
+                proposal_ids=proposal_ids,
+                integration_note=self._optional_string(payload.get("note")),
+            )
+            return self._response(
+                request=request,
+                status="ok",
+                message=(
+                    "Approved method-state capture proposals were applied to Circulatio memory."
+                ),
+                result={
+                    "captureRunId": capture_run_id,
+                    "approvedProposalIds": proposal_ids,
+                },
+                pending_proposals=await self._pending_capture_proposals(
+                    user_id=request["userId"],
+                    session_id=request["source"].get("sessionId"),
+                    capture_run=updated_capture_run,
+                ),
+                affected_entity_ids=[capture_run_id],
+            )
         run_id = await self._resolve_run_id(
             request=request, run_ref=str(payload.get("runRef") or payload.get("runId") or "last")
         )
@@ -723,6 +897,48 @@ class CirculatioAgentBridge:
 
     async def reject_proposals(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
+        capture_run_id = self._optional_string(payload.get("captureRunId"))
+        if capture_run_id is not None:
+            capture_run = await self._service.get_method_state_capture_run(
+                user_id=request["userId"],
+                capture_run_id=capture_run_id,
+            )
+            plan = capture_run.get("memoryWritePlan") or {"proposals": []}
+            pending_ids = self._pending_capture_proposal_ids(capture_run)
+            await self._proposal_alias_index.record_capture_run(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run_id=capture_run_id,
+                proposals=plan.get("proposals", []),
+            )
+            proposal_ids = await self._proposal_alias_index.resolve_capture_proposal_refs(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run_id=capture_run_id,
+                proposal_refs=[str(item) for item in payload.get("proposalRefs", [])],
+                pending_proposal_ids=pending_ids,
+            )
+            updated_capture_run = await self._service.reject_method_state_capture_proposals(
+                user_id=request["userId"],
+                capture_run_id=capture_run_id,
+                proposal_ids=proposal_ids,
+                reason=self._optional_string(payload.get("reason")),
+            )
+            return self._response(
+                request=request,
+                status="ok",
+                message="Method-state capture proposal rejection was recorded.",
+                result={
+                    "captureRunId": capture_run_id,
+                    "rejectedProposalIds": proposal_ids,
+                },
+                pending_proposals=await self._pending_capture_proposals(
+                    user_id=request["userId"],
+                    session_id=request["source"].get("sessionId"),
+                    capture_run=updated_capture_run,
+                ),
+                affected_entity_ids=[capture_run_id],
+            )
         run_id = await self._resolve_run_id(
             request=request, run_ref=str(payload.get("runRef") or payload.get("runId") or "last")
         )
@@ -772,6 +988,24 @@ class CirculatioAgentBridge:
         self, request: BridgeRequestEnvelope
     ) -> BridgeResponseEnvelope:
         payload = request["payload"]
+        capture_run_id = self._optional_string(payload.get("captureRunId"))
+        if capture_run_id is not None:
+            capture_run = await self._service.get_method_state_capture_run(
+                user_id=request["userId"],
+                capture_run_id=capture_run_id,
+            )
+            pending = await self._pending_capture_proposals(
+                user_id=request["userId"],
+                session_id=request["source"].get("sessionId"),
+                capture_run=capture_run,
+            )
+            return self._response(
+                request=request,
+                status="ok",
+                message=f"Loaded {len(pending)} pending method-state proposal(s).",
+                result={"captureRunId": capture_run_id},
+                pending_proposals=pending,
+            )
         run_id = await self._resolve_run_id(
             request=request, run_ref=str(payload.get("runRef") or payload.get("runId") or "last")
         )
@@ -1020,6 +1254,42 @@ class CirculatioAgentBridge:
                 "windowEnd": payload["windowEnd"],
             },
             affected_entity_ids=command_result.get("affectedEntityIds", []),
+        )
+
+    async def discovery(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        discovery = await self._service.generate_discovery(
+            {
+                "userId": request["userId"],
+                **{
+                    key: deepcopy(value)
+                    for key, value in payload.items()
+                    if key
+                    in {
+                        "windowStart",
+                        "windowEnd",
+                        "explicitQuestion",
+                        "textQuery",
+                        "rootNodeIds",
+                        "memoryNamespaces",
+                        "rankingProfile",
+                        "maxItems",
+                    }
+                },
+            }
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message=discovery["fallbackText"],
+            result={
+                "discoveryId": discovery["discoveryId"],
+                "windowStart": discovery["windowStart"],
+                "windowEnd": discovery["windowEnd"],
+                "sectionCount": len(discovery["sections"]),
+                "sourceCounts": deepcopy(discovery["sourceCounts"]),
+                "discovery": deepcopy(discovery),
+            },
         )
 
     async def get_witness_state(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
@@ -1551,6 +1821,8 @@ class CirculatioAgentBridge:
                     "reason": proposal["reason"],
                     "evidenceIds": list(proposal["evidenceIds"]),
                     "payload": deepcopy(proposal["payload"]),
+                    "sourceKind": "interpretation_run",
+                    "sourceId": run["id"],
                 }
             )
         return pending
@@ -1593,6 +1865,52 @@ class CirculatioAgentBridge:
                     "reason": proposal["reason"],
                     "evidenceIds": list(proposal["evidenceIds"]),
                     "payload": deepcopy(proposal["payload"]),
+                    "sourceKind": "living_myth_review",
+                    "sourceId": review["id"],
+                }
+            )
+        return pending
+
+    async def _pending_capture_proposals(
+        self,
+        *,
+        user_id: Id,
+        session_id: str | None,
+        capture_run: MethodStateCaptureRunRecord,
+    ) -> list[BridgePendingProposal]:
+        pending_ids = self._pending_capture_proposal_ids(capture_run)
+        if not pending_ids:
+            return []
+        plan = capture_run.get("memoryWritePlan") or {"proposals": []}
+        await self._proposal_alias_index.record_capture_run(
+            user_id=user_id,
+            session_id=session_id,
+            capture_run_id=capture_run["id"],
+            proposals=plan.get("proposals", []),
+        )
+        aliases = await self._proposal_alias_index.list_capture_pending_aliases(
+            user_id=user_id,
+            session_id=session_id,
+            capture_run_id=capture_run["id"],
+            pending_proposal_ids=pending_ids,
+        )
+        alias_by_id = {proposal_id: alias for alias, proposal_id in aliases}
+        pending: list[BridgePendingProposal] = []
+        for proposal in plan.get("proposals", []):
+            proposal_id = proposal["id"]
+            if proposal_id not in pending_ids:
+                continue
+            pending.append(
+                {
+                    "alias": alias_by_id.get(proposal_id, proposal_id),
+                    "id": proposal_id,
+                    "action": proposal["action"],
+                    "entityType": proposal["entityType"],
+                    "reason": proposal["reason"],
+                    "evidenceIds": list(proposal["evidenceIds"]),
+                    "payload": deepcopy(proposal["payload"]),
+                    "sourceKind": "method_state_capture",
+                    "sourceId": capture_run["id"],
                 }
             )
         return pending
@@ -1605,6 +1923,18 @@ class CirculatioAgentBridge:
         return [
             proposal["id"]
             for proposal in run["result"]["memoryWritePlan"]["proposals"]
+            if decisions.get(proposal["id"], "pending") == "pending"
+        ]
+
+    def _pending_capture_proposal_ids(self, capture_run: MethodStateCaptureRunRecord) -> list[Id]:
+        plan = capture_run.get("memoryWritePlan") or {"proposals": []}
+        decisions = {
+            decision["proposalId"]: decision["status"]
+            for decision in capture_run.get("proposalDecisions", [])
+        }
+        return [
+            proposal["id"]
+            for proposal in plan.get("proposals", [])
             if decisions.get(proposal["id"], "pending") == "pending"
         ]
 
@@ -1654,6 +1984,19 @@ class CirculatioAgentBridge:
             "linkedGoalIds",
             "privacyClass",
             "noteText",
+        }
+        return {key: deepcopy(value) for key, value in payload.items() if key in allowed_keys}
+
+    def _method_state_kwargs(self, payload: dict[str, object]) -> dict[str, object]:
+        allowed_keys = {
+            "observedAt",
+            "anchorRefs",
+            "expectedTargets",
+            "privacyClass",
+            "sessionContext",
+            "lifeContextSnapshot",
+            "safetyContext",
+            "options",
         }
         return {key: deepcopy(value) for key, value in payload.items() if key in allowed_keys}
 

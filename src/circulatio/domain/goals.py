@@ -24,6 +24,7 @@ class GoalRecord(TypedDict, total=False):
     valueTags: Required[list[str]]
     linkedMaterialIds: Required[list[Id]]
     linkedSymbolIds: Required[list[Id]]
+    evidenceIds: NotRequired[list[Id]]
     createdAt: Required[ISODateString]
     updatedAt: Required[ISODateString]
     deletedAt: NotRequired[ISODateString]
@@ -36,6 +37,7 @@ class GoalUpdate(TypedDict, total=False):
     valueTags: list[str]
     linkedMaterialIds: list[Id]
     linkedSymbolIds: list[Id]
+    evidenceIds: list[Id]
     updatedAt: ISODateString
     deletedAt: ISODateString
 

@@ -5,6 +5,7 @@ import importlib.resources as resources
 import os
 import sys
 import unittest
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath("src"))
 
@@ -36,7 +37,10 @@ class PluginPackagingDiscoveryTests(unittest.TestCase):
 
         report = validate_plugin_distribution(strict_installed=True)
         self.assertEqual(report["status"], "ok")
-        self.assertEqual(report["checks"][0]["details"]["entryPoint"], "circulatio_hermes_plugin")
+        self.assertEqual(
+            report["checks"][0]["details"]["entryPoint"],
+            "circulatio_hermes_plugin:register",
+        )
 
     def test_plugin_manifest_tool_list_matches_registered_schemas(self) -> None:
         plugin_yaml = (
@@ -65,6 +69,28 @@ class PluginPackagingDiscoveryTests(unittest.TestCase):
 
         self.assertEqual({schema["name"] for schema in TOOL_SCHEMAS}, set(tools))
         self.assertEqual(commands, ["circulation"])
+
+    def test_shadow_build_files_match_src_when_present(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        shadow_paths = [
+            Path("circulatio/core/circulatio_core.py"),
+            Path("circulatio/core/practice_engine.py"),
+            Path("circulatio/core/interpretation_mapping.py"),
+            Path("circulatio/llm/hermes_model_adapter.py"),
+            Path("circulatio/llm/prompt_builder.py"),
+            Path("circulatio/llm/prompt_fragments.py"),
+            Path("circulatio_hermes_plugin/skills/circulation/SKILL.md"),
+        ]
+        for relative_path in shadow_paths:
+            src_path = repo_root / "src" / relative_path
+            build_path = repo_root / "build" / "lib" / relative_path
+            if not build_path.is_file():
+                continue
+            self.assertEqual(
+                src_path.read_text(),
+                build_path.read_text(),
+                f"Stale build artifact drifted from src: {build_path}",
+            )
 
 
 if __name__ == "__main__":

@@ -155,6 +155,57 @@ class RhythmicRuntimeTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_grounding_first_filters_symbolic_briefs_before_generation(self) -> None:
+        async def run() -> None:
+            repository, service = self._service()
+            await self._seed_practice_followup(repository)
+            await self._seed_journey(repository)
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Containment is thin and ordinary support needs to lead.",
+                    "anchorSummary": "Grounding comes before symbolic invitations right now.",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            result = await service.generate_rhythmic_briefs(
+                {"userId": "user_1", "source": "manual", "limit": 5}
+            )
+            self.assertTrue(result["briefs"])
+            self.assertTrue(
+                all(brief["briefType"] == "practice_followup" for brief in result["briefs"])
+            )
+
+        asyncio.run(run())
+
+    def test_adaptation_profile_personalizes_rhythmic_brief_action(self) -> None:
+        async def run() -> None:
+            repository, service = self._service()
+            await self._seed_journey(repository)
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is steady enough for light contact.",
+                    "anchorSummary": "Containment can hold a simple check-in.",
+                    "groundingRecommendation": "clear_for_depth",
+                }
+            )
+            await service.set_adaptation_preferences(
+                user_id="user_1",
+                scope="interpretation",
+                preferences={"modalityBias": "body"},
+            )
+            result = await service.generate_rhythmic_briefs(
+                {"userId": "user_1", "source": "manual", "limit": 1}
+            )
+            self.assertEqual(len(result["briefs"]), 1)
+            self.assertEqual(
+                result["briefs"][0]["suggestedAction"],
+                "You can notice what your body does around this before naming meaning.",
+            )
+
+        asyncio.run(run())
+
     def test_acted_and_dismissed_update_adaptation_counts(self) -> None:
         async def run() -> None:
             repository, service = self._service()

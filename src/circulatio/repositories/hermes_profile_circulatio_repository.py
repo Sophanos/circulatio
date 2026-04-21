@@ -15,6 +15,13 @@ from ..domain.amplifications import (
     PersonalAmplificationRecord,
     PersonalAmplificationUpdate,
 )
+from ..domain.clarifications import (
+    ClarificationAnswerRecord,
+    ClarificationAnswerUpdate,
+    ClarificationPromptRecord,
+    ClarificationPromptStatus,
+    ClarificationPromptUpdate,
+)
 from ..domain.conscious_attitude import (
     ConsciousAttitudeSnapshotFilters,
     ConsciousAttitudeSnapshotRecord,
@@ -38,6 +45,7 @@ from ..domain.errors import (
     ProfileStorageConflictError,
     ProfileStorageCorruptionError,
 )
+from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.goals import GoalRecord, GoalTensionRecord, GoalTensionUpdate, GoalUpdate
 from ..domain.graph import (
     DeleteGraphEntityRequest,
@@ -71,6 +79,7 @@ from ..domain.living_myth import (
 )
 from ..domain.materials import MaterialListFilters, MaterialRecord, MaterialRevision, MaterialUpdate
 from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
+from ..domain.method_state import MethodStateCaptureRunRecord, MethodStateCaptureRunUpdate
 from ..domain.patterns import PatternHistoryEntry, PatternRecord, PatternType, PatternUpdate
 from ..domain.practices import PracticeSessionRecord, PracticeSessionStatus, PracticeSessionUpdate
 from ..domain.proactive import (
@@ -259,6 +268,139 @@ class HermesProfileCirculatioRepository(CirculatioRepository):
     ) -> InterpretationRunRecord:
         return await self._write(
             user_id, lambda: self._delegate.update_interpretation_run(user_id, run_id, updates)
+        )
+
+    async def create_clarification_prompt(
+        self, record: ClarificationPromptRecord
+    ) -> ClarificationPromptRecord:
+        return await self._write(
+            record["userId"], lambda: self._delegate.create_clarification_prompt(record)
+        )
+
+    async def get_clarification_prompt(
+        self, user_id: Id, prompt_id: Id, *, include_deleted: bool = False
+    ) -> ClarificationPromptRecord:
+        return await self._read(
+            lambda: self._delegate.get_clarification_prompt(
+                user_id,
+                prompt_id,
+                include_deleted=include_deleted,
+            )
+        )
+
+    async def update_clarification_prompt(
+        self, user_id: Id, prompt_id: Id, updates: ClarificationPromptUpdate
+    ) -> ClarificationPromptRecord:
+        return await self._write(
+            user_id,
+            lambda: self._delegate.update_clarification_prompt(user_id, prompt_id, updates),
+        )
+
+    async def list_clarification_prompts(
+        self,
+        user_id: Id,
+        *,
+        status: ClarificationPromptStatus | None = None,
+        material_id: Id | None = None,
+        run_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[ClarificationPromptRecord]:
+        return await self._read(
+            lambda: self._delegate.list_clarification_prompts(
+                user_id,
+                status=status,
+                material_id=material_id,
+                run_id=run_id,
+                limit=limit,
+            )
+        )
+
+    async def create_clarification_answer(
+        self, record: ClarificationAnswerRecord
+    ) -> ClarificationAnswerRecord:
+        return await self._write(
+            record["userId"], lambda: self._delegate.create_clarification_answer(record)
+        )
+
+    async def get_clarification_answer(
+        self, user_id: Id, answer_id: Id, *, include_deleted: bool = False
+    ) -> ClarificationAnswerRecord:
+        return await self._read(
+            lambda: self._delegate.get_clarification_answer(
+                user_id,
+                answer_id,
+                include_deleted=include_deleted,
+            )
+        )
+
+    async def update_clarification_answer(
+        self, user_id: Id, answer_id: Id, updates: ClarificationAnswerUpdate
+    ) -> ClarificationAnswerRecord:
+        return await self._write(
+            user_id,
+            lambda: self._delegate.update_clarification_answer(user_id, answer_id, updates),
+        )
+
+    async def list_clarification_answers(
+        self,
+        user_id: Id,
+        *,
+        prompt_id: Id | None = None,
+        run_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[ClarificationAnswerRecord]:
+        return await self._read(
+            lambda: self._delegate.list_clarification_answers(
+                user_id,
+                prompt_id=prompt_id,
+                run_id=run_id,
+                limit=limit,
+            )
+        )
+
+    async def create_method_state_capture_run(
+        self, record: MethodStateCaptureRunRecord
+    ) -> MethodStateCaptureRunRecord:
+        return await self._write(
+            record["userId"], lambda: self._delegate.create_method_state_capture_run(record)
+        )
+
+    async def get_method_state_capture_run(
+        self, user_id: Id, capture_run_id: Id, *, include_deleted: bool = False
+    ) -> MethodStateCaptureRunRecord:
+        return await self._read(
+            lambda: self._delegate.get_method_state_capture_run(
+                user_id,
+                capture_run_id,
+                include_deleted=include_deleted,
+            )
+        )
+
+    async def get_method_state_capture_run_by_idempotency_key(
+        self, user_id: Id, idempotency_key: str
+    ) -> MethodStateCaptureRunRecord | None:
+        return await self._read(
+            lambda: self._delegate.get_method_state_capture_run_by_idempotency_key(
+                user_id,
+                idempotency_key,
+            )
+        )
+
+    async def update_method_state_capture_run(
+        self, user_id: Id, capture_run_id: Id, updates: MethodStateCaptureRunUpdate
+    ) -> MethodStateCaptureRunRecord:
+        return await self._write(
+            user_id,
+            lambda: self._delegate.update_method_state_capture_run(
+                user_id, capture_run_id, updates
+            ),
+        )
+
+    async def list_method_state_capture_runs(
+        self, user_id: Id, *, limit: int = 50
+    ) -> list[MethodStateCaptureRunRecord]:
+        return await self._read(
+            lambda: self._delegate.list_method_state_capture_runs(user_id, limit=limit)
         )
 
     async def store_evidence_items(
@@ -1103,6 +1245,30 @@ class HermesProfileCirculatioRepository(CirculatioRepository):
             lambda: self._delegate.update_adaptation_profile(user_id, profile_id, updates),
         )
 
+    async def create_interaction_feedback(
+        self, record: InteractionFeedbackRecord
+    ) -> InteractionFeedbackRecord:
+        return await self._write(
+            record["userId"], lambda: self._delegate.create_interaction_feedback(record)
+        )
+
+    async def list_interaction_feedback(
+        self,
+        user_id: Id,
+        *,
+        domain: str | None = None,
+        target_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[InteractionFeedbackRecord]:
+        return await self._read(
+            lambda: self._delegate.list_interaction_feedback(
+                user_id,
+                domain=domain,
+                target_id=target_id,
+                limit=limit,
+            )
+        )
+
     async def create_journey(self, record: JourneyRecord) -> JourneyRecord:
         return await self._write(record["userId"], lambda: self._delegate.create_journey(record))
 
@@ -1581,6 +1747,9 @@ def _bucket_to_payload(bucket: UserCirculatioBucket) -> dict[str, object]:
         "material_summaries": deepcopy(bucket.material_summaries),
         "context_snapshots": deepcopy(bucket.context_snapshots),
         "interpretation_runs": deepcopy(bucket.interpretation_runs),
+        "clarification_prompts": deepcopy(bucket.clarification_prompts),
+        "clarification_answers": deepcopy(bucket.clarification_answers),
+        "method_state_capture_runs": deepcopy(bucket.method_state_capture_runs),
         "evidence": deepcopy(bucket.evidence),
         "symbols": deepcopy(bucket.symbols),
         "symbol_name_index": deepcopy(bucket.symbol_name_index),
@@ -1610,6 +1779,7 @@ def _bucket_to_payload(bucket: UserCirculatioBucket) -> dict[str, object]:
         "journeys": deepcopy(bucket.journeys),
         "proactive_briefs": deepcopy(bucket.proactive_briefs),
         "feedback": deepcopy(bucket.feedback),
+        "interaction_feedback": deepcopy(bucket.interaction_feedback),
         "cultural_origins": deepcopy(bucket.cultural_origins),
         "suppressed": deepcopy(bucket.suppressed),
         "applied_proposal_ids": sorted(bucket.applied_proposal_ids),
@@ -1623,6 +1793,9 @@ def _bucket_from_payload(payload: dict[str, object]) -> UserCirculatioBucket:
         material_summaries=deepcopy(payload.get("material_summaries", {})),
         context_snapshots=deepcopy(payload.get("context_snapshots", {})),
         interpretation_runs=deepcopy(payload.get("interpretation_runs", {})),
+        clarification_prompts=deepcopy(payload.get("clarification_prompts", {})),
+        clarification_answers=deepcopy(payload.get("clarification_answers", {})),
+        method_state_capture_runs=deepcopy(payload.get("method_state_capture_runs", {})),
         evidence=deepcopy(payload.get("evidence", {})),
         symbols=deepcopy(payload.get("symbols", {})),
         symbol_name_index=deepcopy(payload.get("symbol_name_index", {})),
@@ -1652,6 +1825,7 @@ def _bucket_from_payload(payload: dict[str, object]) -> UserCirculatioBucket:
         journeys=deepcopy(payload.get("journeys", {})),
         proactive_briefs=deepcopy(payload.get("proactive_briefs", {})),
         feedback=deepcopy(payload.get("feedback", [])),
+        interaction_feedback=deepcopy(payload.get("interaction_feedback", [])),
         cultural_origins=deepcopy(payload.get("cultural_origins", [])),
         suppressed=deepcopy(payload.get("suppressed", {})),
         applied_proposal_ids=set(payload.get("applied_proposal_ids", [])),

@@ -16,9 +16,11 @@ Hermes plugin for ambient symbolic intake, on-demand weaving, and approval-gated
 - If the user wants a cross-pattern weave such as "what is alive today?" or "what does this seem connected to?", call `circulatio_alive_today`.
 - If the user wants an overview of ongoing threads or a read-mostly host surface, call `circulatio_list_journeys`, `circulatio_get_journey`, or `circulatio_journey_page`.
 - If the user wants meaning or interpretation, **you MUST call `circulatio_interpret_material`**. Do NOT do Jungian interpretation yourself in the host reply. Circulatio handles the method gate, amplification prompts, and collaborative pacing. Your job is to route the request and present Circulatio's response — usually one question or one image at a time.
+- If collective amplification is opened, use both the user's active cultural frames and the Hermes trusted amplification-source registry. Cultural frames tell you which lens is more likely to fit; trusted sources tell you where to look. Current trusted sources include `Symbolonline` first for compact symbol amplification and `Carl Jung Depth Psychology` as a secondary commentary/archive source.
 - If the user wants a threshold reading, chapter-scale synthesis, or a bounded prep packet, call `circulatio_threshold_review`, `circulatio_living_myth_review`, or `circulatio_analysis_packet`.
 - If the user is directly confirming lived individuation material rather than asking for inference, use the direct capture tools such as `circulatio_capture_reality_anchors`, `circulatio_upsert_threshold_process`, `circulatio_record_relational_scene`, `circulatio_record_inner_outer_correspondence`, `circulatio_record_numinous_encounter`, and `circulatio_record_aesthetic_resonance`.
 - If the user wants a practice or rhythmic surfacing, call `circulatio_generate_practice_recommendation` or `circulatio_generate_rhythmic_briefs`, then use the matching response tool only after the user accepts, skips, dismisses, or acts.
+- If the user gives explicit feedback about a Circulatio interpretation or practice recommendation, call `circulatio_record_interpretation_feedback` or `circulatio_record_practice_feedback`. Preserve the user's own note text if they gave one, but do not paraphrase that feedback into a new stored reflection or symbolic note.
 - Approval, rejection, revision, deletion, symbol history, and weekly review stay explicit follow-up operations.
 
 ## Tools
@@ -38,6 +40,7 @@ Hermes plugin for ambient symbolic intake, on-demand weaving, and approval-gated
 - `circulatio_list_pending`, `circulatio_approve_proposals`, `circulatio_reject_proposals`
 - `circulatio_list_pending_review_proposals`, `circulatio_approve_review_proposals`, `circulatio_reject_review_proposals`
 - `circulatio_reject_hypotheses`, `circulatio_revise_entity`, `circulatio_delete_entity`
+- `circulatio_record_interpretation_feedback`, `circulatio_record_practice_feedback`
 
 ### Symbol And Context Reads
 

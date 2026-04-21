@@ -15,6 +15,12 @@ class CirculatioResultRenderer:
             message_text = str(response["message"]).strip()
             if fallback_text and fallback_text not in message_text:
                 lines.extend(self._render_journey_page(journey_page))
+        discovery = result.get("discovery")
+        if isinstance(discovery, dict):
+            fallback_text = str(discovery.get("fallbackText") or "").strip()
+            message_text = str(response["message"]).strip()
+            if not fallback_text or fallback_text not in message_text:
+                lines.extend(self._render_discovery(discovery))
         journey = result.get("journey")
         if isinstance(journey, dict):
             lines.extend(self._render_journey(journey))
@@ -195,6 +201,37 @@ class CirculatioResultRenderer:
                 ]
                 if labels:
                     lines.append("Actions: " + ", ".join(labels))
+        return lines
+
+    def _render_discovery(self, discovery: dict[str, object]) -> list[str]:
+        fallback_text = str(discovery.get("fallbackText") or "").strip()
+        if fallback_text:
+            return fallback_text.splitlines()
+        lines = ["Discovery digest"]
+        window_start = discovery.get("windowStart")
+        window_end = discovery.get("windowEnd")
+        if window_start and window_end:
+            lines.append(f"Window: {window_start} -> {window_end}")
+        sections = discovery.get("sections")
+        if not isinstance(sections, list):
+            return lines
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            lines.append("")
+            lines.append(str(section.get("title") or "Section"))
+            items = section.get("items")
+            if not isinstance(items, list) or not items:
+                summary = str(section.get("summary") or "").strip()
+                if summary:
+                    lines.append(summary)
+                continue
+            for item in items[:5]:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("label") or "").strip()
+                if label:
+                    lines.append(f"- {label}")
         return lines
 
     def _render_journey(self, journey: dict[str, object]) -> list[str]:

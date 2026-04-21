@@ -21,6 +21,7 @@ class ProposalAliasIndex:
     def __init__(self) -> None:
         self._runs: dict[tuple[Id, str, Id], ProposalAliasMapping] = {}
         self._reviews: dict[tuple[Id, str, Id], ProposalAliasMapping] = {}
+        self._captures: dict[tuple[Id, str, Id], ProposalAliasMapping] = {}
         self._latest_run_by_session: dict[tuple[Id, str], Id] = {}
         self._lock = asyncio.Lock()
 
@@ -55,6 +56,22 @@ class ProposalAliasIndex:
             user_id=user_id,
             session_id=session_id,
             owner_id=review_id,
+            proposals=proposals,
+        )
+
+    async def record_capture_run(
+        self,
+        *,
+        user_id: Id,
+        session_id: str | None,
+        capture_run_id: Id,
+        proposals: list[MemoryWriteProposal],
+    ) -> None:
+        await self._record_mapping(
+            store=self._captures,
+            user_id=user_id,
+            session_id=session_id,
+            owner_id=capture_run_id,
             proposals=proposals,
         )
 
@@ -123,6 +140,25 @@ class ProposalAliasIndex:
             proposal_refs=proposal_refs,
             pending_proposal_ids=pending_proposal_ids,
             owner_label="review",
+        )
+
+    async def resolve_capture_proposal_refs(
+        self,
+        *,
+        user_id: Id,
+        session_id: str | None,
+        capture_run_id: Id,
+        proposal_refs: list[str],
+        pending_proposal_ids: list[Id],
+    ) -> list[Id]:
+        return await self._resolve_proposal_refs(
+            store=self._captures,
+            user_id=user_id,
+            session_id=session_id,
+            owner_id=capture_run_id,
+            proposal_refs=proposal_refs,
+            pending_proposal_ids=pending_proposal_ids,
+            owner_label="capture run",
         )
 
     async def _resolve_proposal_refs(
@@ -228,6 +264,23 @@ class ProposalAliasIndex:
             owner_id=review_id,
             pending_proposal_ids=pending_proposal_ids,
             owner_label="review",
+        )
+
+    async def list_capture_pending_aliases(
+        self,
+        *,
+        user_id: Id,
+        session_id: str | None,
+        capture_run_id: Id,
+        pending_proposal_ids: list[Id],
+    ) -> list[tuple[str, Id]]:
+        return await self._list_pending_aliases(
+            store=self._captures,
+            user_id=user_id,
+            session_id=session_id,
+            owner_id=capture_run_id,
+            pending_proposal_ids=pending_proposal_ids,
+            owner_label="capture run",
         )
 
     async def _list_pending_aliases(

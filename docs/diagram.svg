@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1100" role="img" aria-labelledby="title desc">
+  <title id="title">Circulatio enhanced project diagram</title>
+  <desc id="desc">A clean black and white project diagram for Circulatio, showing Circulatio holding dreams, body states, reflections, and charged events, then transforming them through capture, hold, and interpretation into patterns, journeys, living myth, and analysis packets under safety, evidence, consent, and approval guardrails.</desc>
+  <defs>
+    <style>
+      text { font-family: "Cabinet Grotesk", "Outfit", "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif; fill: #0d0f14; }
+      .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: 0.08em; }
+      .nav { font-size: 12px; font-weight: 800; letter-spacing: 0.10em; text-transform: uppercase; fill: #3f444d; }
+      .nav-sub { font-size: 13px; font-weight: 500; fill: #6d7480; letter-spacing: 0.02em; }
+      .kicker { font-size: 15px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; fill: #797f8a; }
+      .hero { font-size: 84px; font-weight: 800; letter-spacing: -0.065em; }
+      .subhero { font-size: 23px; font-weight: 500; fill: #444b56; letter-spacing: -0.015em; }
+      .section { font-size: 14px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; fill: #777e8b; }
+      .card-title { font-size: 28px; font-weight: 800; letter-spacing: -0.045em; }
+      .card-body { font-size: 16px; font-weight: 520; fill: #565d68; letter-spacing: -0.01em; }
+      .mini-title { font-size: 18px; font-weight: 800; letter-spacing: -0.035em; }
+      .mini-body { font-size: 13px; font-weight: 520; fill: #5f6671; letter-spacing: -0.005em; }
+      .center-title { font-size: 44px; font-weight: 850; letter-spacing: -0.065em; }
+      .center-sub { font-size: 17px; font-weight: 600; fill: #474e59; letter-spacing: -0.01em; }
+      .stage { font-size: 22px; font-weight: 800; letter-spacing: -0.04em; }
+      .stage-note { font-size: 13px; font-weight: 560; fill: #666d78; }
+      .footer { font-size: 15px; font-weight: 650; fill: #7a808a; letter-spacing: 0.04em; }
+      .quote { font-size: 18px; font-weight: 650; fill: #2c3139; letter-spacing: -0.01em; }
+    </style>
+    <radialGradient id="soft-vessel" cx="50%" cy="50%" r="62%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="68%" stop-color="#f5f6f8"/>
+      <stop offset="100%" stop-color="#eceff3"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="45%" r="58%">
+      <stop offset="0%" stop-color="#eef1f5" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="linefade" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#d7dbe1" stop-opacity="0"/>
+      <stop offset="22%" stop-color="#c3c8d0" stop-opacity="1"/>
+      <stop offset="78%" stop-color="#c3c8d0" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#d7dbe1" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grain" width="96" height="96" patternUnits="userSpaceOnUse">
+      <path d="M13 21h1v1h-1zM61 18h1v1h-1zM83 44h1v1h-1zM31 62h1v1h-1zM71 76h1v1h-1zM44 37h1v1h-1z" fill="#0d0f14" opacity="0.035"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#aeb4bd"/>
+    </marker>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0d0f14" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1100" fill="#ffffff"/>
+  <rect width="1600" height="1100" fill="url(#grain)"/>
+  <ellipse cx="800" cy="463" rx="520" ry="430" fill="url(#halo)"/>
+  <g transform="translate(160 70)">
+    <text class="kicker" x="640" y="0" text-anchor="middle">soul + soma + spirit</text>
+    <text class="hero" x="640" y="88" text-anchor="middle">Soul OS for soul-making.</text>
+  </g>
+  <line x1="228" y1="256" x2="1372" y2="256" stroke="url(#linefade)" stroke-width="2"/>
+  <g transform="translate(120 318)">
+    <text class="section" x="260" y="-32" text-anchor="middle">material entering the vessel</text>
+    <g transform="translate(0 0)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Dreams</text>
+      <text class="card-body" x="28" y="80">images, recurrences,</text>
+      <text class="card-body" x="28" y="104">figures, thresholds</text>
+      <path d="M202 31c20 20 20 50 0 70c-20-20-20-50 0-70z" fill="none" stroke="#c7ccd4" stroke-width="2"/>
+    </g>
+    <g transform="translate(270 0)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Body States</text>
+      <text class="card-body" x="28" y="80">tension, activation,</text>
+      <text class="card-body" x="28" y="104">fatigue, grounding</text>
+      <path d="M198 28c-30 26-30 54 0 80c30-26 30-54 0-80z" fill="none" stroke="#c7ccd4" stroke-width="2"/>
+    </g>
+    <g transform="translate(0 152)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Reflections</text>
+      <text class="card-body" x="28" y="80">notes, associations,</text>
+      <text class="card-body" x="28" y="104">moods, stance</text>
+      <path d="M188 38h34M188 62h26M188 86h34" stroke="#c7ccd4" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(270 152)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Charged Events</text>
+      <text class="card-body" x="28" y="80">conflict, coincidence,</text>
+      <text class="card-body" x="28" y="104">loss, new openings</text>
+      <path d="M202 29l23 38h-27l20 36l-46-49h30z" fill="none" stroke="#c7ccd4" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <g fill="none" stroke="#aeb4bd" stroke-width="1.6" marker-end="url(#arrow)">
+    <path d="M640 384C680 392 702 414 724 443"/>
+    <path d="M642 450C680 450 698 454 714 458"/>
+    <path d="M640 536C680 528 702 512 724 503"/>
+    <path d="M640 602C690 580 710 560 724 557"/>
+  </g>
+  <g transform="translate(682 298)">
+    <circle cx="118" cy="160" r="197" fill="none" stroke="#d8dce3" stroke-width="1.2"/>
+    <circle cx="118" cy="160" r="157" fill="none" stroke="#e6e9ee" stroke-width="1.2" stroke-dasharray="8 12"/>
+    <path d="M-35 160a153 153 0 1 1 306 0a153 153 0 1 1-306 0" fill="none" stroke="#17191d" stroke-width="1.6" stroke-dasharray="2 14" stroke-linecap="round"/>
+    <rect x="-8" y="15" width="252" height="290" rx="28" fill="url(#soft-vessel)" stroke="#17191d" stroke-width="2" filter="url(#soft-shadow)"/>
+    <text class="center-title" x="118" y="74" text-anchor="middle">Circulatio</text>
+    <text class="center-sub" x="118" y="102" text-anchor="middle">Understanding</text>
+    <g transform="translate(22 130)">
+      <rect width="192" height="44" rx="22" fill="#ffffff" stroke="#17191d" stroke-width="1"/>
+      <text class="stage" x="24" y="29">Capture</text>
+      <text class="stage-note" x="116" y="29">provenance</text>
+    </g>
+    <g transform="translate(22 184)">
+      <rect width="192" height="44" rx="22" fill="#ffffff" stroke="#17191d" stroke-width="1"/>
+      <text class="stage" x="24" y="29">Hold</text>
+      <text class="stage-note" x="88" y="29">no rushing</text>
+    </g>
+    <g transform="translate(22 238)">
+      <rect width="192" height="44" rx="22" fill="#ffffff" stroke="#17191d" stroke-width="1"/>
+      <text class="stage" x="24" y="29">Interpret</text>
+      <text class="stage-note" x="128" y="29">when ripe</text>
+    </g>
+  </g>
+  <g fill="none" stroke="#aeb4bd" stroke-width="1.6" marker-end="url(#arrow)">
+    <path d="M926 443C960 414 982 392 1010 384"/>
+    <path d="M926 458C960 454 982 450 1000 450"/>
+    <path d="M926 503C960 512 982 528 1010 536"/>
+    <path d="M926 557C968 560 990 580 1010 602"/>
+  </g>
+  <g transform="translate(960 318)">
+    <text class="section" x="260" y="-32" text-anchor="middle">what becomes visible</text>
+    <g transform="translate(0 0)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Pattern</text>
+      <text class="card-body" x="28" y="80">what recurs, shifts,</text>
+      <text class="card-body" x="28" y="104">ripens, or fades</text>
+      <path d="M182 43c32-28 56 12 24 40c-18 15-35 20-48 26c6-19 10-39 24-66z" fill="none" stroke="#c7ccd4" stroke-width="2"/>
+    </g>
+    <g transform="translate(270 0)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Journeys</text>
+      <text class="card-body" x="28" y="80">named threads held</text>
+      <text class="card-body" x="28" y="104">across time</text>
+      <path d="M184 90c17-50 28-60 50-72M184 90c24-10 40-8 64 4" fill="none" stroke="#c7ccd4" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(0 152)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Living Myth</text>
+      <text class="card-body" x="28" y="80">chapter, opposition,</text>
+      <text class="card-body" x="28" y="104">bridge, return</text>
+      <path d="M176 44h56v54h-56zM188 56h32M188 70h26M188 84h34" fill="none" stroke="#c7ccd4" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(270 152)">
+      <rect width="250" height="132" rx="18" fill="#ffffff" stroke="#17191d" stroke-width="1.4"/>
+      <text class="card-title" x="28" y="48">Analysis Packets</text>
+      <text class="card-body" x="28" y="80">bounded material for</text>
+      <text class="card-body" x="28" y="104">journaling or analysis</text>
+      <path d="M179 44h58M179 64h46M179 84h58M179 104h34" stroke="#c7ccd4" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
+  <g transform="translate(120 728)">
+    <rect width="1360" height="194" rx="30" fill="#fafbfc" stroke="#17191d" stroke-width="1.4"/>
+    <text class="section" x="680" y="44" text-anchor="middle">guardrails that keep depth honest</text>
+    <g transform="translate(40 76)">
+      <rect width="232" height="78" rx="16" fill="#ffffff" stroke="#c5cad2" stroke-width="1"/>
+      <text class="mini-title" x="22" y="32">Grounding first</text>
+      <text class="mini-body" x="22" y="56">safety gates before depth</text>
+    </g>
+    <g transform="translate(296 76)">
+      <rect width="232" height="78" rx="16" fill="#ffffff" stroke="#c5cad2" stroke-width="1"/>
+      <text class="mini-title" x="22" y="32">Evidence ledger</text>
+      <text class="mini-body" x="22" y="56">observations before claims</text>
+    </g>
+    <g transform="translate(552 76)">
+      <rect width="232" height="78" rx="16" fill="#ffffff" stroke="#c5cad2" stroke-width="1"/>
+      <text class="mini-title" x="22" y="32">Hypotheses only</text>
+      <text class="mini-body" x="22" y="56">meaning stays testable</text>
+    </g>
+    <g transform="translate(808 76)">
+      <rect width="232" height="78" rx="16" fill="#ffffff" stroke="#c5cad2" stroke-width="1"/>
+      <text class="mini-title" x="22" y="32">Approval-gated</text>
+      <text class="mini-body" x="22" y="56">symbolic memory needs consent</text>
+    </g>
+    <g transform="translate(1064 76)">
+      <rect width="232" height="78" rx="16" fill="#ffffff" stroke="#c5cad2" stroke-width="1"/>
+      <text class="mini-title" x="22" y="32">Offline evolution</text>
+      <text class="mini-body" x="22" y="56">method changes stay reviewed</text>
+    </g>
+  </g>
+  <g transform="translate(184 980)">
+    <path d="M0 0H1232" stroke="#dfe3e8" stroke-width="1.5"/>
+    <text class="quote" x="616" y="42" text-anchor="middle">A collaborative witness that remembers what you forget, sees what you cannot yet see, and stays with you while you do the work.</text>
+    <text class="footer" x="616" y="86" text-anchor="middle">Not a therapist · Not a wellness tracker · Not a productivity system · Not a dependency loop</text>
+  </g>
+</svg>

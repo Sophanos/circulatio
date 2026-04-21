@@ -5,8 +5,10 @@ import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from time import monotonic
 from typing import Literal, NotRequired, TypedDict
 
+from ..domain.method_state import MethodStateRoutingInput
 from ..domain.normalization import compact_life_context_snapshot
 from ..domain.types import (
     AnalysisPacketInput,
@@ -22,6 +24,7 @@ from .contracts import (
     LlmAnalysisPacketOutput,
     LlmInterpretationOutput,
     LlmLivingMythReviewOutput,
+    LlmMethodStateRoutingOutput,
     LlmPracticeOutput,
     LlmRhythmicBriefOutput,
     LlmThresholdReviewOutput,
@@ -29,15 +32,17 @@ from .contracts import (
 )
 from .json_schema import (
     INTERPRETATION_OUTPUT_SCHEMA,
+    METHOD_STATE_ROUTING_OUTPUT_SCHEMA,
     extract_json_object,
     schema_text,
 )
-from .ports import CirculatioLlmPort
+from .ports import CirculatioLlmPort, CirculatioMethodStateLlmPort
 from .prompt_builder import (
     build_analysis_packet_messages,
     build_interpretation_messages,
     build_life_context_messages,
     build_living_myth_review_messages,
+    build_method_state_routing_messages,
     build_practice_messages,
     build_rhythmic_brief_messages,
     build_threshold_review_messages,
@@ -62,7 +67,7 @@ class ModelPathProbeResult(TypedDict, total=False):
     details: NotRequired[dict[str, object]]
 
 
-class HermesModelAdapter(CirculatioLlmPort):
+class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
     """Hermes-backed model adapter with JSON-only responses.
 
     Imports from the Hermes runtime are intentionally lazy so repository tests can
@@ -323,6 +328,63 @@ class HermesModelAdapter(CirculatioLlmPort):
             snapshot["notableChanges"] = notable_changes
         return compact_life_context_snapshot(snapshot) or snapshot
 
+    async def route_method_state_response(
+        self,
+        input_data: MethodStateRoutingInput,
+    ) -> LlmMethodStateRoutingOutput:
+        client = self._load_auxiliary_client()
+        try:
+            payload = await self._call_json_with_client(
+                client,
+                build_method_state_routing_messages(input_data),
+                max_tokens=self._max_review_tokens,
+                schema=METHOD_STATE_ROUTING_OUTPUT_SCHEMA,
+                schema_name="circulatio_method_state_routing",
+            )
+        except Exception as exc:
+            self._debug_log_llm_event("method_state_routing_failed", error=exc)
+            return {
+                "answerSummary": "",
+                "evidenceSpans": [],
+                "captureCandidates": [],
+                "followUpPrompts": [],
+                "routingWarnings": ["method_state_routing_failed"],
+            }
+        return self._normalize_method_state_routing_output(payload)
+
+    async def complete_structured_json(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        schema: dict[str, object] | None = None,
+        schema_name: str | None = None,
+        max_tokens: int = 1200,
+        temperature: float | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, object]:
+        client = self._load_auxiliary_client()
+        started = monotonic()
+        result = await self._call_structured_json_with_client(
+            client,
+            messages,
+            max_tokens=max_tokens,
+            schema=schema,
+            schema_name=schema_name,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+        )
+        latency_ms = int((monotonic() - started) * 1000)
+        return {
+            "payload": result["payload"],
+            "rawText": result.get("rawText"),
+            "provider": self._provider,
+            "model": self._model,
+            "usage": self._response_usage(result.get("response")),
+            "latencyMs": latency_ms,
+            "cacheHit": False,
+            "error": None,
+        }
+
     def _list_of_dicts(self, value: object) -> list[dict[str, object]]:
         if not isinstance(value, list):
             return []
@@ -425,6 +487,12 @@ class HermesModelAdapter(CirculatioLlmPort):
             "userFacingResponse": str(payload.get("userFacingResponse", "")).strip(),
             "clarifyingQuestion": str(payload.get("clarifyingQuestion", "")).strip(),
         }
+        clarification_plan = self._dict_value(payload.get("clarificationPlan"))
+        if self._is_clarification_plan_candidate(clarification_plan):
+            result["clarificationPlan"] = clarification_plan
+        clarification_intent = self._dict_value(payload.get("clarificationIntent"))
+        if self._is_clarification_intent_candidate(clarification_intent):
+            result["clarificationIntent"] = clarification_intent
         depth_readiness = self._dict_value(payload.get("depthReadiness"))
         if self._is_depth_readiness_candidate(depth_readiness):
             result["depthReadiness"] = depth_readiness
@@ -446,6 +514,22 @@ class HermesModelAdapter(CirculatioLlmPort):
         if individuation:
             result["individuation"] = individuation
         return result
+
+    def _normalize_method_state_routing_output(
+        self, payload: dict[str, object]
+    ) -> LlmMethodStateRoutingOutput:
+        return {
+            "answerSummary": str(payload.get("answerSummary", "")).strip(),
+            "evidenceSpans": self._filter_dicts(
+                payload.get("evidenceSpans"),
+                validator=self._is_method_state_evidence_span_candidate,
+            ),
+            "captureCandidates": self._filter_dicts(
+                payload.get("captureCandidates"), validator=self._is_method_state_capture_candidate
+            ),
+            "followUpPrompts": self._list_of_scalars(payload.get("followUpPrompts")),
+            "routingWarnings": self._list_of_scalars(payload.get("routingWarnings")),
+        }
 
     def _has_required_text_fields(self, candidate: dict[str, object], *fields: str) -> bool:
         return all(str(candidate.get(field) or "").strip() for field in fields)
@@ -532,6 +616,45 @@ class HermesModelAdapter(CirculatioLlmPort):
             and isinstance(candidate.get("matchingFeatures"), list)
         )
 
+    def _is_clarification_plan_candidate(self, candidate: dict[str, object]) -> bool:
+        return self._has_required_text_fields(
+            candidate,
+            "questionText",
+            "intent",
+            "captureTarget",
+            "expectedAnswerKind",
+        )
+
+    def _is_clarification_intent_candidate(self, candidate: dict[str, object]) -> bool:
+        return (
+            self._has_required_text_fields(
+                candidate, "refKey", "questionText", "storagePolicy", "expiresAt"
+            )
+            and isinstance(candidate.get("expectedTargets"), list)
+            and isinstance(candidate.get("anchorRefs"), dict)
+            and isinstance(candidate.get("consentScopes"), list)
+        )
+
+    def _is_method_state_evidence_span_candidate(self, candidate: dict[str, object]) -> bool:
+        return (
+            self._has_required_text_fields(candidate, "refKey")
+            and bool(
+                str(candidate.get("quote") or "").strip()
+                or str(candidate.get("summary") or "").strip()
+            )
+            and isinstance(candidate.get("targetKinds"), list)
+        )
+
+    def _is_method_state_capture_candidate(self, candidate: dict[str, object]) -> bool:
+        return (
+            self._has_required_text_fields(
+                candidate, "targetKind", "application", "confidence", "reason"
+            )
+            and isinstance(candidate.get("payload"), dict)
+            and isinstance(candidate.get("supportingEvidenceRefs"), list)
+            and isinstance(candidate.get("consentScopes"), list)
+        )
+
     def _has_meaningful_practice_candidate(self, value: dict[str, object]) -> bool:
         if not value:
             return False
@@ -557,6 +680,8 @@ class HermesModelAdapter(CirculatioLlmPort):
             else 0,
             "userFacingResponse": 1 if str(output.get("userFacingResponse", "")).strip() else 0,
             "clarifyingQuestion": 1 if str(output.get("clarifyingQuestion", "")).strip() else 0,
+            "clarificationPlan": 1 if output.get("clarificationPlan") else 0,
+            "clarificationIntent": 1 if output.get("clarificationIntent") else 0,
         }
         interpretive_signal_count = sum(
             counts[field]
@@ -746,9 +871,17 @@ class HermesModelAdapter(CirculatioLlmPort):
         messages: list[dict[str, str]],
         *,
         max_tokens: int,
+        temperature: float | None = None,
+        timeout_seconds: float | None = None,
     ) -> dict[str, object]:
         client = self._load_auxiliary_client()
-        return await self._call_json_with_client(client, messages, max_tokens=max_tokens)
+        return await self._call_json_with_client(
+            client,
+            messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+        )
 
     async def _call_json_with_client(
         self,
@@ -758,6 +891,30 @@ class HermesModelAdapter(CirculatioLlmPort):
         max_tokens: int,
         schema: dict[str, object] | None = None,
         schema_name: str | None = None,
+        temperature: float | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, object]:
+        result = await self._call_structured_json_with_client(
+            client,
+            messages,
+            max_tokens=max_tokens,
+            schema=schema,
+            schema_name=schema_name,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+        )
+        return dict(result["payload"])
+
+    async def _call_structured_json_with_client(
+        self,
+        client: HermesAuxiliaryClientFns,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int,
+        schema: dict[str, object] | None = None,
+        schema_name: str | None = None,
+        temperature: float | None = None,
+        timeout_seconds: float | None = None,
     ) -> dict[str, object]:
         async_call_llm = client["async_call_llm"]
         extract_content_or_reasoning = client["extract_content_or_reasoning"]
@@ -765,7 +922,7 @@ class HermesModelAdapter(CirculatioLlmPort):
             "provider": self._provider,
             "model": self._model,
             "messages": messages,
-            "temperature": self._temperature,
+            "temperature": self._temperature if temperature is None else temperature,
             "max_tokens": max_tokens,
         }
         response = await self._call_llm_json_stage(
@@ -774,13 +931,14 @@ class HermesModelAdapter(CirculatioLlmPort):
             base_kwargs=base_kwargs,
             schema=schema,
             schema_name=schema_name,
+            timeout_seconds=timeout_seconds,
         )
         text = extract_content_or_reasoning(response)
         self._debug_log_llm_event("initial_raw", response=response, text=text)
         try:
             payload = extract_json_object(text)
             self._debug_log_llm_event("initial_parsed", payload=payload)
-            return payload
+            return {"payload": payload, "rawText": text, "response": response}
         except ValueError as exc:
             self._debug_log_llm_event("initial_parse_failed", text=text, error=exc)
             repair_response = await self._call_llm_json_stage(
@@ -805,12 +963,13 @@ class HermesModelAdapter(CirculatioLlmPort):
                 },
                 schema=schema,
                 schema_name=schema_name,
+                timeout_seconds=timeout_seconds,
             )
             repair_text = extract_content_or_reasoning(repair_response)
             self._debug_log_llm_event("repair_raw", response=repair_response, text=repair_text)
             payload = extract_json_object(repair_text)
             self._debug_log_llm_event("repair_parsed", payload=payload)
-            return payload
+            return {"payload": payload, "rawText": repair_text, "response": repair_response}
 
     async def _call_llm_json_stage(
         self,
@@ -820,6 +979,7 @@ class HermesModelAdapter(CirculatioLlmPort):
         base_kwargs: dict[str, object],
         schema: dict[str, object] | None,
         schema_name: str | None,
+        timeout_seconds: float | None = None,
     ) -> object:
         request_kwargs = dict(base_kwargs)
         request_kwargs.update(self._json_output_kwargs(schema=schema, schema_name=schema_name))
@@ -827,6 +987,7 @@ class HermesModelAdapter(CirculatioLlmPort):
             return await self._call_llm_with_timeout(
                 async_call_llm,
                 stage=stage,
+                timeout_seconds=timeout_seconds,
                 **request_kwargs,
             )
         except TypeError as exc:
@@ -843,8 +1004,42 @@ class HermesModelAdapter(CirculatioLlmPort):
             return await self._call_llm_with_timeout(
                 async_call_llm,
                 stage=stage,
+                timeout_seconds=timeout_seconds,
                 **base_kwargs,
             )
+
+    def _response_usage(self, response: object) -> dict[str, object] | None:
+        for candidate in (
+            response.get("usage") if isinstance(response, dict) else None,
+            getattr(response, "usage", None),
+        ):
+            usage = self._normalize_usage_value(candidate)
+            if usage is not None:
+                return usage
+        return None
+
+    def _normalize_usage_value(self, value: object) -> dict[str, object] | None:
+        if isinstance(value, dict):
+            normalized = {
+                str(key): item
+                for key, item in value.items()
+                if isinstance(item, (str, int, float, bool))
+            }
+            return normalized or None
+        if value is None:
+            return None
+        normalized = {}
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "input_tokens",
+            "output_tokens",
+        ):
+            item = getattr(value, key, None)
+            if isinstance(item, (str, int, float, bool)):
+                normalized[key] = item
+        return normalized or None
 
     def _json_output_kwargs(
         self,
@@ -894,9 +1089,10 @@ class HermesModelAdapter(CirculatioLlmPort):
         async_call_llm: Callable[..., Awaitable[object]],
         *,
         stage: str,
+        timeout_seconds: float | None = None,
         **kwargs: object,
     ) -> object:
-        timeout = self._request_timeout_seconds
+        timeout = self._request_timeout_seconds if timeout_seconds is None else timeout_seconds
         if timeout is None:
             return await async_call_llm(**kwargs)
         try:

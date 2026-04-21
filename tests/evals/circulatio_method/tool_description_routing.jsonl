@@ -1,0 +1,3 @@
+{"caseId":"tool_interpret_material_001","toolName":"circulatio_interpret_material","requiredSubstrings":["Prefer storing first","method gate","wait for new input"],"forbiddenSubstrings":["freeform persona output"],"maxDescriptionChars":500}
+{"caseId":"tool_interpretation_feedback_001","toolName":"circulatio_record_interpretation_feedback","requiredSubstrings":["explicit user feedback","without parsing free-text notes"],"maxDescriptionChars":500}
+{"caseId":"tool_practice_feedback_001","toolName":"circulatio_record_practice_feedback","requiredSubstrings":["explicit user feedback","without parsing free-text notes"],"maxDescriptionChars":500}

@@ -49,6 +49,8 @@ class CirculatioCommandParser:
             return self._parse_symbols(tokens)
         if tokens[0] == "review":
             return self._parse_review(tokens)
+        if tokens[0] == "discovery":
+            return self._parse_discovery(tokens)
         if tokens[0] == "journey":
             return self._parse_journey(tokens)
         if tokens[0] == "packet":
@@ -293,6 +295,73 @@ class CirculatioCommandParser:
             operation="circulatio.packet.analysis",
             payload=payload,
             subcommand="packet",
+        )
+
+    def _parse_discovery(self, tokens: list[str]) -> ParsedCirculationCommand:
+        payload: dict[str, object] = {}
+        question_tokens: list[str] = []
+        index = 1
+        while index < len(tokens):
+            token = tokens[index]
+            if token in {"--query"}:
+                query = self._require_value(tokens, index, token)
+                payload["explicitQuestion"] = query
+                payload["textQuery"] = query
+                index += 2
+                continue
+            if token in {"--from", "--start"}:
+                payload["windowStart"] = self._require_value(tokens, index, token)
+                index += 2
+                continue
+            if token in {"--to", "--end"}:
+                payload["windowEnd"] = self._require_value(tokens, index, token)
+                index += 2
+                continue
+            if token == "--root":
+                self._append_multi_value(
+                    payload,
+                    "rootNodeIds",
+                    self._require_value(tokens, index, token),
+                )
+                index += 2
+                continue
+            if token == "--limit":
+                raw_limit = self._require_value(tokens, index, token)
+                try:
+                    payload["maxItems"] = int(raw_limit)
+                except ValueError as exc:
+                    raise ValidationError(
+                        "/circulation discovery --limit must be an integer."
+                    ) from exc
+                index += 2
+                continue
+            if token == "--profile":
+                profile = self._require_value(tokens, index, token)
+                if profile not in {"default", "recency", "recurrence", "importance"}:
+                    raise ValidationError(
+                        "/circulation discovery --profile must be default, recency, "
+                        "recurrence, or importance."
+                    )
+                payload["rankingProfile"] = profile
+                index += 2
+                continue
+            if token.startswith("--"):
+                raise ValidationError(f"Unknown /circulation discovery option: {token}")
+            question_tokens.append(token)
+            index += 1
+        if question_tokens:
+            if payload.get("textQuery"):
+                raise ValidationError(
+                    "/circulation discovery accepts either bare text or --query, not both."
+                )
+            question = " ".join(question_tokens).strip()
+            if question:
+                payload["explicitQuestion"] = question
+                payload["textQuery"] = question
+        return ParsedCirculationCommand(
+            operation="circulatio.discovery",
+            payload=payload,
+            subcommand="discovery",
         )
 
     def _parse_journey(self, tokens: list[str]) -> ParsedCirculationCommand:

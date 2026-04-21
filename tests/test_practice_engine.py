@@ -72,6 +72,49 @@ class PracticeEngineTests(unittest.TestCase):
         )
         self.assertEqual(result["durationMinutes"], 8)
 
+    def test_practice_hints_override_legacy_adaptation_hints(self) -> None:
+        result = self.engine.reconcile_llm_practice(
+            practice={
+                "id": "practice_1",
+                "type": "journaling",
+                "reason": "Write it down.",
+                "instructions": ["Write what is present."],
+                "durationMinutes": 15,
+                "contraindicationsChecked": ["none"],
+                "requiresConsent": False,
+            },
+            safety={"status": "clear", "flags": ["none"], "depthWorkAllowed": True},
+            method_gate=None,
+            depth_readiness=None,
+            consent_preferences=[],
+            practice_hints={"maturity": "learning", "maxDurationMinutes": 6},
+            adaptation_hints={"maturity": "learning", "maxDurationMinutes": 12},
+        )
+        self.assertEqual(result["durationMinutes"], 6)
+
+    def test_practice_engine_annotates_targeted_tension(self) -> None:
+        result = self.engine.reconcile_llm_practice(
+            practice={
+                "id": "practice_1",
+                "type": "journaling",
+                "reason": "Write what is active.",
+                "instructions": ["Write what is active."],
+                "durationMinutes": 10,
+                "contraindicationsChecked": ["none"],
+                "requiresConsent": False,
+            },
+            safety={"status": "clear", "flags": ["none"], "depthWorkAllowed": True},
+            method_gate=None,
+            depth_readiness=None,
+            consent_preferences=[],
+            goal_tensions=[
+                {"id": "tension_1", "tensionSummary": "Directness and safety pull against each other."}
+            ],
+            body_states=[{"id": "body_1", "sensation": "tightness"}],
+        )
+        self.assertEqual(result["targetedTensionId"], "tension_1")
+        self.assertEqual(result["targetedBodyStateId"], "body_1")
+
     def test_learned_preferences_remain_soft_before_threshold(self) -> None:
         result = self.engine.build_adaptation_hints(
             profile={

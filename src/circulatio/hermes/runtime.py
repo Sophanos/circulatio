@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from ..adapters.context_adapter import ContextAdapter
 from ..adapters.context_builder import CirculatioLifeContextBuilder
@@ -10,11 +11,12 @@ from ..adapters.method_context_builder import CirculatioMethodContextBuilder
 from ..application.circulatio_service import CirculatioService
 from ..core.circulatio_core import CirculatioCore
 from ..llm.hermes_model_adapter import HermesModelAdapter
-from ..llm.ports import CirculatioLlmPort
+from ..llm.ports import CirculatioLlmPort, CirculatioMethodStateLlmPort
 from ..repositories.circulatio_repository import CirculatioRepository
 from ..repositories.hermes_profile_circulatio_repository import HermesProfileCirculatioRepository
 from ..repositories.in_memory_circulatio_repository import InMemoryCirculatioRepository
 from .agent_bridge import CirculatioAgentBridge
+from .amplification_sources import default_trusted_amplification_sources
 from .command_router import HermesCirculationCommandRouter
 from .idempotency import IdempotencyStore, InMemoryIdempotencyStore, SQLiteIdempotencyStore
 from .profile_paths import get_circulatio_db_path
@@ -61,7 +63,14 @@ def build_in_memory_circulatio_runtime(
         method_context_builder=method_context_builder,
     )
     core = CirculatioCore(repository, llm=llm)
-    service = CirculatioService(repository, core, context_adapter=context_adapter)
+    method_state_llm = _as_method_state_llm(llm)
+    service = CirculatioService(
+        repository,
+        core,
+        context_adapter=context_adapter,
+        method_state_llm=method_state_llm,
+        trusted_amplification_sources=default_trusted_amplification_sources(),
+    )
     router = HermesCirculationCommandRouter(service)
     idempotency_store = InMemoryIdempotencyStore()
     proposal_alias_index = ProposalAliasIndex()
@@ -108,7 +117,14 @@ def build_hermes_circulatio_runtime(
         method_context_builder=method_context_builder,
     )
     core = CirculatioCore(repository, llm=model_adapter)
-    service = CirculatioService(repository, core, context_adapter=context_adapter)
+    method_state_llm = _as_method_state_llm(model_adapter)
+    service = CirculatioService(
+        repository,
+        core,
+        context_adapter=context_adapter,
+        method_state_llm=method_state_llm,
+        trusted_amplification_sources=default_trusted_amplification_sources(),
+    )
     router = HermesCirculationCommandRouter(service)
     idempotency_store = SQLiteIdempotencyStore(
         db_path=repository.db_path,
@@ -134,3 +150,11 @@ def build_hermes_circulatio_runtime(
         life_context_builder=life_context_builder,
         method_context_builder=method_context_builder,
     )
+
+
+def _as_method_state_llm(
+    llm: CirculatioLlmPort | None,
+) -> CirculatioMethodStateLlmPort | None:
+    if llm is None or not hasattr(llm, "route_method_state_response"):
+        return None
+    return cast(CirculatioMethodStateLlmPort, llm)

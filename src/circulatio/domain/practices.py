@@ -41,6 +41,7 @@ class PracticeSessionRecord(TypedDict, total=False):
     outcome: NotRequired[str]
     activationBefore: NotRequired[Literal["low", "moderate", "high"]]
     activationAfter: NotRequired[Literal["low", "moderate", "high"]]
+    outcomeEvidenceIds: NotRequired[list[Id]]
     source: NotRequired[PracticeSessionSource]
     templateId: NotRequired[Id]
     modality: NotRequired[str]
@@ -75,6 +76,7 @@ class PracticeSessionUpdate(TypedDict, total=False):
     outcome: str
     activationBefore: Literal["low", "moderate", "high"]
     activationAfter: Literal["low", "moderate", "high"]
+    outcomeEvidenceIds: list[Id]
     source: PracticeSessionSource
     templateId: Id
     modality: str

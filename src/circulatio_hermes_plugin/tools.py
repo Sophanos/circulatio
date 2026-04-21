@@ -134,6 +134,15 @@ async def dashboard_summary_tool(
     )
 
 
+async def discovery_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.discovery",
+        tool_name="circulatio_discovery",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
 async def journey_page_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
     return await _dispatch_tool(
         operation="circulatio.journey.page",
@@ -487,6 +496,17 @@ async def answer_amplification_tool(
     )
 
 
+async def method_state_respond_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.method_state.respond",
+        tool_name="circulatio_method_state_respond",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
 async def upsert_goal_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
     return await _dispatch_tool(
         operation="circulatio.goals.upsert",
@@ -535,6 +555,28 @@ async def respond_practice_recommendation_tool(
     return await _dispatch_tool(
         operation="circulatio.practice.respond",
         tool_name="circulatio_respond_practice_recommendation",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
+async def record_interpretation_feedback_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.feedback.interpretation",
+        tool_name="circulatio_record_interpretation_feedback",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
+async def record_practice_feedback_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.feedback.practice",
+        tool_name="circulatio_record_practice_feedback",
         arguments=arguments,
         kwargs=kwargs,
     )

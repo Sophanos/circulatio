@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from typing import Literal, NotRequired, Required, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, Required, TypedDict
+
+if TYPE_CHECKING:
+    from .clarifications import (
+        ClarificationCaptureTarget,
+        ClarificationCreatedRecordRef,
+        ClarificationIntentType,
+        ExpectedAnswerKind,
+    )
+    from .method_state import MethodStateCaptureTargetKind
 
 ISODateString = str
 Id = str
@@ -31,6 +40,7 @@ EvidenceType = Literal[
     "cultural_reference",
     "counterevidence",
     "session_context",
+    "method_state_response",
 ]
 Confidence = Literal["low", "medium", "high"]
 HypothesisType = Literal[
@@ -232,6 +242,41 @@ class InterpretationFeedbackSummary(TypedDict, total=False):
     claimDomain: NotRequired[str]
 
 
+InterpretationInteractionFeedback = Literal[
+    "too_much",
+    "too_vague",
+    "too_abstract",
+    "good_level",
+    "helpful",
+    "not_helpful",
+]
+PracticeInteractionFeedback = Literal[
+    "good_fit",
+    "not_for_me",
+    "too_intense",
+    "too_long",
+    "helpful",
+    "not_helpful",
+]
+InteractionFeedbackDomain = Literal["interpretation", "practice", "brief", "journey_page"]
+InteractionFeedbackTargetType = Literal[
+    "interpretation_run",
+    "practice_session",
+    "brief",
+    "journey_page",
+]
+
+
+class InteractionFeedbackSummary(TypedDict, total=False):
+    id: Required[Id]
+    domain: Required[InteractionFeedbackDomain]
+    targetType: Required[InteractionFeedbackTargetType]
+    targetId: Required[Id]
+    feedback: Required[str]
+    locale: NotRequired[str]
+    createdAt: Required[ISODateString]
+
+
 class PracticeOutcomeSummary(TypedDict, total=False):
     id: Required[Id]
     practiceType: Required[PracticeType]
@@ -250,6 +295,7 @@ class PracticeSessionSummary(TypedDict, total=False):
     outcome: NotRequired[str]
     activationBefore: NotRequired[Literal["low", "moderate", "high"]]
     activationAfter: NotRequired[Literal["low", "moderate", "high"]]
+    outcomeEvidenceIds: NotRequired[list[Id]]
     templateId: NotRequired[Id]
     modality: NotRequired[str]
     intensity: NotRequired[str]
@@ -288,6 +334,7 @@ class GoalSummary(TypedDict, total=False):
     status: Required[str]
     valueTags: Required[list[str]]
     description: NotRequired[str]
+    evidenceIds: NotRequired[list[Id]]
 
 
 class GoalTensionSummary(TypedDict, total=False):
@@ -381,6 +428,68 @@ class UserAdaptationProfileSummary(TypedDict, total=False):
     sampleCounts: Required[dict[str, int]]
 
 
+CommunicationTone = Literal["gentle", "direct", "spacious"]
+CommunicationQuestioningStyle = Literal["soma_first", "image_first", "feeling_first", "reflective"]
+CommunicationSymbolicDensity = Literal["sparse", "moderate", "dense"]
+InterpretationDepthPreference = Literal[
+    "brief_pattern_notes",
+    "cautious_amplification",
+    "deep_amplification",
+]
+InterpretationModalityBias = Literal["body", "image", "emotion", "narrative", "cultural"]
+AdaptationPreferenceScope = Literal["communication", "interpretation", "practice", "rhythm"]
+RuntimeHintSource = Literal["default", "learned", "explicit", "mixed"]
+
+
+class CommunicationPreferenceSettings(TypedDict, total=False):
+    tone: NotRequired[CommunicationTone]
+    questioningStyle: NotRequired[CommunicationQuestioningStyle]
+    symbolicDensity: NotRequired[CommunicationSymbolicDensity]
+
+
+class InterpretationPreferenceSettings(TypedDict, total=False):
+    depthPreference: NotRequired[InterpretationDepthPreference]
+    modalityBias: NotRequired[InterpretationModalityBias]
+
+
+class PracticePreferenceSettings(TypedDict, total=False):
+    preferredModalities: NotRequired[list[str]]
+    avoidedModalities: NotRequired[list[str]]
+    maxDurationMinutes: NotRequired[int]
+
+
+class RhythmPreferenceSettings(TypedDict, total=False):
+    maxBriefsPerDay: NotRequired[int]
+    minimumHoursBetweenBriefs: NotRequired[int]
+    dismissedTriggerCooldownHours: NotRequired[int]
+    actedOnTriggerCooldownHours: NotRequired[int]
+    quietHours: NotRequired[dict[str, str]]
+
+
+class CommunicationHints(TypedDict, total=False):
+    tone: Required[CommunicationTone]
+    questioningStyle: Required[CommunicationQuestioningStyle]
+    symbolicDensity: Required[CommunicationSymbolicDensity]
+    source: Required[RuntimeHintSource]
+
+
+class InterpretationHints(TypedDict, total=False):
+    depthPreference: Required[InterpretationDepthPreference]
+    modalityBias: Required[InterpretationModalityBias]
+    source: Required[RuntimeHintSource]
+
+
+class PracticeHints(TypedDict, total=False):
+    preferredModalities: NotRequired[list[str]]
+    avoidedModalities: NotRequired[list[str]]
+    maxDurationMinutes: NotRequired[int]
+    recentSkips: NotRequired[list[str]]
+    recentCompletions: NotRequired[list[str]]
+    notes: NotRequired[list[str]]
+    maturity: Required[Literal["default", "learning", "mature"]]
+    source: Required[RuntimeHintSource]
+
+
 class JourneySummary(TypedDict, total=False):
     id: Required[Id]
     label: Required[str]
@@ -399,6 +508,12 @@ LongitudinalSignalType = Literal[
     "body_goal_cooccurrence",
     "dream_series_shift",
     "culture_symbol_lens",
+    "relational_scene_recurrence",
+    "practice_feedback_pattern",
+    "dream_ego_stance_shift",
+    "compensation_pattern",
+    "goal_tension_recurrence",
+    "typology_feedback_signal",
 ]
 
 
@@ -411,6 +526,23 @@ class LongitudinalSignalSummary(TypedDict, total=False):
     count: Required[int]
     lastSeen: Required[ISODateString]
     strength: Required[Literal["weak", "moderate", "strong"]]
+
+
+AmplificationSourceKind = Literal[
+    "symbol_reference",
+    "depth_psychology_archive",
+    "primary_text",
+    "scholarly_reference",
+    "other",
+]
+
+
+class AmplificationSourceSummary(TypedDict, total=False):
+    label: Required[str]
+    url: Required[str]
+    kind: Required[AmplificationSourceKind]
+    language: NotRequired[str]
+    notes: NotRequired[str]
 
 
 class CulturalFrameSummary(TypedDict, total=False):
@@ -892,6 +1024,8 @@ class LifeContextSnapshot(TypedDict, total=False):
     windowStart: Required[ISODateString]
     windowEnd: Required[ISODateString]
     lifeEventRefs: NotRequired[list[LifeEventRefSummary]]
+    activeGoals: NotRequired[list[GoalSummary]]
+    goalTensions: NotRequired[list[GoalTensionSummary]]
     moodSummary: NotRequired[str]
     energySummary: NotRequired[str]
     focusSummary: NotRequired[str]
@@ -907,6 +1041,280 @@ class LifeContextSnapshot(TypedDict, total=False):
             "seed-demo",
         ]
     ]
+
+
+class DreamDynamicsObservation(TypedDict, total=False):
+    id: Required[Id]
+    source: Required[Literal["user_reported", "clarifying_answer", "interpretation_input"]]
+    observedAt: Required[ISODateString]
+    egoStance: Required[str]
+    actionSummary: Required[str]
+    affectBefore: NotRequired[str]
+    affectAfter: NotRequired[str]
+    bodySensations: NotRequired[list[str]]
+    lysisSummary: NotRequired[str]
+    relationalStance: NotRequired[str]
+    evidenceIds: Required[list[Id]]
+    createdAt: Required[ISODateString]
+
+
+class DreamDynamicsSummary(TypedDict, total=False):
+    materialId: Required[Id]
+    observedAt: Required[ISODateString]
+    egoStance: Required[str]
+    actionSummary: Required[str]
+    lysisSummary: NotRequired[str]
+    evidenceIds: Required[list[Id]]
+
+
+class ClarificationIntent(TypedDict, total=False):
+    refKey: Required[str]
+    questionText: Required[str]
+    expectedTargets: Required[list[MethodStateCaptureTargetKind]]
+    anchorRefs: Required[dict[str, object]]
+    consentScopes: Required[list[str]]
+    storagePolicy: Required[
+        Literal[
+            "direct_if_explicit",
+            "candidate_then_review",
+            "proposal_required",
+            "no_storage_without_confirmation",
+        ]
+    ]
+    expiresAt: Required[ISODateString]
+
+
+class MethodStateSourceRef(TypedDict, total=False):
+    recordType: Required[str]
+    recordId: Required[Id]
+    summary: NotRequired[str]
+
+
+class GroundingSummary(TypedDict, total=False):
+    recommendation: Required[Literal["clear_for_depth", "pace_gently", "grounding_first"]]
+    activationPattern: Required[
+        Literal["low", "moderate", "high", "overwhelming", "mixed", "unknown"]
+    ]
+    supportSignals: Required[list[str]]
+    strainSignals: Required[list[str]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    evidenceIds: Required[list[Id]]
+    confidence: Required[Confidence]
+    updatedAt: Required[ISODateString]
+
+
+class ContainmentSummary(TypedDict, total=False):
+    status: Required[Literal["steady", "strained", "thin", "unknown"]]
+    supportSignals: Required[list[str]]
+    strainSignals: Required[list[str]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    evidenceIds: Required[list[Id]]
+    confidence: Required[Confidence]
+    updatedAt: Required[ISODateString]
+
+
+class EgoCapacitySummary(TypedDict, total=False):
+    reflectiveCapacity: Required[Literal["steady", "fragile", "unknown"]]
+    agencyTone: Required[Literal["available", "strained", "collapsed", "unknown"]]
+    symbolicContact: Required[Literal["available", "too_intense", "thin", "unknown"]]
+    confidence: Required[Confidence]
+    reasons: Required[list[str]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    evidenceIds: Required[list[Id]]
+    updatedAt: Required[ISODateString]
+
+
+class EgoRelationTrajectorySummary(TypedDict, total=False):
+    currentRelation: Required[Literal["aligned", "curious", "conflicted", "avoidant", "unknown"]]
+    agencyTrend: Required[Literal["expanding", "contracting", "mixed", "unknown"]]
+    movementLanguage: Required[list[str]]
+    recentEgoStances: Required[list[str]]
+    confidence: Required[Confidence]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    evidenceIds: Required[list[Id]]
+    updatedAt: Required[ISODateString]
+
+
+class RelationalFieldSummary(TypedDict, total=False):
+    relationshipContact: Required[Literal["available", "thin", "isolated", "unknown"]]
+    spaciousness: Required[Literal["spacious", "constricted", "mixed", "unknown"]]
+    isolationRisk: Required[Literal["low", "moderate", "high", "unknown"]]
+    dependencyPressure: Required[Literal["low", "moderate", "high", "unknown"]]
+    supportDirection: Required[
+        Literal["increase_contact", "protect_space", "hold_contact_lightly", "stabilize_field"]
+    ]
+    recurringAffect: Required[list[str]]
+    activeSceneIds: Required[list[Id]]
+    projectionLanguageAllowed: Required[bool]
+    reasons: Required[list[str]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    evidenceIds: Required[list[Id]]
+    confidence: Required[Confidence]
+    updatedAt: Required[ISODateString]
+
+
+class CompensationTendencySummary(TypedDict, total=False):
+    status: Required[Literal["insufficient_evidence", "signals_only", "hypothesis_available"]]
+    consciousPole: NotRequired[str]
+    compensatingPole: NotRequired[str]
+    patternSummary: Required[str]
+    confidence: Required[Literal["low", "medium"]]
+    evidenceIds: Required[list[Id]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    counterevidenceIds: Required[list[Id]]
+    userTestPrompt: Required[str]
+    normalizedClaimKey: Required[str]
+    approvalRequired: Required[Literal[True]]
+    updatedAt: Required[ISODateString]
+
+
+class QuestioningPreferenceSummary(TypedDict, total=False):
+    preferredQuestionStyles: Required[
+        list[
+            Literal[
+                "body_first",
+                "image_first",
+                "relational_first",
+                "choice_based",
+                "open_association",
+            ]
+        ]
+    ]
+    avoidedQuestionStyles: Required[list[str]]
+    preferredCaptureTargets: Required[list[ClarificationCaptureTarget]]
+    maxQuestionsPerTurn: Required[int]
+    depthPacing: Required[Literal["direct", "gentle", "one_step", "unknown"]]
+    answerFrictionSignals: Required[list[str]]
+    confidence: Required[Confidence]
+    source: Required[Literal["adaptation_profile"]]
+    updatedAt: Required[ISODateString]
+
+
+class ActiveGoalTensionSummary(TypedDict, total=False):
+    goalTensionId: Required[Id]
+    linkedGoalIds: Required[list[Id]]
+    summary: Required[str]
+    polarityLabels: Required[list[str]]
+    balancingDirection: Required[str]
+    evidenceIds: Required[list[Id]]
+    updatedAt: Required[ISODateString]
+
+
+class PracticeLoopSummary(TypedDict, total=False):
+    preferredModalities: Required[list[str]]
+    avoidedModalities: Required[list[str]]
+    recentCompletedTypes: Required[list[str]]
+    recentSkippedTypes: Required[list[str]]
+    recentOutcomeTrend: Required[Literal["settling", "activating", "mixed", "unknown"]]
+    recommendedIntensity: Required[Literal["low", "moderate", "unknown"]]
+    maxDurationMinutes: NotRequired[int]
+    reasons: Required[list[str]]
+    source: Required[Literal["adaptation_profile", "practice_outcomes", "mixed"]]
+    updatedAt: Required[ISODateString]
+
+
+class TypologyMethodStateSummary(TypedDict, total=False):
+    status: Required[Literal["insufficient_evidence", "signals_only", "candidate_available"]]
+    activeLensIds: Required[list[Id]]
+    feedbackSignalCount: Required[int]
+    activeFunctions: Required[list[PsychologicalFunction]]
+    promptBias: Required[
+        Literal["body_first", "image_first", "relational_first", "reflection_first", "neutral"]
+    ]
+    practiceBias: Required[
+        Literal[
+            "sensation_grounding",
+            "image_tracking",
+            "value_discernment",
+            "pattern_noting",
+            "neutral",
+        ]
+    ]
+    balancingFunction: NotRequired[PsychologicalFunction]
+    caution: NotRequired[str]
+    confidence: Required[Literal["low", "medium"]]
+    updatedAt: Required[ISODateString]
+
+
+class MethodStateSummary(TypedDict, total=False):
+    grounding: NotRequired[GroundingSummary]
+    containment: NotRequired[ContainmentSummary]
+    egoCapacity: NotRequired[EgoCapacitySummary]
+    egoRelationTrajectory: NotRequired[EgoRelationTrajectorySummary]
+    relationalField: NotRequired[RelationalFieldSummary]
+    compensationTendencies: NotRequired[list[CompensationTendencySummary]]
+    questioningPreference: NotRequired[QuestioningPreferenceSummary]
+    activeGoalTension: NotRequired[ActiveGoalTensionSummary]
+    practiceLoop: NotRequired[PracticeLoopSummary]
+    typologyMethodState: NotRequired[TypologyMethodStateSummary]
+    generatedAt: Required[ISODateString]
+
+
+class WitnessStateSummary(TypedDict, total=False):
+    stance: Required[Literal["grounding_first", "paced_contact", "symbolic_contact"]]
+    tone: Required[Literal["grounded", "gentle", "direct", "spacious"]]
+    startingMove: Required[str]
+    maxQuestionsPerTurn: Required[int]
+    preferredQuestionStyles: Required[list[str]]
+    avoidedQuestionStyles: Required[list[str]]
+    preferredClarificationTargets: Required[list[ClarificationCaptureTarget]]
+    blockedMoves: Required[list[str]]
+    witnessVoice: NotRequired[str]
+    avoidPhrasingPatterns: Required[list[str]]
+    activeGoalFrame: NotRequired[str]
+    practiceFrame: NotRequired[str]
+    typologyFrame: NotRequired[str]
+    recentLocale: NotRequired[str]
+    reasons: Required[list[str]]
+    updatedAt: Required[ISODateString]
+
+
+class ClarificationPlan(TypedDict, total=False):
+    questionText: Required[str]
+    questionKey: NotRequired[str]
+    intent: Required[ClarificationIntentType]
+    captureTarget: Required[ClarificationCaptureTarget]
+    expectedAnswerKind: Required[ExpectedAnswerKind]
+    answerSlots: NotRequired[dict[str, object]]
+    routingHints: NotRequired[dict[str, object]]
+    supportingRefs: NotRequired[list[str]]
+    anchorRefs: NotRequired[dict[str, object]]
+    consentScopes: NotRequired[list[str]]
+
+
+class ClarificationPromptSummary(TypedDict, total=False):
+    id: Required[Id]
+    materialId: NotRequired[Id]
+    runId: NotRequired[Id]
+    questionText: Required[str]
+    questionKey: NotRequired[str]
+    intent: Required[ClarificationIntentType]
+    captureTarget: Required[ClarificationCaptureTarget]
+    expectedAnswerKind: Required[ExpectedAnswerKind]
+    status: Required[str]
+    supportingRefs: NotRequired[list[str]]
+    createdAt: Required[ISODateString]
+    updatedAt: Required[ISODateString]
+
+
+class ClarificationAnswerSummary(TypedDict, total=False):
+    id: Required[Id]
+    promptId: NotRequired[Id]
+    materialId: NotRequired[Id]
+    runId: NotRequired[Id]
+    captureTarget: Required[ClarificationCaptureTarget]
+    routingStatus: Required[str]
+    createdRecordRefs: Required[list[ClarificationCreatedRecordRef]]
+    validationErrors: NotRequired[list[str]]
+    createdAt: Required[ISODateString]
+    updatedAt: Required[ISODateString]
+
+
+class ClarificationStateSummary(TypedDict, total=False):
+    pendingPrompts: Required[list[ClarificationPromptSummary]]
+    recentlyAnswered: Required[list[ClarificationAnswerSummary]]
+    recentlyUnrouted: Required[list[ClarificationAnswerSummary]]
+    avoidRepeatQuestionKeys: Required[list[str]]
 
 
 class MethodContextSnapshot(TypedDict, total=False):
@@ -926,8 +1334,12 @@ class MethodContextSnapshot(TypedDict, total=False):
     adaptationProfile: NotRequired[UserAdaptationProfileSummary]
     activeJourneys: NotRequired[list[JourneySummary]]
     recentPracticeSessions: NotRequired[list[PracticeSessionSummary]]
+    recentDreamDynamics: NotRequired[list[DreamDynamicsSummary]]
+    methodState: NotRequired[MethodStateSummary]
+    clarificationState: NotRequired[ClarificationStateSummary]
     individuationContext: NotRequired[IndividuationContextSummary]
     livingMythContext: NotRequired[LivingMythContextSummary]
+    witnessState: NotRequired[WitnessStateSummary]
     source: Required[Literal["circulatio-backend"]]
 
 
@@ -945,6 +1357,10 @@ class MaterialInterpretationInput(TypedDict, total=False):
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
     hermesMemoryContext: NotRequired[HermesMemoryContext]
+    trustedAmplificationSources: NotRequired[list[AmplificationSourceSummary]]
+    communicationHints: NotRequired[CommunicationHints]
+    interpretationHints: NotRequired[InterpretationHints]
+    practiceHints: NotRequired[PracticeHints]
     safetyContext: NotRequired[SafetyContext]
     options: NotRequired[InterpretationOptions]
 
@@ -972,16 +1388,7 @@ class PracticeTriggerSummary(TypedDict, total=False):
     reason: NotRequired[str]
 
 
-class PracticeAdaptationHints(TypedDict, total=False):
-    maturity: Required[Literal["insufficient_data", "learning", "mature"]]
-    preferredModalities: NotRequired[list[str]]
-    avoidedModalities: NotRequired[list[str]]
-    preferredDurationMinutes: NotRequired[int]
-    maxDurationMinutes: NotRequired[int]
-    intensityPreference: NotRequired[Literal["low", "moderate"]]
-    recentSkips: NotRequired[list[str]]
-    recentCompletions: NotRequired[list[str]]
-    notes: NotRequired[list[str]]
+PracticeAdaptationHints = PracticeHints
 
 
 class PracticeRecommendationInput(TypedDict, total=False):
@@ -995,7 +1402,8 @@ class PracticeRecommendationInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     safetyContext: NotRequired[SafetyContext]
     explicitQuestion: NotRequired[str]
-    adaptationHints: NotRequired[PracticeAdaptationHints]
+    practiceHints: NotRequired[PracticeHints]
+    adaptationHints: NotRequired[PracticeHints]
     options: NotRequired[InterpretationOptions]
 
 
@@ -1120,6 +1528,8 @@ class PracticePlan(TypedDict, total=False):
     id: Required[Id]
     type: Required[PracticeType]
     target: NotRequired[str]
+    targetedTensionId: NotRequired[Id]
+    targetedBodyStateId: NotRequired[Id]
     reason: Required[str]
     contraindicationsChecked: Required[list[SafetyFlag]]
     durationMinutes: Required[int]
@@ -1157,6 +1567,7 @@ class PracticeOutcomeWritePayload(TypedDict, total=False):
     outcome: Required[str]
     activationBefore: NotRequired[Literal["low", "moderate", "high"]]
     activationAfter: NotRequired[Literal["low", "moderate", "high"]]
+    outcomeEvidenceIds: NotRequired[list[Id]]
 
 
 class MaterialSummaryWritePayload(TypedDict, total=False):
@@ -1840,6 +2251,8 @@ class InterpretationResult(TypedDict, total=False):
     typologyAssessment: NotRequired[TypologyAssessment]
     practiceRecommendation: Required[PracticePlan]
     clarifyingQuestion: NotRequired[str]
+    clarificationPlan: NotRequired[ClarificationPlan]
+    clarificationIntent: NotRequired[ClarificationIntent]
     memoryWritePlan: Required[MemoryWritePlan]
     userFacingResponse: Required[str]
     llmInterpretationHealth: NotRequired[LlmInterpretationHealth]

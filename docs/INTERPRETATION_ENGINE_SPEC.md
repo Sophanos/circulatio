@@ -2,7 +2,7 @@
 >
 > This document is the hermeneutic deep-dive: how the agent works with Jungian material.
 >
-> **Current runtime note (April 2026):** The backend now exposes threshold review, living myth review, bounded analysis packets, approval-gated Phase 8/9 durable writes, ripeness-based proactive invitations, and lightweight journey containers that Hermes can reopen by human label. Those journey surfaces are organizational rather than interpretive. The symbolic workflow surfaces remain LLM-shaped for symbolic language; deterministic code stays limited to safety, consent, cadence, evidence integrity, normalization, entity resolution, and persistence.
+> **Current runtime note (April 2026):** The backend now exposes threshold review, living myth review, bounded analysis packets, approval-gated Phase 8/9 durable writes, ripeness-based proactive invitations, lightweight journey containers that Hermes can reopen by human label, and an offline Evolution OS for prompt fragments, the Hermes skill, and tool descriptions. That builder layer produces reviewable candidate bundles and stays outside the runtime path. Journey surfaces remain organizational rather than interpretive. The symbolic workflow surfaces remain LLM-shaped for symbolic language; deterministic code stays limited to safety, consent, cadence, evidence integrity, normalization, entity resolution, persistence, and offline evaluation gates.
 
 # Circulatio Interpretation Engine Specification
 ## How The Agent Works With Dreams, The Unconscious, And The Body
@@ -229,6 +229,19 @@ Alchemical language such as mortificatio may be offered only as a light interpre
 
 **Presentation:**
 > "This may be less a problem to solve than a threshold to endure. If the alchemical lens helps, it has the feel of reduction or stripping, but I would keep that as a lens, not a conclusion."
+
+### 4.7 Method-State Connector
+
+Clarifying answers and context-bound follow-up notes are part of the method, not just conversational residue.
+
+**System requirement:** The host may route an explicit follow-up answer into Circulatio only when it is anchored to an existing run, material, prompt, practice, goal, or similarly bounded context. The backend must then:
+- extract only what the user actually supplied or explicitly confirmed
+- create evidence-backed direct writes for low-risk user-reported state such as body state, personal amplification, conscious attitude, goal pressure, practice feedback, and relational scene
+- keep projection hypotheses, inner/outer correspondence, typology lenses, dream-series claims, and living-myth synthesis approval-gated
+- re-check consent and safety before both application and later approval
+- refuse hidden capture-any routing or deterministic symbolic inference from free text
+
+**Implementation note:** Circulatio now carries this through an explicit method-state connector. Clarifying intent may be emitted with an interpretation run, Hermes/host routes the later answer with anchors, and Circulatio turns that answer into durable evidence, direct capture records, or pending proposals that later feed method-context projection.
 
 ---
 

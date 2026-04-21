@@ -14,6 +14,7 @@ from circulatio.application.circulatio_service import CirculatioService
 from circulatio.core.circulatio_core import CirculatioCore
 from circulatio.domain.errors import ConflictError, ValidationError
 from circulatio.domain.ids import create_id
+from circulatio.hermes.amplification_sources import default_trusted_amplification_sources
 from circulatio.repositories.in_memory_circulatio_repository import InMemoryCirculatioRepository
 from tests._helpers import FakeCirculatioLlm
 
@@ -48,7 +49,13 @@ class CirculatioServiceTests(unittest.TestCase):
             life_context_builder=builder,
             method_context_builder=CirculatioMethodContextBuilder(repository),
         )
-        service = CirculatioService(repository, core, context_adapter=context_adapter)
+        service = CirculatioService(
+            repository,
+            core,
+            context_adapter=context_adapter,
+            method_state_llm=llm,
+            trusted_amplification_sources=default_trusted_amplification_sources(),
+        )
         return repository, service, llm
 
     def test_create_material_and_llm_interpretation_persists_run_and_evidence(self) -> None:
@@ -310,6 +317,372 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_process_method_state_response_answers_amplification_prompt_and_is_idempotent(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            workflow = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A snake stood in the doorway.",
+                }
+            )
+            prompt = (
+                await repository.list_amplification_prompts(
+                    "user_1",
+                    run_id=workflow["run"]["id"],
+                )
+            )[0]
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_prompt_1",
+                    "source": "amplification_answer",
+                    "responseText": "It feels ancient and watchful.",
+                    "anchorRefs": {
+                        "promptId": prompt["id"],
+                        "runId": workflow["run"]["id"],
+                    },
+                    "expectedTargets": ["personal_amplification"],
+                }
+            )
+            replay = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_prompt_1",
+                    "source": "amplification_answer",
+                    "responseText": "It feels ancient and watchful.",
+                    "anchorRefs": {
+                        "promptId": prompt["id"],
+                        "runId": workflow["run"]["id"],
+                    },
+                    "expectedTargets": ["personal_amplification"],
+                }
+            )
+            amplifications = await repository.list_personal_amplifications(
+                "user_1",
+                run_id=workflow["run"]["id"],
+            )
+            self.assertEqual(len(amplifications), 1)
+            self.assertEqual(amplifications[0]["associationText"], "It feels ancient and watchful.")
+            self.assertEqual(result["appliedEntityRefs"][0]["entityType"], "PersonalAmplification")
+            self.assertEqual(replay["captureRun"]["id"], result["captureRun"]["id"])
+            self.assertEqual(len(llm.method_state_route_calls), 1)
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_updates_dream_dynamics_and_method_context(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "I stood at the doorway while the figure moved deeper into the house.",
+                    "materialDate": "2026-04-18T08:00:00Z",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_dream_1",
+                    "source": "dream_dynamics",
+                    "responseText": "I kept watching from the doorway and my jaw locked at the end.",
+                    "observedAt": "2026-04-18T09:00:00Z",
+                    "anchorRefs": {"materialId": material["id"]},
+                    "expectedTargets": ["dream_dynamics", "body_state"],
+                }
+            )
+            updated_material = await repository.get_material("user_1", material["id"])
+            state = await service.get_witness_state(
+                user_id="user_1",
+                window_start="2026-04-12T00:00:00Z",
+                window_end="2026-04-19T23:59:59Z",
+                material_id=material["id"],
+            )
+            self.assertEqual(result["captureRun"]["status"], "completed")
+            self.assertTrue(updated_material["dreamStructure"]["methodDynamics"])
+            self.assertTrue(state["recentDreamDynamics"])
+            self.assertEqual(state["recentDreamDynamics"][0]["materialId"], material["id"])
+            body_states = await repository.list_body_states("user_1")
+            self.assertEqual(len(body_states), 1)
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_keeps_projection_hypothesis_approval_gated(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "I keep reacting to him like he already decided against me.",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_projection_1",
+                    "source": "freeform_followup",
+                    "responseText": "It may be my own old authority pattern landing on him.",
+                    "anchorRefs": {"materialId": material["id"]},
+                    "expectedTargets": ["projection_hypothesis"],
+                }
+            )
+            self.assertEqual(result["appliedEntityRefs"], [])
+            self.assertEqual(len(result["pendingProposals"]), 1)
+            self.assertEqual(result["pendingProposals"][0]["entityType"], "ProjectionHypothesis")
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_withholds_projection_hypothesis_when_grounding_first(
+        self,
+    ) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "The body and daily life both need immediate grounding.",
+                    "anchorSummary": "Containment is thin and deeper symbolic work should pause.",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "I keep reacting to him like he already decided against me.",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_projection_grounding_first_1",
+                    "source": "freeform_followup",
+                    "responseText": "It may be my own old authority pattern landing on him.",
+                    "anchorRefs": {"materialId": material["id"]},
+                    "expectedTargets": ["projection_hypothesis"],
+                }
+            )
+            self.assertEqual(result["captureRun"]["status"], "no_capture")
+            self.assertEqual(result["pendingProposals"], [])
+            self.assertEqual(
+                result["withheldCandidates"],
+                [
+                    {
+                        "targetKind": "projection_hypothesis",
+                        "reason": "method_state_policy_grounding_only:projection_hypothesis",
+                    }
+                ],
+            )
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_withholds_threshold_process_when_grounding_only(
+        self,
+    ) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Daily life needs grounding before threshold work.",
+                    "anchorSummary": "Containment is thin and symbolic depth should pause.",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Something old is ending, but I need steadier footing first.",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_threshold_grounding_only_1",
+                    "source": "freeform_followup",
+                    "responseText": "An older work identity is ending, but I need steadier footing first.",
+                    "anchorRefs": {"materialId": material["id"]},
+                    "expectedTargets": ["threshold_process"],
+                }
+            )
+            self.assertEqual(result["captureRun"]["status"], "no_capture")
+            self.assertEqual(
+                result["withheldCandidates"],
+                [
+                    {
+                        "targetKind": "threshold_process",
+                        "reason": "method_state_policy_grounding_only:threshold_process",
+                    }
+                ],
+            )
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_allows_body_state_during_grounding_only(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Daily life needs grounding before symbolic depth.",
+                    "anchorSummary": "Containment is thin and the body needs primary attention.",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_body_grounding_only_1",
+                    "source": "body_note",
+                    "responseText": "My chest tightens the moment I think about the transition.",
+                    "expectedTargets": ["body_state"],
+                }
+            )
+            body_states = await repository.list_body_states("user_1")
+            self.assertEqual(result["captureRun"]["status"], "completed")
+            self.assertEqual(result["withheldCandidates"], [])
+            self.assertEqual(result["appliedEntityRefs"][0]["entityType"], "BodyState")
+            self.assertEqual(len(body_states), 1)
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_updates_practice_preferences(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            workflow = await service.generate_practice_recommendation({"userId": "user_1"})
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_practice_preference_1",
+                    "source": "practice_feedback",
+                    "responseText": "Writing for five minutes works best for me.",
+                    "anchorRefs": {"practiceSessionId": workflow["practiceSession"]["id"]},
+                    "expectedTargets": ["practice_preference"],
+                }
+            )
+            profile = await repository.get_adaptation_profile("user_1")
+            self.assertEqual(result["captureRun"]["status"], "completed")
+            entity_types = {item["entityType"] for item in result["appliedEntityRefs"]}
+            self.assertIn("AdaptationProfile", entity_types)
+            self.assertEqual(
+                profile["explicitPreferences"]["practice"]["preferredModalities"],
+                ["writing"],
+            )
+            self.assertEqual(
+                profile["explicitPreferences"]["practice"]["maxDurationMinutes"],
+                5,
+            )
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_writes_reality_anchors_and_threshold_process(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Daily life is steady enough to hold a threshold carefully.",
+                    "anchorSummary": "Outer life has enough continuity for depth work.",
+                    "groundingRecommendation": "clear_for_depth",
+                }
+            )
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Work is stable, but something old is ending.",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_threshold_1",
+                    "source": "freeform_followup",
+                    "responseText": "Work is steady enough, and an older work identity is ending.",
+                    "anchorRefs": {"materialId": material["id"]},
+                    "expectedTargets": ["reality_anchors", "threshold_process"],
+                }
+            )
+            records = await repository.list_individuation_records(
+                "user_1",
+                record_types=["reality_anchor_summary", "threshold_process"],
+                limit=20,
+            )
+            record_types = {record["recordType"] for record in records}
+            self.assertEqual(result["captureRun"]["status"], "completed")
+            self.assertIn("reality_anchor_summary", record_types)
+            self.assertIn("threshold_process", record_types)
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_withholds_threshold_process_when_reflective_capacity_is_fragile(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            original_build = repository.build_method_context_snapshot_from_records
+
+            async def fragile_method_context(
+                user_id: str,
+                *,
+                window_start: str,
+                window_end: str,
+                material_id: str | None = None,
+            ) -> dict[str, object]:
+                context = await original_build(
+                    user_id,
+                    window_start=window_start,
+                    window_end=window_end,
+                    material_id=material_id,
+                )
+                context["methodState"] = {
+                    "containment": {"groundingNeed": "clear_for_depth"},
+                    "egoCapacity": {"reflectiveCapacity": "fragile"},
+                }
+                return context
+
+            repository.build_method_context_snapshot_from_records = fragile_method_context
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Work is stable, but something old is ending.",
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "method_state_threshold_fragile_1",
+                    "source": "freeform_followup",
+                    "responseText": "Work is steady enough, and an older work identity is ending.",
+                    "anchorRefs": {"materialId": material["id"]},
+                    "expectedTargets": ["threshold_process"],
+                }
+            )
+            self.assertEqual(result["captureRun"]["status"], "no_capture")
+            self.assertEqual(result["appliedEntityRefs"], [])
+            self.assertEqual(
+                result["withheldCandidates"],
+                [
+                    {
+                        "targetKind": "threshold_process",
+                        "reason": "method_state_policy_blocked_move:active_imagination",
+                    }
+                ],
+            )
+
+        asyncio.run(run())
+
     def test_conscious_attitude_capture_enables_depth_method_context(self) -> None:
         async def run() -> None:
             _, service, llm = self._service()
@@ -321,6 +694,14 @@ class CirculatioServiceTests(unittest.TestCase):
                     "stanceSummary": "I am trying to stay composed around authority conflict.",
                     "activeConflicts": ["directness vs safety"],
                     "emotionalTone": "guarded",
+                }
+            )
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Daily life is stable.",
+                    "anchorSummary": "Daily life is stable enough for depth work.",
+                    "groundingRecommendation": "clear_for_depth",
                 }
             )
             await service.set_consent_preference(
@@ -373,6 +754,38 @@ class CirculatioServiceTests(unittest.TestCase):
             )
             self.assertEqual(state["consentPreferences"][0]["scope"], "collective_amplification")
             self.assertEqual(state["consentPreferences"][0]["status"], "allow")
+
+        asyncio.run(run())
+
+    def test_get_witness_state_returns_distinct_witness_behavior_contract(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Containment is thin and ordinary contact needs to lead.",
+                    "anchorSummary": "Grounding needs to come before symbolic deepening.",
+                    "groundingRecommendation": "grounding_first",
+                    "relationshipContact": "thin",
+                    "reflectiveCapacity": "fragile",
+                }
+            )
+            await service.set_adaptation_preferences(
+                user_id="user_1",
+                scope="interpretation",
+                preferences={"modalityBias": "body"},
+            )
+            state = await service.get_witness_state(
+                user_id="user_1",
+                window_start="2026-04-12T00:00:00Z",
+                window_end="2026-04-19T23:59:59Z",
+            )
+            witness_state = state["witnessState"]
+            self.assertEqual(witness_state["stance"], "grounding_first")
+            self.assertEqual(witness_state["startingMove"], "grounding")
+            self.assertIn("body_first", witness_state["preferredQuestionStyles"])
+            self.assertIn("body_state", witness_state["preferredClarificationTargets"])
+            self.assertIn("active_imagination", witness_state["blockedMoves"])
 
         asyncio.run(run())
 
@@ -429,6 +842,53 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(len(llm.practice_calls), 1)
             profile = await repository.get_adaptation_profile("user_1")
             self.assertEqual(profile["sampleCounts"]["practice_recommended"], 1)
+
+        asyncio.run(run())
+
+    def test_generate_practice_recommendation_uses_goal_tension_and_practice_loop(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            first_goal = await service.upsert_goal(
+                {"userId": "user_1", "label": "Speak directly", "status": "active"}
+            )
+            second_goal = await service.upsert_goal(
+                {"userId": "user_1", "label": "Keep the peace", "status": "active"}
+            )
+            await service.upsert_goal_tension(
+                {
+                    "userId": "user_1",
+                    "goalIds": [first_goal["id"], second_goal["id"]],
+                    "tensionSummary": "Directness and safety are both live.",
+                    "polarityLabels": ["directness", "safety"],
+                    "status": "active",
+                }
+            )
+            await repository.create_practice_session(
+                {
+                    "id": "practice_history_1",
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "reason": "Track the authority pattern.",
+                    "instructions": ["Write for five minutes."],
+                    "durationMinutes": 8,
+                    "contraindicationsChecked": ["none"],
+                    "requiresConsent": False,
+                    "status": "completed",
+                    "activationBefore": "low",
+                    "activationAfter": "high",
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:05:00Z",
+                }
+            )
+            workflow = await service.generate_practice_recommendation({"userId": "user_1"})
+            practice = workflow["practiceRecommendation"]
+            self.assertEqual(practice["durationMinutes"], 6)
+            self.assertIn(
+                "Hold directness and safety together before choosing a side.",
+                practice["instructions"],
+            )
+            self.assertIn("goal_tension_frame_added", practice["adaptationNotes"])
+            self.assertIn("duration_shortened_for_low_intensity", practice["adaptationNotes"])
 
         asyncio.run(run())
 
@@ -547,6 +1007,111 @@ class CirculatioServiceTests(unittest.TestCase):
             profile = await repository.get_adaptation_profile("user_1")
             hints = service._adaptation_engine.derive_practice_hints(profile=profile)
             self.assertEqual(hints["maturity"], "mature")
+
+        asyncio.run(run())
+
+    def test_interpretation_feedback_persists_locale_and_stays_separate_from_hypothesis_feedback(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            workflow = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "The same image kept circling after the meeting.",
+                }
+            )
+            feedback = await service.record_interpretation_feedback(
+                "user_1",
+                workflow["run"]["id"],
+                "too_much",
+                note="Zu viel auf einmal.",
+                locale="de-DE",
+            )
+            stored = await repository.list_interaction_feedback("user_1", domain="interpretation")
+            memory = await repository.build_hermes_memory_context_from_records("user_1")
+            self.assertEqual(feedback["locale"], "de-DE")
+            self.assertEqual(stored[0]["note"], "Zu viel auf einmal.")
+            self.assertEqual(stored[0]["feedback"], "too_much")
+            self.assertEqual(memory["recentInterpretationFeedback"], [])
+
+        asyncio.run(run())
+
+    def test_practice_feedback_persists_locale_and_note_verbatim(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            workflow = await service.generate_practice_recommendation({"userId": "user_1"})
+            practice_id = workflow["practiceSession"]["id"]
+            feedback = await service.record_practice_feedback(
+                "user_1",
+                practice_id,
+                "too_long",
+                note="Demasiado largo para hoy.",
+                locale="es-ES",
+            )
+            stored = await repository.list_interaction_feedback("user_1", domain="practice")
+            self.assertEqual(feedback["locale"], "es-ES")
+            self.assertEqual(stored[0]["note"], "Demasiado largo para hoy.")
+            self.assertEqual(stored[0]["targetId"], practice_id)
+
+        asyncio.run(run())
+
+    def test_invalid_adaptation_preferences_are_rejected_by_scope(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            with self.assertRaises(ValidationError):
+                await service.set_adaptation_preferences(
+                    user_id="user_1",
+                    scope="practice",
+                    preferences={"maxDurationMinutes": 0},
+                )
+            with self.assertRaises(ValidationError):
+                await service.set_adaptation_preferences(
+                    user_id="user_1",
+                    scope="communication",
+                    preferences={"tone": "blunt"},
+                )
+
+        asyncio.run(run())
+
+    def test_explicit_preferences_override_learned_policy_without_mutation(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.set_adaptation_preferences(
+                user_id="user_1",
+                scope="communication",
+                preferences={"tone": "gentle", "questioningStyle": "reflective"},
+            )
+            await service.apply_learned_policy_update(
+                user_id="user_1",
+                scope="communication",
+                policy={"tone": "direct", "symbolicDensity": "dense"},
+            )
+            profile = await repository.get_adaptation_profile("user_1")
+            hints = service._adaptation_engine.derive_communication_hints(profile=profile)
+            self.assertEqual(profile["explicitPreferences"]["communication"]["tone"], "gentle")
+            self.assertEqual(profile["learnedSignals"]["communicationPolicy"]["tone"], "direct")
+            self.assertEqual(hints["tone"], "gentle")
+            self.assertEqual(hints["symbolicDensity"], "dense")
+
+        asyncio.run(run())
+
+    def test_explicit_practice_preferences_override_learned_policy_at_runtime(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.set_adaptation_preferences(
+                user_id="user_1",
+                scope="practice",
+                preferences={"maxDurationMinutes": 5},
+            )
+            await service.apply_learned_policy_update(
+                user_id="user_1",
+                scope="practice",
+                policy={"maxDurationMinutes": 12},
+            )
+            workflow = await service.generate_practice_recommendation({"userId": "user_1"})
+            self.assertEqual(workflow["practiceRecommendation"]["durationMinutes"], 5)
 
         asyncio.run(run())
 
@@ -972,6 +1537,14 @@ class CirculatioServiceTests(unittest.TestCase):
     def test_dream_interpretation_uses_llm_and_persists_method_gate_output(self) -> None:
         async def run() -> None:
             repository, service, llm = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Daily life is stable.",
+                    "anchorSummary": "Daily life is stable enough for depth work.",
+                    "groundingRecommendation": "clear_for_depth",
+                }
+            )
             dream = await service.store_material(
                 {
                     "userId": "user_1",
@@ -1041,6 +1614,267 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(
                 llm.review_calls[0]["lifeContextSnapshot"]["source"], "circulatio-backend"
             )
+
+        asyncio.run(run())
+
+    def test_generate_weekly_review_respects_grounding_first_method_state(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is too thin for depth work right now.",
+                    "anchorSummary": "Sleep is strained and daily life needs stabilizing first.",
+                    "workDailyLifeContinuity": "strained",
+                    "sleepBodyRegulation": "strained",
+                    "relationshipContact": "thin",
+                    "reflectiveCapacity": "fragile",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            review = await service.generate_weekly_review(
+                user_id="user_1",
+                window_start="2026-04-12T00:00:00Z",
+                window_end="2026-04-19T23:59:59Z",
+            )
+            practice = review["result"]["practiceSuggestion"]
+            self.assertEqual(practice["type"], "grounding")
+            self.assertIn("method_state_grounding_first_fallback", practice["adaptationNotes"])
+
+        asyncio.run(run())
+
+    def test_generate_discovery_surfaces_method_context_longitudinal_items(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "The week has felt steady, but a work transition is active.",
+                    "materialDate": "2026-04-16T08:00:00Z",
+                }
+            )
+            await service.upsert_goal(
+                {
+                    "userId": "user_1",
+                    "label": "Speak more directly",
+                    "status": "active",
+                }
+            )
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is steady enough for careful reflection.",
+                    "anchorSummary": "Work and relationships are holding.",
+                    "workDailyLifeContinuity": "stable",
+                    "sleepBodyRegulation": "stable",
+                    "relationshipContact": "available",
+                    "reflectiveCapacity": "steady",
+                    "groundingRecommendation": "clear_for_depth",
+                }
+            )
+            discovery = await service.generate_discovery(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "maxItems": 6,
+                }
+            )
+            criteria = {
+                criterion
+                for section in discovery["sections"]
+                for item in section["items"]
+                for criterion in item["criteria"]
+            }
+            self.assertIn("method_context_reality_anchor", criteria)
+            self.assertIn("method_context_active_goal", criteria)
+
+        asyncio.run(run())
+
+    def test_discovery_includes_method_state_sections(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A recurring work thread keeps returning with chest pressure.",
+                    "materialDate": "2026-04-16T08:00:00Z",
+                }
+            )
+            await service.capture_conscious_attitude(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "stanceSummary": "Trying to stay in contact without collapsing.",
+                    "activeConflicts": ["directness vs safety"],
+                }
+            )
+            await service.store_body_state(
+                {
+                    "userId": "user_1",
+                    "sensation": "tightness",
+                    "bodyRegion": "chest",
+                    "observedAt": "2026-04-16T09:00:00Z",
+                    "linkedMaterialIds": [material["id"]],
+                }
+            )
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is steady enough for careful contact.",
+                    "anchorSummary": "Containment is present, but pacing still matters.",
+                    "groundingRecommendation": "pace_gently",
+                }
+            )
+            await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Authority thread",
+                    "currentQuestion": "How do I stay in contact without armoring?",
+                    "relatedMaterialIds": [material["id"]],
+                }
+            )
+            discovery = await service.generate_discovery(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "maxItems": 4,
+                }
+            )
+            sections_by_key = {section["key"]: section for section in discovery["sections"]}
+            self.assertEqual(
+                [section["key"] for section in discovery["sections"]],
+                [
+                    "recurring",
+                    "dream_body_event_links",
+                    "ripe_to_revisit",
+                    "conscious_attitude",
+                    "body_states",
+                    "method_state",
+                    "journey_threads",
+                    "held_for_now",
+                ],
+            )
+            self.assertTrue(sections_by_key["conscious_attitude"]["items"])
+            self.assertTrue(sections_by_key["body_states"]["items"])
+            self.assertTrue(sections_by_key["method_state"]["items"])
+            self.assertTrue(sections_by_key["journey_threads"]["items"])
+
+        asyncio.run(run())
+
+    def test_generate_discovery_surfaces_method_state_goal_and_practice_arc(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            first_goal = await service.upsert_goal(
+                {"userId": "user_1", "label": "Speak directly", "status": "active"}
+            )
+            second_goal = await service.upsert_goal(
+                {"userId": "user_1", "label": "Stay safe", "status": "active"}
+            )
+            await service.upsert_goal_tension(
+                {
+                    "userId": "user_1",
+                    "goalIds": [first_goal["id"], second_goal["id"]],
+                    "tensionSummary": "Directness and safety are both alive.",
+                    "polarityLabels": ["directness", "safety"],
+                    "status": "active",
+                }
+            )
+            await repository.create_practice_session(
+                {
+                    "id": "practice_arc_1",
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "reason": "Track the work thread.",
+                    "instructions": ["Write briefly."],
+                    "durationMinutes": 8,
+                    "contraindicationsChecked": ["none"],
+                    "requiresConsent": False,
+                    "status": "completed",
+                    "activationBefore": "low",
+                    "activationAfter": "high",
+                    "createdAt": "2026-04-18T10:00:00Z",
+                    "updatedAt": "2026-04-18T10:05:00Z",
+                }
+            )
+            discovery = await service.generate_discovery(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "maxItems": 6,
+                }
+            )
+            criteria = {
+                criterion
+                for section in discovery["sections"]
+                for item in section["items"]
+                for criterion in item["criteria"]
+            }
+            self.assertIn("method_state_active_goal_tension", criteria)
+            self.assertIn("method_state_practice_loop", criteria)
+
+        asyncio.run(run())
+
+    def test_threshold_review_practice_respects_grounding_first_method_state(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is too thin for threshold depth right now.",
+                    "anchorSummary": "Containment is strained and sleep is unsettled.",
+                    "workDailyLifeContinuity": "strained",
+                    "sleepBodyRegulation": "strained",
+                    "relationshipContact": "thin",
+                    "reflectiveCapacity": "fragile",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            workflow = await service.generate_threshold_review(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "persist": False,
+                }
+            )
+            practice = workflow["result"]["practiceRecommendation"]
+            self.assertEqual(practice["type"], "grounding")
+            self.assertIn("method_state_grounding_first_fallback", practice["adaptationNotes"])
+
+        asyncio.run(run())
+
+    def test_living_myth_review_practice_respects_grounding_first_method_state(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is too thin for symbolic synthesis right now.",
+                    "anchorSummary": "Daily life needs grounding before chapter-scale meaning work.",
+                    "workDailyLifeContinuity": "strained",
+                    "sleepBodyRegulation": "strained",
+                    "relationshipContact": "thin",
+                    "reflectiveCapacity": "fragile",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            workflow = await service.generate_living_myth_review(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "persist": False,
+                }
+            )
+            practice = workflow["result"]["practiceRecommendation"]
+            self.assertEqual(practice["type"], "grounding")
+            self.assertIn("method_state_grounding_first_fallback", practice["adaptationNotes"])
 
         asyncio.run(run())
 
@@ -1631,6 +2465,339 @@ class CirculatioServiceTests(unittest.TestCase):
                         "relatedSymbolIds": ["missing_symbol"],
                     }
                 )
+
+        asyncio.run(run())
+
+    def test_interpretation_input_includes_trusted_amplification_sources_and_keeps_culture_separate(
+        self,
+    ) -> None:
+        async def run() -> None:
+            _, service, llm = self._service()
+            await service.set_cultural_frame(
+                {
+                    "userId": "user_1",
+                    "label": "Jungian amplification",
+                    "type": "mythic",
+                    "allowedUses": ["collective_amplification"],
+                }
+            )
+            await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A serpent circled a tree.",
+                    "options": {"allowCulturalAmplification": True},
+                }
+            )
+            interpret_input = llm.interpret_calls[-1]
+            self.assertEqual(
+                interpret_input["trustedAmplificationSources"][0]["label"],
+                "Symbolonline",
+            )
+            self.assertEqual(
+                interpret_input["trustedAmplificationSources"][1]["url"],
+                "https://carljungdepthpsychologysite.blog/",
+            )
+            self.assertEqual(
+                interpret_input["methodContextSnapshot"]["activeCulturalFrames"][0]["label"],
+                "Jungian amplification",
+            )
+
+        asyncio.run(run())
+
+    def test_answer_clarification_rejects_empty_answer_when_not_skipping(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            with self.assertRaises(ValidationError) as ctx:
+                await service.answer_clarification(
+                    {"userId": "user_1", "answerText": "", "skip": False}
+                )
+            self.assertIn("answerText is required", str(ctx.exception))
+
+        asyncio.run(run())
+
+    def test_answer_clarification_skip_without_prompt_creates_skipped_record(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            result = await service.answer_clarification(
+                {"userId": "user_1", "answerText": "", "skip": True}
+            )
+            self.assertEqual(result["routingStatus"], "skipped")
+            self.assertEqual(result["answer"]["routingStatus"], "skipped")
+            self.assertEqual(result["createdRecordRefs"], [])
+
+        asyncio.run(run())
+
+    def test_answer_clarification_answer_only_is_unrouted_without_payload(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "Just thinking out loud.",
+                    "captureTargetOverride": "answer_only",
+                }
+            )
+            self.assertEqual(result["routingStatus"], "unrouted")
+            self.assertEqual(result["createdRecordRefs"], [])
+            self.assertFalse(result["answer"].get("validationErrors"))
+
+        asyncio.run(run())
+
+    def test_answer_clarification_body_state_needs_review_when_payload_missing(
+        self,
+    ) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "My chest feels tight.",
+                    "captureTargetOverride": "body_state",
+                }
+            )
+            self.assertEqual(result["routingStatus"], "needs_review")
+            errors = result["answer"].get("validationErrors", [])
+            self.assertTrue(any("Structured answerPayload is required" in e for e in errors))
+
+        asyncio.run(run())
+
+    def test_answer_clarification_body_state_needs_review_on_invalid_payload(
+        self,
+    ) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "Tightness",
+                    "captureTargetOverride": "body_state",
+                    "answerPayload": {"bodyRegion": "chest"},
+                }
+            )
+            self.assertEqual(result["routingStatus"], "needs_review")
+            errors = result["answer"].get("validationErrors", [])
+            self.assertTrue(any("payload.sensation" in e for e in errors))
+
+        asyncio.run(run())
+
+    def test_answer_clarification_happy_path_body_state(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "Tight chest",
+                    "captureTargetOverride": "body_state",
+                    "answerPayload": {
+                        "sensation": "tightness",
+                        "bodyRegion": "chest",
+                        "activation": "high",
+                    },
+                }
+            )
+            self.assertEqual(result["routingStatus"], "routed")
+            self.assertEqual(len(result["createdRecordRefs"]), 1)
+            self.assertEqual(result["createdRecordRefs"][0]["recordType"], "BodyState")
+            body_states = await repository.list_body_states("user_1")
+            self.assertEqual(len(body_states), 1)
+            self.assertEqual(body_states[0]["sensation"], "tightness")
+
+        asyncio.run(run())
+
+    def test_answer_clarification_happy_path_goal(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "I want to speak more directly",
+                    "captureTargetOverride": "goal",
+                    "answerPayload": {
+                        "label": "Speak more directly",
+                        "valueTags": ["truth"],
+                    },
+                }
+            )
+            self.assertEqual(result["routingStatus"], "routed")
+            self.assertEqual(result["createdRecordRefs"][0]["recordType"], "Goal")
+            goals = await repository.list_goals("user_1")
+            self.assertEqual(len(goals), 1)
+            self.assertEqual(goals[0]["label"], "Speak more directly")
+
+        asyncio.run(run())
+
+    def test_answer_clarification_happy_path_threshold_process(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "Work identity ending",
+                    "captureTargetOverride": "threshold_process",
+                    "answerPayload": {
+                        "summary": "An older work identity is ending.",
+                        "thresholdName": "Vocational threshold",
+                        "normalizedThresholdKey": "vocational-threshold",
+                        "phase": "liminal",
+                    },
+                }
+            )
+            self.assertEqual(result["routingStatus"], "routed")
+            self.assertEqual(result["createdRecordRefs"][0]["recordType"], "ThresholdProcess")
+            records = await repository.list_individuation_records(
+                "user_1", record_types=["threshold_process"], limit=20
+            )
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["details"]["thresholdName"], "Vocational threshold")
+
+        asyncio.run(run())
+
+    def test_answer_clarification_happy_path_interpretation_preference(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "Keep it body-first and light.",
+                    "captureTargetOverride": "interpretation_preference",
+                    "answerPayload": {
+                        "depthPreference": "brief_pattern_notes",
+                        "modalityBias": "body",
+                    },
+                }
+            )
+            self.assertEqual(result["routingStatus"], "routed")
+            self.assertEqual(result["createdRecordRefs"][0]["recordType"], "AdaptationProfile")
+            profile = await repository.get_adaptation_profile("user_1")
+            self.assertEqual(
+                profile["explicitPreferences"]["interpretation"]["depthPreference"],
+                "brief_pattern_notes",
+            )
+            self.assertEqual(
+                profile["explicitPreferences"]["interpretation"]["modalityBias"],
+                "body",
+            )
+
+        asyncio.run(run())
+
+    def test_answer_clarification_happy_path_typology_feedback(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "That framing fits, but only very lightly.",
+                    "captureTargetOverride": "typology_feedback",
+                    "answerPayload": {
+                        "role": "inferior",
+                        "function": "sensation",
+                        "claim": "Concrete facts can drop out when conflict spikes.",
+                        "confidence": "low",
+                        "status": "user_refined",
+                        "userTestPrompt": "When conflict spikes, do concrete facts get fuzzy first?",
+                    },
+                }
+            )
+            self.assertEqual(result["routingStatus"], "routed")
+            self.assertEqual(result["createdRecordRefs"][0]["recordType"], "TypologyLens")
+            lenses = await repository.list_typology_lenses("user_1")
+            self.assertEqual(len(lenses), 1)
+            self.assertEqual(lenses[0]["function"], "sensation")
+            self.assertEqual(lenses[0]["status"], "user_refined")
+
+        asyncio.run(run())
+
+    def test_answer_clarification_uses_capture_target_override_over_prompt(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            prompt = await repository.create_clarification_prompt(
+                {
+                    "id": "prompt_1",
+                    "userId": "user_1",
+                    "questionText": "Where do you feel it?",
+                    "intent": "body_signal",
+                    "captureTarget": "body_state",
+                    "expectedAnswerKind": "free_text",
+                    "status": "pending",
+                    "privacyClass": "session_only",
+                    "createdAt": "2026-04-21T10:00:00Z",
+                    "updatedAt": "2026-04-21T10:00:00Z",
+                }
+            )
+            result = await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "promptId": prompt["id"],
+                    "answerText": "Just a note.",
+                    "captureTargetOverride": "answer_only",
+                }
+            )
+            self.assertEqual(result["routingStatus"], "unrouted")
+            self.assertEqual(result["answer"]["captureTarget"], "answer_only")
+            self.assertEqual(result["prompt"]["status"], "answered_unrouted")
+
+        asyncio.run(run())
+
+    def test_answer_clarification_rejects_other_users_prompt(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            prompt = await repository.create_clarification_prompt(
+                {
+                    "id": "prompt_u2",
+                    "userId": "user_2",
+                    "questionText": "What is your goal?",
+                    "intent": "goal_pressure",
+                    "captureTarget": "goal",
+                    "expectedAnswerKind": "free_text",
+                    "status": "pending",
+                    "privacyClass": "session_only",
+                    "createdAt": "2026-04-21T10:00:00Z",
+                    "updatedAt": "2026-04-21T10:00:00Z",
+                }
+            )
+            with self.assertRaises(Exception) as ctx:
+                await service.answer_clarification(
+                    {
+                        "userId": "user_1",
+                        "promptId": prompt["id"],
+                        "answerText": "hello",
+                    }
+                )
+            self.assertIn("prompt_u2", str(ctx.exception))
+
+        asyncio.run(run())
+
+    def test_answer_clarification_emits_adaptation_signals_for_routed_and_skipped(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "",
+                    "skip": True,
+                    "captureTargetOverride": "body_state",
+                }
+            )
+            await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "Heat",
+                    "captureTargetOverride": "body_state",
+                    "answerPayload": {"sensation": "heat"},
+                }
+            )
+            profile = await repository.get_adaptation_profile("user_1")
+            self.assertEqual(profile["sampleCounts"].get("clarification_skipped", 0), 1)
+            self.assertEqual(profile["sampleCounts"].get("clarification_answered", 0), 1)
+            recent = profile.get("learnedSignals", {}).get("recentEvents", [])
+            types = [e.get("type") for e in recent[-3:]]
+            self.assertIn("clarification_skipped", types)
+            self.assertIn("clarification_answered", types)
 
         asyncio.run(run())
 

@@ -21,6 +21,7 @@ from ..domain.types import (
     LivingMythReviewInput,
     LivingMythReviewResult,
     MaterialInterpretationInput,
+    MethodContextSnapshot,
     MethodGateResult,
     PracticeRecommendationInput,
     PracticeRecommendationResult,
@@ -42,6 +43,7 @@ from .interpretation_fallbacks import (
 from .interpretation_mapping import (
     build_amplification_prompts_from_llm,
     build_analysis_packet_provenance,
+    build_clarification_plan_from_llm,
     build_compensation_assessment,
     build_depth_readiness_from_llm,
     build_dream_series_proposals,
@@ -63,6 +65,11 @@ from .interpretation_mapping import (
     build_typology_assessment_from_llm,
     try_llm_interpretation,
     validate_evidence_integrity,
+)
+from .method_state_policy import (
+    derive_runtime_method_state_policy,
+    merge_method_gate_with_policy,
+    reconcile_depth_readiness_with_policy,
 )
 from .practice_engine import PracticeEngine
 from .safety_gate import SafetyGate
@@ -175,6 +182,11 @@ class CirculatioCore:
         )
         depth_readiness = build_depth_readiness_from_llm(llm_output.get("depthReadiness"))
         method_gate = build_method_gate_from_llm(llm_output.get("methodGate"))
+        runtime_policy = derive_runtime_method_state_policy(
+            normalized_input.get("methodContextSnapshot")
+        )
+        method_gate = merge_method_gate_with_policy(method_gate, runtime_policy)
+        depth_readiness = reconcile_depth_readiness_with_policy(depth_readiness, runtime_policy)
         amplification_prompts = build_amplification_prompts_from_llm(
             llm_output.get("amplificationPrompts"),
             symbol_ref_map=symbol_ref_map,
@@ -227,10 +239,26 @@ class CirculatioCore:
             consent_preferences=normalized_input.get("methodContextSnapshot", {}).get(
                 "consentPreferences", []
             ),
+            goal_tensions=self._practice_goal_tensions(
+                normalized_input.get("methodContextSnapshot")
+            ),
+            body_states=self._practice_body_states(normalized_input.get("methodContextSnapshot")),
+            practice_hints=normalized_input.get("practiceHints"),
+            method_context=normalized_input.get("methodContextSnapshot"),
+            runtime_policy=runtime_policy,
             fallback_reason="llm_missing_practice_fallback_to_journaling",
         )
 
-        clarifying_question = str(llm_output.get("clarifyingQuestion", "")).strip() or None
+        clarification_plan = build_clarification_plan_from_llm(
+            llm_output,
+            preferred_targets=runtime_policy.get("preferredClarificationTargets"),
+        )
+        clarifying_question = (
+            str(clarification_plan.get("questionText", "")).strip()
+            if clarification_plan
+            else str(llm_output.get("clarifyingQuestion", "")).strip()
+        ) or None
+        clarification_intent = llm_output.get("clarificationIntent")
         user_facing_response = str(llm_output.get("userFacingResponse", "")).strip()
         if not user_facing_response and clarifying_question:
             user_facing_response = clarifying_question
@@ -271,7 +299,10 @@ class CirculatioCore:
                     run_id=run_id, material_id=material_id, safety=safety
                 )
 
-        compensation = build_compensation_assessment(hypotheses)
+        compensation = build_compensation_assessment(
+            hypotheses,
+            normalized_input.get("methodContextSnapshot"),
+        )
         typology_assessment = build_typology_assessment_from_llm(
             llm_output.get("typologyAssessment")
         )
@@ -328,6 +359,10 @@ class CirculatioCore:
             result["typologyAssessment"] = typology_assessment
         if clarifying_question:
             result["clarifyingQuestion"] = clarifying_question
+        if clarification_plan:
+            result["clarificationPlan"] = clarification_plan
+        if isinstance(clarification_intent, dict) and clarification_intent.get("refKey"):
+            result["clarificationIntent"] = dict(clarification_intent)
         validate_evidence_integrity(result)
         return result
 
@@ -363,16 +398,24 @@ class CirculatioCore:
                 )
                 llm_review = None
 
+        runtime_policy = derive_runtime_method_state_policy(input_data.get("methodContextSnapshot"))
+        method_gate = merge_method_gate_with_policy(None, runtime_policy)
+        depth_readiness = reconcile_depth_readiness_with_policy(None, runtime_policy)
         practice = self._practice_engine.reconcile_llm_practice(
             practice=build_practice_from_llm(
                 llm_review.get("practiceRecommendation") if llm_review else None
             ),
-            method_gate=input_data.get("methodContextSnapshot", {}).get("methodGate"),
-            depth_readiness=None,
+            method_gate=method_gate,
+            depth_readiness=depth_readiness,
             safety=self._clear_safety_disposition(),
             consent_preferences=input_data.get("methodContextSnapshot", {}).get(
                 "consentPreferences", []
             ),
+            goal_tensions=self._practice_goal_tensions(input_data.get("methodContextSnapshot")),
+            body_states=self._practice_body_states(input_data.get("methodContextSnapshot")),
+            practice_hints=input_data.get("practiceHints"),
+            method_context=input_data.get("methodContextSnapshot"),
+            runtime_policy=runtime_policy,
             fallback_reason="llm_missing_practice_fallback_to_journaling",
         )
         active_themes = (
@@ -417,13 +460,26 @@ class CirculatioCore:
         consent_preferences = normalized_input.get("methodContextSnapshot", {}).get(
             "consentPreferences", []
         )
+        runtime_policy = derive_runtime_method_state_policy(
+            normalized_input.get("methodContextSnapshot")
+        )
+        method_gate = merge_method_gate_with_policy(None, runtime_policy)
+        depth_readiness = reconcile_depth_readiness_with_policy(None, runtime_policy)
         if not safety["depthWorkAllowed"]:
             practice = self._practice_engine.reconcile_llm_practice(
                 practice=None,
                 safety=safety,
-                method_gate=None,
-                depth_readiness=None,
+                method_gate=method_gate,
+                depth_readiness=depth_readiness,
                 consent_preferences=consent_preferences,
+                goal_tensions=self._practice_goal_tensions(
+                    normalized_input.get("methodContextSnapshot")
+                ),
+                body_states=self._practice_body_states(
+                    normalized_input.get("methodContextSnapshot")
+                ),
+                method_context=normalized_input.get("methodContextSnapshot"),
+                runtime_policy=runtime_policy,
                 fallback_reason="safety_gate_blocks_threshold_review",
             )
             return {
@@ -471,9 +527,15 @@ class CirculatioCore:
         practice = self._practice_engine.reconcile_llm_practice(
             practice=build_practice_from_llm(llm_output.get("practiceRecommendation")),
             safety=safety,
-            method_gate=None,
-            depth_readiness=None,
+            method_gate=method_gate,
+            depth_readiness=depth_readiness,
             consent_preferences=consent_preferences,
+            goal_tensions=self._practice_goal_tensions(
+                normalized_input.get("methodContextSnapshot")
+            ),
+            body_states=self._practice_body_states(normalized_input.get("methodContextSnapshot")),
+            method_context=normalized_input.get("methodContextSnapshot"),
+            runtime_policy=runtime_policy,
             fallback_reason="llm_missing_practice_fallback_to_journaling",
         )
         result: ThresholdReviewResult = {
@@ -517,7 +579,28 @@ class CirculatioCore:
         consent_preferences = normalized_input.get("methodContextSnapshot", {}).get(
             "consentPreferences", []
         )
+        runtime_policy = derive_runtime_method_state_policy(
+            normalized_input.get("methodContextSnapshot")
+        )
+        method_gate = merge_method_gate_with_policy(None, runtime_policy)
+        depth_readiness = reconcile_depth_readiness_with_policy(None, runtime_policy)
         if not safety["depthWorkAllowed"]:
+            practice = self._practice_engine.reconcile_llm_practice(
+                practice=None,
+                safety=safety,
+                method_gate=method_gate,
+                depth_readiness=depth_readiness,
+                consent_preferences=consent_preferences,
+                goal_tensions=self._practice_goal_tensions(
+                    normalized_input.get("methodContextSnapshot")
+                ),
+                body_states=self._practice_body_states(
+                    normalized_input.get("methodContextSnapshot")
+                ),
+                method_context=normalized_input.get("methodContextSnapshot"),
+                runtime_policy=runtime_policy,
+                fallback_reason="safety_gate_blocks_living_myth_review",
+            )
             return {
                 "userFacingResponse": (
                     "Living-myth synthesis is withheld while depth work is paused."
@@ -525,6 +608,7 @@ class CirculatioCore:
                 "mythicQuestions": [],
                 "thresholdMarkers": [],
                 "complexEncounters": [],
+                "practiceRecommendation": practice,
                 "withheld": True,
                 "withheldReason": "safety_gate_blocks_living_myth_review",
                 "withheldReasons": ["safety_gate_blocks_living_myth_review"],
@@ -565,9 +649,15 @@ class CirculatioCore:
         practice = self._practice_engine.reconcile_llm_practice(
             practice=build_practice_from_llm(llm_output.get("practiceRecommendation")),
             safety=safety,
-            method_gate=None,
-            depth_readiness=None,
+            method_gate=method_gate,
+            depth_readiness=depth_readiness,
             consent_preferences=consent_preferences,
+            goal_tensions=self._practice_goal_tensions(
+                normalized_input.get("methodContextSnapshot")
+            ),
+            body_states=self._practice_body_states(normalized_input.get("methodContextSnapshot")),
+            method_context=normalized_input.get("methodContextSnapshot"),
+            runtime_policy=runtime_policy,
             fallback_reason="llm_missing_practice_fallback_to_journaling",
         )
         result: LivingMythReviewResult = {
@@ -795,13 +885,26 @@ class CirculatioCore:
         consent_preferences = normalized_input.get("methodContextSnapshot", {}).get(
             "consentPreferences", []
         )
+        runtime_policy = derive_runtime_method_state_policy(
+            normalized_input.get("methodContextSnapshot")
+        )
+        method_gate = merge_method_gate_with_policy(None, runtime_policy)
+        depth_readiness = reconcile_depth_readiness_with_policy(None, runtime_policy)
         if not safety["depthWorkAllowed"]:
             practice = self._practice_engine.reconcile_llm_practice(
                 practice=None,
                 safety=safety,
-                method_gate=None,
-                depth_readiness=None,
+                method_gate=method_gate,
+                depth_readiness=depth_readiness,
                 consent_preferences=consent_preferences,
+                goal_tensions=self._practice_goal_tensions(
+                    normalized_input.get("methodContextSnapshot")
+                ),
+                body_states=self._practice_body_states(
+                    normalized_input.get("methodContextSnapshot")
+                ),
+                method_context=normalized_input.get("methodContextSnapshot"),
+                runtime_policy=runtime_policy,
                 fallback_reason="safety_blocked_grounding_fallback",
             )
             return {
@@ -854,10 +957,18 @@ class CirculatioCore:
         practice = self._practice_engine.reconcile_llm_practice(
             practice=practice_candidate,
             safety=safety,
-            method_gate=None,
-            depth_readiness=None,
+            method_gate=method_gate,
+            depth_readiness=depth_readiness,
             consent_preferences=consent_preferences,
+            goal_tensions=self._practice_goal_tensions(
+                normalized_input.get("methodContextSnapshot")
+            ),
+            body_states=self._practice_body_states(normalized_input.get("methodContextSnapshot")),
+            practice_hints=normalized_input.get("practiceHints")
+            or normalized_input.get("adaptationHints"),
             adaptation_hints=normalized_input.get("adaptationHints"),
+            method_context=normalized_input.get("methodContextSnapshot"),
+            runtime_policy=runtime_policy,
             fallback_reason="llm_missing_practice_fallback_to_journaling",
         )
         response = str(llm_output.get("userFacingResponse", "")).strip() if llm_output else ""
@@ -884,6 +995,15 @@ class CirculatioCore:
         synthetic = self._synthetic_brief_material_input(input_data)
         safety = self._safety_gate.assess(synthetic)
         brief_type = str(input_data.get("seed", {}).get("briefType") or "daily")
+        runtime_policy = derive_runtime_method_state_policy(input_data.get("methodContextSnapshot"))
+        if (
+            runtime_policy.get("depthLevel") == "grounding_only"
+            and brief_type != "practice_followup"
+        ):
+            return {
+                "withheld": True,
+                "withheldReason": "method_state_policy_blocks_symbolic_brief",
+            }
         if not safety["depthWorkAllowed"] and brief_type != "practice_followup":
             return {
                 "withheld": True,
@@ -962,6 +1082,10 @@ class CirculatioCore:
         depth_readiness: DepthReadinessAssessment | None,
         safety: SafetyDisposition,
         consent_preferences: list[dict[str, object]],
+        goal_tensions: list[dict[str, object]] | None = None,
+        body_states: list[dict[str, object]] | None = None,
+        method_context: dict[str, object] | None = None,
+        runtime_policy: dict[str, object] | None = None,
     ) -> dict[str, object]:
         return self._practice_engine.reconcile_llm_practice(
             practice=cast(object, practice),
@@ -969,10 +1093,26 @@ class CirculatioCore:
             depth_readiness=depth_readiness,
             safety=safety,
             consent_preferences=consent_preferences,
+            goal_tensions=goal_tensions,
+            body_states=body_states,
+            method_context=cast(MethodContextSnapshot | None, method_context),
+            runtime_policy=runtime_policy,
         )
 
     def _clear_safety_disposition(self) -> SafetyDisposition:
         return {"status": "clear", "flags": ["none"], "depthWorkAllowed": True}
+
+    def _practice_goal_tensions(self, method_context: object | None) -> list[dict[str, object]]:
+        if not isinstance(method_context, dict):
+            return []
+        return [item for item in method_context.get("goalTensions", []) if isinstance(item, dict)]
+
+    def _practice_body_states(self, method_context: object | None) -> list[dict[str, object]]:
+        if not isinstance(method_context, dict):
+            return []
+        return [
+            item for item in method_context.get("recentBodyStates", []) if isinstance(item, dict)
+        ]
 
     def _synthetic_practice_material_input(
         self, input_data: PracticeRecommendationInput

@@ -38,6 +38,9 @@ from .in_memory_projection_contexts import (
     build_living_myth_review_input_locked as _build_living_myth_review_input_locked_context,
 )
 from .in_memory_projection_contexts import (
+    build_method_context_snapshot_locked as _build_method_context_snapshot_locked_context,
+)
+from .in_memory_projection_contexts import (
     build_threshold_review_input_locked as _build_threshold_review_input_locked_context,
 )
 from .in_memory_projection_shared import (
@@ -59,25 +62,11 @@ from .in_memory_projection_summary import (
     _derive_focus_summary,
     _derive_habit_summary,
     _derive_life_event_refs,
-    _derive_longitudinal_signals,
     _derive_mental_state_summary,
     _derive_mood_summary,
     _derive_notable_changes,
-    _latest_adaptation_profile,
-    _project_adaptation_profile_summary,
-    _project_amplification_prompt_summary,
-    _project_body_state_summary,
-    _project_collective_amplification_summary,
-    _project_conscious_attitude_summary,
-    _project_consent_preference_summary,
-    _project_cultural_frame_summary,
-    _project_dream_series_membership_summary,
-    _project_dream_series_summary,
     _project_goal_summary,
     _project_goal_tension_summary,
-    _project_journey_summary,
-    _project_personal_amplification_summary,
-    _project_practice_session_summary,
     active_patterns,
     active_symbols,
     active_typology_lenses,
@@ -1547,7 +1536,24 @@ def build_life_context_snapshot_locked(
     ]
     symbols = active_symbols(bucket)
     patterns = active_patterns(bucket)
-    if not materials and not practices and not symbols and not patterns:
+    goals = [
+        item
+        for item in bucket.goals.values()
+        if item.get("status") not in {"deleted", "completed"} and item["userId"] == user_id
+    ]
+    goal_tensions = [
+        item
+        for item in bucket.goal_tensions.values()
+        if item.get("status") != "deleted" and item["userId"] == user_id
+    ]
+    if (
+        not materials
+        and not practices
+        and not symbols
+        and not patterns
+        and not goals
+        and not goal_tensions
+    ):
         return None
     snapshot: LifeContextSnapshot = {
         "windowStart": window_start,
@@ -1577,6 +1583,17 @@ def build_life_context_snapshot_locked(
     focus_summary = _derive_focus_summary(symbols, patterns)
     if focus_summary:
         snapshot["focusSummary"] = focus_summary
+    goals.sort(key=lambda item: item.get("updatedAt", item.get("createdAt", "")), reverse=True)
+    if goals:
+        snapshot["activeGoals"] = [_project_goal_summary(item) for item in goals[:5]]
+    goal_tensions.sort(
+        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
+        reverse=True,
+    )
+    if goal_tensions:
+        snapshot["goalTensions"] = [
+            _project_goal_tension_summary(item) for item in goal_tensions[:5]
+        ]
     mental_state = _derive_mental_state_summary(
         [
             item
@@ -1636,208 +1653,13 @@ def build_method_context_snapshot_locked(
     window_end: str,
     material_id: Id | None = None,
 ) -> MethodContextSnapshot | None:
-    start_dt = _parse_datetime(window_start)
-    end_dt = _parse_datetime(window_end)
-    snapshot: MethodContextSnapshot = {
-        "windowStart": window_start,
-        "windowEnd": window_end,
-        "source": "circulatio-backend",
-    }
-    attitudes = [
-        item
-        for item in bucket.conscious_attitudes.values()
-        if item.get("status") != "deleted"
-        and item["userId"] == user_id
-        and item.get("windowEnd", window_end) >= window_start
-        and item.get("windowStart", window_start) <= window_end
-    ]
-    attitudes.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
+    return _build_method_context_snapshot_locked_context(
+        bucket,
+        user_id=user_id,
+        window_start=window_start,
+        window_end=window_end,
+        material_id=material_id,
     )
-    if attitudes:
-        snapshot["consciousAttitude"] = _project_conscious_attitude_summary(attitudes[0])
-    body_states = [
-        item
-        for item in bucket.body_states.values()
-        if item.get("status") != "deleted"
-        and item["userId"] == user_id
-        and _is_within_window(
-            _parse_datetime(item.get("observedAt", item.get("createdAt"))),
-            start_dt,
-            end_dt,
-        )
-    ]
-    body_states.sort(
-        key=lambda item: item.get("observedAt", item.get("updatedAt", item.get("createdAt", ""))),
-        reverse=True,
-    )
-    if body_states:
-        snapshot["recentBodyStates"] = [
-            _project_body_state_summary(item) for item in body_states[:5]
-        ]
-    goals = [
-        item
-        for item in bucket.goals.values()
-        if item.get("status") not in {"deleted", "completed"} and item["userId"] == user_id
-    ]
-    goals.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if goals:
-        snapshot["activeGoals"] = [_project_goal_summary(item) for item in goals[:5]]
-    goal_tensions = [
-        item
-        for item in bucket.goal_tensions.values()
-        if item.get("status") != "deleted" and item["userId"] == user_id
-    ]
-    goal_tensions.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if goal_tensions:
-        snapshot["goalTensions"] = [
-            _project_goal_tension_summary(item) for item in goal_tensions[:5]
-        ]
-    amplifications = [
-        item
-        for item in bucket.personal_amplifications.values()
-        if item.get("status") != "deleted"
-        and item["userId"] == user_id
-        and _is_within_window(_parse_datetime(item.get("createdAt")), start_dt, end_dt)
-    ]
-    amplifications.sort(key=lambda item: item.get("createdAt", ""), reverse=True)
-    if amplifications:
-        snapshot["personalAmplifications"] = [
-            _project_personal_amplification_summary(item) for item in amplifications[:5]
-        ]
-    consent = [item for item in bucket.consent_preferences.values() if item["userId"] == user_id]
-    consent.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if consent:
-        snapshot["consentPreferences"] = [
-            _project_consent_preference_summary(item) for item in consent[:6]
-        ]
-    prompts = [
-        item
-        for item in bucket.amplification_prompts.values()
-        if item.get("status") == "pending"
-        and item["userId"] == user_id
-        and (material_id is None or item.get("materialId") == material_id or item.get("runId"))
-    ]
-    prompts.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if prompts:
-        snapshot["pendingAmplificationPrompts"] = [
-            _project_amplification_prompt_summary(item) for item in prompts[:5]
-        ]
-    memberships_by_series: dict[Id, list[dict[str, object]]] = {}
-    for membership in bucket.dream_series_memberships.values():
-        if membership.get("status") == "deleted" or membership["userId"] != user_id:
-            continue
-        memberships_by_series.setdefault(membership["seriesId"], []).append(membership)
-    series = [
-        item
-        for item in bucket.dream_series.values()
-        if item.get("status") != "deleted" and item["userId"] == user_id
-    ]
-    series.sort(
-        key=lambda item: (
-            item.get("lastSeen", item.get("updatedAt", item.get("createdAt", ""))),
-            item.get("updatedAt", item.get("createdAt", "")),
-        ),
-        reverse=True,
-    )
-    if series:
-        projected = []
-        for item in series[:5]:
-            summary = _project_dream_series_summary(item)
-            memberships = sorted(
-                memberships_by_series.get(item["id"], []),
-                key=lambda value: value.get("updatedAt", value.get("createdAt", "")),
-                reverse=True,
-            )[:3]
-            if memberships:
-                summary["recentMemberships"] = [
-                    _project_dream_series_membership_summary(value) for value in memberships
-                ]
-            projected.append(summary)
-        snapshot["activeDreamSeries"] = projected
-    enabled_frames = [
-        item
-        for item in bucket.cultural_frames.values()
-        if item["userId"] == user_id and item.get("status") == "enabled"
-    ]
-    enabled_frames.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if enabled_frames:
-        snapshot["activeCulturalFrames"] = [
-            _project_cultural_frame_summary(item) for item in enabled_frames[:5]
-        ]
-    consent_status = {item["scope"]: item["status"] for item in consent}
-    frame_label_by_id = {item["id"]: item["label"] for item in enabled_frames}
-    collective = [
-        item
-        for item in bucket.collective_amplifications.values()
-        if item["userId"] == user_id
-        and item.get("status") in {"offered", "user_resonated"}
-        and (
-            consent_status.get("collective_amplification") == "allow"
-            or item.get("status") == "user_resonated"
-        )
-    ]
-    collective.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if collective:
-        snapshot["collectiveAmplifications"] = [
-            _project_collective_amplification_summary(item, frame_label_by_id=frame_label_by_id)
-            for item in collective[:5]
-        ]
-    adaptation = _latest_adaptation_profile(bucket)
-    if adaptation is not None:
-        snapshot["adaptationProfile"] = _project_adaptation_profile_summary(adaptation)
-    journeys = [
-        item
-        for item in bucket.journeys.values()
-        if item.get("status") != "deleted" and item["userId"] == user_id
-    ]
-    journeys.sort(
-        key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-        reverse=True,
-    )
-    if journeys:
-        snapshot["activeJourneys"] = [_project_journey_summary(item) for item in journeys[:5]]
-    practices = [
-        item
-        for item in bucket.practice_sessions.values()
-        if item.get("status") != "deleted"
-        and item["userId"] == user_id
-        and _is_within_window(_practice_timestamp(item), start_dt, end_dt)
-    ]
-    practices.sort(
-        key=lambda item: item.get(
-            "completedAt",
-            item.get("updatedAt", item.get("createdAt", "")),
-        ),
-        reverse=True,
-    )
-    if practices:
-        snapshot["recentPracticeSessions"] = [
-            _project_practice_session_summary(item) for item in practices[:5]
-        ]
-    signals = _derive_longitudinal_signals(bucket)
-    if signals:
-        snapshot["longitudinalSignals"] = signals
-    return snapshot if len(snapshot) > 3 else None
 
 
 def build_circulation_summary_input_locked(

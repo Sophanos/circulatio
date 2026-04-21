@@ -11,6 +11,7 @@ provides_tools:
   - circulatio_query_graph
   - circulatio_memory_kernel
   - circulatio_dashboard_summary
+  - circulatio_discovery
   - circulatio_journey_page
   - circulatio_create_journey
   - circulatio_list_journeys
@@ -27,6 +28,8 @@ provides_tools:
   - circulatio_approve_review_proposals
   - circulatio_reject_review_proposals
   - circulatio_reject_hypotheses
+  - circulatio_record_interpretation_feedback
+  - circulatio_record_practice_feedback
   - circulatio_revise_entity
   - circulatio_delete_entity
   - circulatio_symbols_list
@@ -46,6 +49,7 @@ provides_tools:
   - circulatio_record_aesthetic_resonance
   - circulatio_set_consent
   - circulatio_answer_amplification
+  - circulatio_method_state_respond
   - circulatio_upsert_goal
   - circulatio_upsert_goal_tension
   - circulatio_set_cultural_frame

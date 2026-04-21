@@ -203,6 +203,9 @@ class CirculatioCoreTests(unittest.TestCase):
                                 "materialIds": ["material_old"],
                             }
                         ],
+                        "methodState": {
+                            "containment": {"groundingNeed": "clear_for_depth"}
+                        },
                         "source": "circulatio-backend",
                     },
                 }
@@ -487,6 +490,9 @@ class CirculatioCoreTests(unittest.TestCase):
                         "windowEnd": "2026-04-19T00:00:00Z",
                         "consciousAttitude": {"id": "att_1", "stanceSummary": "Stay with it."},
                         "consentPreferences": [{"scope": "active_imagination", "status": "allow"}],
+                        "methodState": {
+                            "containment": {"groundingNeed": "clear_for_depth"}
+                        },
                         "source": "circulatio-backend",
                     },
                 }
@@ -672,6 +678,35 @@ class CirculatioCoreTests(unittest.TestCase):
             )
             self.assertEqual(result["practiceRecommendation"]["type"], "journaling")
             self.assertEqual(result["llmHealth"]["source"], "fallback")
+
+        asyncio.run(run())
+
+    def test_generate_practice_respects_explicit_practice_hints(self) -> None:
+        async def run() -> None:
+            repo = InMemoryGraphMemoryRepository()
+            llm = FakeCirculatioLlm()
+            core = CirculatioCore(repo, llm=llm)
+            result = await core.generate_practice(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T00:00:00Z",
+                    "trigger": {"triggerType": "manual"},
+                    "practiceHints": {"maxDurationMinutes": 4, "source": "explicit"},
+                    "hermesMemoryContext": {
+                        "recurringSymbols": [],
+                        "activeComplexCandidates": [],
+                        "recentMaterialSummaries": [],
+                        "recentInterpretationFeedback": [],
+                        "practiceOutcomes": [],
+                        "culturalOriginPreferences": [],
+                        "suppressedHypotheses": [],
+                        "typologyLensSummaries": [],
+                        "recentTypologySignals": [],
+                    },
+                }
+            )
+            self.assertEqual(result["practiceRecommendation"]["durationMinutes"], 4)
 
         asyncio.run(run())
 

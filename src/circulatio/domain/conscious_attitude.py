@@ -10,6 +10,7 @@ ConsciousAttitudeSnapshotStatus = Literal[
     "user_confirmed",
     "superseded",
     "deleted",
+    "active",
 ]
 ConsciousAttitudeSource = Literal[
     "manual_checkin",
@@ -18,6 +19,7 @@ ConsciousAttitudeSource = Literal[
     "weekly_review",
     "interpretation_input",
     "system_candidate",
+    "user_reported",
 ]
 
 

@@ -134,6 +134,24 @@ DASHBOARD_SUMMARY_TOOL_SCHEMA = _schema(
     {},
 )
 
+DISCOVERY_TOOL_SCHEMA = _schema(
+    "circulatio_discovery",
+    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings.",
+    {
+        "windowStart": {"type": "string"},
+        "windowEnd": {"type": "string"},
+        "explicitQuestion": {"type": "string"},
+        "textQuery": {"type": "string"},
+        "rootNodeIds": _ID_ARRAY_PROPERTY,
+        "memoryNamespaces": {"type": "array", "items": {"type": "string"}},
+        "rankingProfile": {
+            "type": "string",
+            "enum": ["default", "recency", "recurrence", "importance"],
+        },
+        "maxItems": {"type": "integer"},
+    },
+)
+
 JOURNEY_PAGE_TOOL_SCHEMA = _schema(
     "circulatio_journey_page",
     "Build a read-mostly Journeying Host page from existing Circulatio context without approving memory, creating reviews, creating proactive briefs, or saving practice sessions.",
@@ -243,7 +261,13 @@ GET_MATERIAL_TOOL_SCHEMA = _schema(
 
 INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
-    "Deliberately interpret stored or raw Circulatio material. Prefer storing first and then calling this by materialId. If the user appears to mean an existing note such as 'the dream about bear' or 'that reflection from yesterday', call circulatio_list_materials first and then interpret by materialId instead of asking them to repeat it. For dreams, the first response may return a method gate asking for missing narrative, conscious attitude, or personal amplification before offering a fuller reading. If that happens, present the returned question to the user and wait for new input; do not call this tool again in the same turn with unchanged material. If the result reports llmInterpretationHealth.status='fallback', relay that diagnostic plainly and stop rather than improvising your own symbolic reading.",
+    "Deliberately interpret stored or raw Circulatio material. Prefer storing first, then "
+    "call this by materialId. If the user means an existing note, call "
+    "circulatio_list_materials first and interpret by materialId. Dreams may return a "
+    "method gate for missing narrative, attitude, or amplification; present that "
+    "question, wait for new input, and do not call this tool again in the same turn with "
+    "unchanged material. If llmInterpretationHealth.status='fallback', relay that "
+    "diagnostic plainly and stop.",
     {
         "materialId": {"type": "string"},
         "materialType": {
@@ -267,19 +291,21 @@ INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
 
 LIST_PENDING_TOOL_SCHEMA = _schema(
     "circulatio_list_pending",
-    "List pending Circulatio proposals for a run without approving them.",
+    "List pending Circulatio proposals for an interpretation run or a method-state capture run without approving them.",
     {
         "runRef": {"type": "string", "description": "Run id or 'last'."},
         "runId": {"type": "string", "description": "Explicit run id."},
+        "captureRunId": {"type": "string", "description": "Explicit method-state capture run id."},
     },
 )
 
 APPROVE_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_approve_proposals",
-    "Approve one or more pending Circulatio proposals. This is an explicit memory-write action and should only be called when the user clearly wants approval.",
+    "Approve one or more pending Circulatio proposals from an interpretation run or a method-state capture run. This is an explicit memory-write action and should only be called when the user clearly wants approval.",
     {
         "runRef": {"type": "string", "description": "Run id or 'last'."},
         "runId": {"type": "string"},
+        "captureRunId": {"type": "string"},
         "proposalRefs": {"type": "array", "items": {"type": "string"}},
         "note": {"type": "string"},
     },
@@ -288,10 +314,11 @@ APPROVE_PROPOSALS_TOOL_SCHEMA = _schema(
 
 REJECT_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_reject_proposals",
-    "Reject one or more pending Circulatio proposals without writing them to symbolic memory.",
+    "Reject one or more pending Circulatio proposals from an interpretation run or a method-state capture run without writing them to symbolic memory.",
     {
         "runRef": {"type": "string", "description": "Run id or 'last'."},
         "runId": {"type": "string"},
+        "captureRunId": {"type": "string"},
         "proposalRefs": {"type": "array", "items": {"type": "string"}},
         "reason": {"type": "string"},
     },
@@ -651,6 +678,51 @@ ANSWER_AMPLIFICATION_TOOL_SCHEMA = _schema(
     required=["canonicalName", "surfaceText", "associationText"],
 )
 
+METHOD_STATE_RESPOND_TOOL_SCHEMA = _schema(
+    "circulatio_method_state_respond",
+    "Process a context-bound follow-up response through Circulatio's method-state connector. Use this only when Hermes already knows the answer belongs to a prior Circulatio context such as a clarifying question, amplification prompt, body note, goal feedback, practice feedback, or other anchored follow-up. Do not use it as a generic capture-any intake.",
+    {
+        "responseText": {"type": "string"},
+        "source": {
+            "type": "string",
+            "enum": [
+                "clarifying_answer",
+                "freeform_followup",
+                "body_note",
+                "amplification_answer",
+                "relational_scene",
+                "dream_dynamics",
+                "goal_feedback",
+                "practice_feedback",
+                "consent_update",
+            ],
+        },
+        "anchorRefs": {
+            "type": "object",
+            "properties": {
+                "materialId": {"type": "string"},
+                "runId": {"type": "string"},
+                "promptId": {"type": "string"},
+                "clarificationRefKey": {"type": "string"},
+                "practiceSessionId": {"type": "string"},
+                "briefId": {"type": "string"},
+                "reviewId": {"type": "string"},
+                "goalId": {"type": "string"},
+                "journeyId": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+        "expectedTargets": {"type": "array", "items": {"type": "string"}},
+        "observedAt": {"type": "string"},
+        "privacyClass": {"type": "string"},
+        "sessionContext": {"type": "object"},
+        "lifeContextSnapshot": {"type": "object"},
+        "safetyContext": {"type": "object"},
+        "options": {"type": "object"},
+    },
+    required=["responseText", "source"],
+)
+
 UPSERT_GOAL_TOOL_SCHEMA = _schema(
     "circulatio_upsert_goal",
     "Create or update an explicit goal record in Circulatio.",
@@ -697,7 +769,7 @@ SET_CULTURAL_FRAME_TOOL_SCHEMA = _schema(
 
 GENERATE_PRACTICE_TOOL_SCHEMA = _schema(
     "circulatio_generate_practice_recommendation",
-    "Generate a bounded LLM-shaped practice recommendation from recent Circulatio context.",
+    "Generate a bounded LLM-shaped practice recommendation from recent Circulatio context. Safety and consent gates still apply. This generates the recommendation only; response recording stays in circulatio_respond_practice_recommendation.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -720,6 +792,50 @@ RESPOND_PRACTICE_TOOL_SCHEMA = _schema(
         "activationBefore": {"type": "string", "enum": ["low", "moderate", "high"]},
     },
     required=["practiceSessionId", "action"],
+)
+
+RECORD_INTERPRETATION_FEEDBACK_TOOL_SCHEMA = _schema(
+    "circulatio_record_interpretation_feedback",
+    "Record explicit user feedback on a Circulatio interpretation run without parsing free-text notes.",
+    {
+        "runId": {"type": "string"},
+        "feedback": {
+            "type": "string",
+            "enum": [
+                "too_much",
+                "too_vague",
+                "too_abstract",
+                "good_level",
+                "helpful",
+                "not_helpful",
+            ],
+        },
+        "note": {"type": "string"},
+        "locale": {"type": "string"},
+    },
+    required=["runId", "feedback"],
+)
+
+RECORD_PRACTICE_FEEDBACK_TOOL_SCHEMA = _schema(
+    "circulatio_record_practice_feedback",
+    "Record explicit user feedback on a Circulatio practice recommendation or completed practice without parsing free-text notes.",
+    {
+        "practiceSessionId": {"type": "string"},
+        "feedback": {
+            "type": "string",
+            "enum": [
+                "good_fit",
+                "not_for_me",
+                "too_intense",
+                "too_long",
+                "helpful",
+                "not_helpful",
+            ],
+        },
+        "note": {"type": "string"},
+        "locale": {"type": "string"},
+    },
+    required=["practiceSessionId", "feedback"],
 )
 
 GENERATE_RHYTHMIC_BRIEFS_TOOL_SCHEMA = _schema(
@@ -755,6 +871,7 @@ TOOL_SCHEMAS = [
     QUERY_GRAPH_TOOL_SCHEMA,
     MEMORY_KERNEL_TOOL_SCHEMA,
     DASHBOARD_SUMMARY_TOOL_SCHEMA,
+    DISCOVERY_TOOL_SCHEMA,
     JOURNEY_PAGE_TOOL_SCHEMA,
     CREATE_JOURNEY_TOOL_SCHEMA,
     LIST_JOURNEYS_TOOL_SCHEMA,
@@ -790,11 +907,14 @@ TOOL_SCHEMAS = [
     RECORD_AESTHETIC_RESONANCE_TOOL_SCHEMA,
     SET_CONSENT_TOOL_SCHEMA,
     ANSWER_AMPLIFICATION_TOOL_SCHEMA,
+    METHOD_STATE_RESPOND_TOOL_SCHEMA,
     UPSERT_GOAL_TOOL_SCHEMA,
     UPSERT_GOAL_TENSION_TOOL_SCHEMA,
     SET_CULTURAL_FRAME_TOOL_SCHEMA,
     GENERATE_PRACTICE_TOOL_SCHEMA,
     RESPOND_PRACTICE_TOOL_SCHEMA,
+    RECORD_INTERPRETATION_FEEDBACK_TOOL_SCHEMA,
+    RECORD_PRACTICE_FEEDBACK_TOOL_SCHEMA,
     GENERATE_RHYTHMIC_BRIEFS_TOOL_SCHEMA,
     RESPOND_RHYTHMIC_BRIEF_TOOL_SCHEMA,
 ]

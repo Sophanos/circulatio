@@ -78,6 +78,10 @@ def compact_life_context_snapshot(
     }
     if snapshot.get("lifeEventRefs"):
         compact["lifeEventRefs"] = list(snapshot["lifeEventRefs"][:5])
+    if snapshot.get("activeGoals"):
+        compact["activeGoals"] = list(snapshot["activeGoals"][:5])
+    if snapshot.get("goalTensions"):
+        compact["goalTensions"] = list(snapshot["goalTensions"][:5])
     for key in (
         "moodSummary",
         "energySummary",

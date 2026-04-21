@@ -1,4 +1,4 @@
-> **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, derived projections, proactive invitation seeds, and Hermes/plugin exposure.
+> **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
 > **Consolidated docs:** See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules.
 
@@ -95,6 +95,20 @@ CirculatioService.create_and_interpret_material()
 
 The important current rule is that Circulatio no longer treats local heuristics as the primary source of meaning. The model is the intended source of interpretive moves. Local code still owns safety hard-stops, evidence integrity, storage, privacy, IDs, and schema normalization.
 
+The current method-state connector chain is:
+
+```text
+Hermes/host decides a follow-up answer is context-bound
+→ explicit bridge/tool call (`circulatio.method_state.respond`)
+→ CirculatioService.process_method_state_response()
+→ store response as bounded reflection material + evidence
+→ direct user-reported record writes OR approval-gated proposals
+→ derived method-context projections (`recentDreamDynamics`, method-state summary, clarification state)
+→ later interpretation / review / practice calls consume the enriched method context
+```
+
+This connector is intentionally additive. It is not a hidden capture-any ingress. Hermes still owns intent recognition and routing. Circulatio only accepts explicit, anchored follow-up responses and turns them into evidence-backed durable state or pending proposals.
+
 ### Current Phase 4-7 Snapshot
 
 The codebase now already contains the Phase 4-7 substrate that later work should build on rather than replace:
@@ -102,7 +116,7 @@ The codebase now already contains the Phase 4-7 substrate that later work should
 * `MethodContextSnapshot` is part of interpretation input and persisted context snapshots.
 * Domain records now exist for conscious attitude, personal amplification, body states, goals, dream series, culture, adaptation, journeys, and proactive briefs.
 * `CirculatioCore` accepts LLM-produced `methodGate`, `depthReadiness`, amplification prompts, dream-series suggestions, and richer practice metadata.
-* Hermes/plugin surfaces now support hold-first storage for dreams, events, reflections, symbolic notes, and body states, plus `alive_today`, journey-page assembly, low-risk journey-container management, label-based journey resolution, explicit `/circulation journey ...` QA commands, interpretation, review, and approval flows.
+* Hermes/plugin surfaces now support hold-first storage for dreams, events, reflections, symbolic notes, and body states, plus `alive_today`, the bounded read-only `discovery` digest, journey-page assembly, low-risk journey-container management, label-based journey resolution, explicit `/circulation journey ...` QA commands, interpretation, review, and approval flows.
 
 ### Current Phase 8/9 Snapshot
 
@@ -113,11 +127,54 @@ As of April 2026, the Phase 8/9 backend slice is also present in the main runtim
 * durable writes derived from threshold and living-myth workflows remain proposal-based and require explicit approval before persistence
 * derived memory-kernel and graph projections now include approved individuation/living-myth material without exposing raw material text
 * proactive runtime support now includes threshold, chapter, return, bridge, and analysis-packet invitations based only on approved/projected records
-* Hermes/plugin surfaces now expose threshold review, living myth review, analysis packet, review proposal approval/rejection, and direct user-capture tools for explicit Phase 8 records
+* Hermes/plugin surfaces now expose threshold review, living myth review, analysis packet, review proposal approval/rejection, direct user-capture tools for explicit Phase 8 records, and an explicit method-state response operation for anchored clarifying/follow-up answers
+* personalization now includes durable `InteractionFeedbackRecord` events, typed explicit-preference scopes, learned communication/practice policy slots under `learnedSignals`, derived runtime hints for prompts, and Hermes-side Atropos communication/practice env builders for bounded policy-learning
 * Hermes may now autonomously create and update `JourneyRecord` containers as low-risk organizational writes, resolve them by exact/normalized human label when the host supplies that label, and expose explicit journey lifecycle slash commands for QA/debug/demo, while interpretation-derived durable symbolic memory remains approval-gated
 * the repo now includes an external Hermes-host smoke harness that installs Circulatio into a temporary Hermes home/site-packages path and exercises host-level plugin load, store, journey lifecycle, and page rendering without adding a second command-only architecture
 
 The remaining work in this area should be refinement, wider validation, and documentation upkeep rather than a new architectural phase transition.
+
+### Current Evolution OS Tooling
+
+Circulatio now includes a repo-local, offline Evolution OS layer: optimize text artifacts first, evaluate them against explicit rubrics, stage reviewable candidate bundles, and require human review before adoption. This tooling stays outside the runtime path even though it lives in the same repo. It is builder infrastructure, not product behavior.
+
+**Current targets:**
+
+* `src/circulatio/llm/prompt_fragments.py` — extracted prompt policy fragments for interpretation, practice, threshold review, living myth review, method-state routing, and packet generation
+* `src/circulatio_hermes_plugin/skills/circulation/SKILL.md` — Hermes-facing host-routing instructions
+* `src/circulatio_hermes_plugin/schemas.py` — tool descriptions used during Hermes tool selection
+
+**Current infrastructure:**
+
+* `tools/self_evolution/targets.py` — target registry, mutation scope, owner, and immutable dependency metadata
+* `tools/self_evolution/dataset_builder.py` — schemaVersion 1/2 JSONL loading plus split/severity/gate normalization
+* `tools/self_evolution/fitness.py` — deterministic rubric scoring with blocking/major/minor case metadata
+* `tools/self_evolution/constraints.py` — prompt-fragment, skill-size, tool-description, dataset-coverage, and immutable-bundle gates
+* `tools/self_evolution/evaluator.py` — baseline, candidate-path, and candidate-bundle evaluation with regression reporting
+* `tools/self_evolution/artifacts.py` — candidate discovery, staging, hashing, git provenance, and diff generation
+* `tools/self_evolution/review.py` — `report.json`, `report.md`, `manifest.json`, `candidate_manifest.json`, `diff.patch`, and rationale packaging
+* `tools/self_evolution/optimizer.py` — offline candidate orchestration; phase 1 fully supports `manual`
+* `scripts/evaluate_circulatio_method.py` — strict gate plus candidate-bundle evaluation CLI
+* `scripts/evolve_circulatio_method.py` — manual candidate staging CLI for review-package generation
+* `tests/evals/circulatio_method/` — hand-authored eval fixtures, including schemaVersion 2 split/severity coverage
+
+**Current contract:**
+
+* Optimize offline only. No mid-conversation prompt mutation.
+* Optimize text artifacts before code.
+* Keep raw multilingual feedback notes out of runtime prompts and review artifacts.
+* Emit reviewable run directories under `artifacts/self_evolution/runs/`; do not write prompt changes into user state.
+* Require explicit evaluator pass plus normal repo tests before accepting a candidate.
+* Do not let the optimizer freely mutate `SafetyGate`, approval logic, persistence schemas, evidence integrity, or direct durable-write rules.
+
+**Current commands:**
+
+```bash
+.venv/bin/python scripts/evaluate_circulatio_method.py --strict
+.venv/bin/python scripts/evolve_circulatio_method.py --target prompt_fragments --strategy manual --prompt-fragments src/circulatio/llm/prompt_fragments.py
+```
+
+This is the current offline builder path. The repo does **not** yet ship reflection/pareto search or provider-backed execution/judge gates; it ships the extraction points, datasets, reports, and constraints needed to add those later without weakening runtime boundaries.
 
 ### What Should Be Reused
 
@@ -625,16 +682,17 @@ Phase 6 now keeps practice generation LLM-first while giving the runtime an expl
 
 Phase 6 also centralizes adaptation learning in `AdaptationEngine`. `UserAdaptationProfile` now tracks:
 - **Engagement patterns:** Which namespaces does the user log most? (dream-heavy vs. body-heavy vs. goal-heavy)
-- **Practice preferences:** Duration, modality, time of day, acceptance rate
-- **Interpretation depth preference:** Deep amplification vs. brief pattern notes
+- **Practice preferences:** Explicit preferred/avoided modalities plus explicit duration ceiling
+- **Communication preferences:** Tone, questioning style, symbolic density
+- **Interpretation preferences:** Depth pacing and modality bias
 - **Amplification pack affinity:** Which cultural frames resonate? Which are ignored?
 - **Typology indicators:** Cognitive function signals from language
 - **Ego strength trajectory:** Confronting shadow vs. avoiding it
 - **Rhythmic tolerance:** Engagement rate with unsolicited briefings and cadence preferences
 
-**Explicit + implicit learning:** Start with explicit preference settings. Layer implicit learning after 20+ interactions.
+**Explicit + implicit learning:** Explicit preferences are validated by scope and remain user-owned. Learned policy updates live separately under `learnedSignals.*Policy`, never rewrite explicit preferences, and only become prompt-visible through derived typed hints. Raw multilingual note text is stored durably on `InteractionFeedbackRecord` and excluded from runtime prompts.
 
-**Status:** Implemented for practice and rhythmic cadence hints. Learned preferences remain soft and threshold-gated.
+**Status:** Implemented for communication, interpretation, practice, and rhythm scopes. Interaction feedback, learned policy updates, and Hermes Atropos env builders now exist as bounded runtime surfaces. Learned preferences remain soft and threshold-gated.
 
 ---
 
@@ -648,12 +706,14 @@ Phase 6 also centralizes adaptation learning in `AdaptationEngine`. `UserAdaptat
 | `src/circulatio/adapters/context_builder.py` | **New.** CirculatioLifeContextBuilder. |
 | `src/circulatio/adapters/context_adapter.py` | **Modify.** Add builder injection, precedence, window resolution. |
 | `src/circulatio/adapters/__init__.py` | **Modify.** Export CirculatioLifeContextBuilder and LifeContextBuilder. |
+| `src/circulatio/domain/feedback.py` | **New.** Durable interaction-feedback records for interpretation/practice feedback. |
 | `src/circulatio/application/circulatio_service.py` | **Modify.** Unify _build_material_input() to always use ContextAdapter. |
 | `src/circulatio/repositories/circulatio_repository.py` | **Modify.** Add abstract methods for memory kernel, graph query, life context. |
 | `src/circulatio/repositories/in_memory_projections.py` | **Modify.** Add build_memory_kernel_snapshot_locked, query_graph_locked, build_life_context_snapshot_locked. |
 | `src/circulatio/repositories/in_memory_circulatio_repository.py` | **Modify.** Implement three new abstract methods. |
 | `src/circulatio/repositories/hermes_profile_circulatio_repository.py` | **Modify.** Implement three new abstract methods. |
 | `src/circulatio/hermes/runtime.py` | **Modify.** Wire CirculatioLifeContextBuilder into both runtime builders. |
+| `src/circulatio/hermes/atropos_envs.py` | **New.** Bounded Hermes-side communication/practice env builders plus reward helpers. |
 | `tests/test_context_builder.py` | **New.** Tests for native context derivation and precedence. |
 | `tests/test_memory_graph_scaffolding.py` | **New.** Tests for memory kernel and graph query. |
 | `tests/test_circulatio_service.py` | **Modify.** Update service tests for unified context path. |
@@ -729,6 +789,7 @@ Native context builder must never summarize from raw `MaterialRecord.text`. Use 
 - Extend `MaterialRecord` for body states (sensations, activation, fatigue markers)
 - Add `GoalRecord` and `GoalTensionRecord` to domain
 - Add `CulturalAmplificationPack` as optional lens
+- Keep `CulturalFrame` as the user-owned lens while Hermes hosts maintain a separate trusted amplification-source registry for collective amplification research
 - Extend graph edges: `TRIGGERS` (symbol → body), `CORRELATES_WITH` (symbol → goal), `AMPLIFIED_BY` (symbol → culture)
 - Update `CirculatioLifeContextBuilder` to derive soma and goal summaries
 
@@ -739,8 +800,8 @@ Native context builder must never summarize from raw `MaterialRecord.text`. Use 
 **Architecture:**
 - `PracticeEngine` owns deterministic reconciliation for safety, consent, method limits, explicit duration caps, lifecycle defaults, and coarse outcome signals
 - `CirculatioCore.generate_practice()` is LLM-first and returns bounded practice recommendations without persisting
-- `CirculatioService` persists recommendations, accepts/skips, records outcomes, and emits adaptation events through explicit workflow methods
-- `AdaptationEngine` derives soft preference hints and cadence hints while never overriding explicit consent
+- `CirculatioService` persists recommendations, accepts/skips, records outcomes, records explicit interpretation/practice feedback, and emits adaptation events through explicit workflow methods
+- `AdaptationEngine` validates explicit preference scopes, stores learned policy separately, derives soft typed hints, and never overrides explicit consent or explicit preferences
 
 ### Phase 7: Rhythmic Companion Runtime
 
@@ -807,7 +868,8 @@ Condensed core contract so an AI agent understands the interpretation boundary w
 Supporting inputs:
 - `SessionContext` — current conversation notes (`source: "current-conversation"`)
 - `LifeContextSnapshot` — mood, energy, focus, mental state, habits, notable changes
-- `HermesMemoryContext` — recurring symbols, active complex candidates, recent summaries, feedback, practice outcomes, cultural preferences, suppressed hypotheses, typology summaries
+- `HermesMemoryContext` — recurring symbols, active complex candidates, recent summaries, practice outcomes, cultural preferences, suppressed hypotheses, typology summaries
+- derived runtime hints — communication, interpretation, and practice hints built from explicit-over-learned adaptation resolution
 
 ### Primary Output
 
@@ -834,4 +896,4 @@ Supporting inputs:
 
 ### Service-Layer Boundary
 
-Above the core, `CirculatioService` provides: material creation, create-and-interpret workflows, reinterpreting stored material, proposal approval/rejection, hypothesis suppression, revision and deletion, history queries, weekly review generation, practice outcome recording, and dashboard summaries.
+Above the core, `CirculatioService` provides: material creation, create-and-interpret workflows, reinterpreting stored material, explicit method-state response processing for anchored follow-up answers, bounded read-only discovery assembly, proposal approval/rejection for interpretation, review, and method-state capture runs, hypothesis suppression, explicit interpretation/practice feedback recording, validated adaptation preference updates, revision and deletion, history queries, weekly review generation, practice outcome recording, and dashboard summaries.

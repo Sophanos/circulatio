@@ -11,6 +11,13 @@ from ..domain.amplifications import (
     PersonalAmplificationRecord,
     PersonalAmplificationUpdate,
 )
+from ..domain.clarifications import (
+    ClarificationAnswerRecord,
+    ClarificationAnswerUpdate,
+    ClarificationPromptRecord,
+    ClarificationPromptStatus,
+    ClarificationPromptUpdate,
+)
 from ..domain.conscious_attitude import (
     ConsciousAttitudeSnapshotFilters,
     ConsciousAttitudeSnapshotRecord,
@@ -30,6 +37,7 @@ from ..domain.dream_series import (
     DreamSeriesUpdate,
 )
 from ..domain.errors import ConflictError, EntityNotFoundError
+from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.goals import GoalRecord, GoalTensionRecord, GoalTensionUpdate, GoalUpdate
 from ..domain.graph import (
     DeleteGraphEntityRequest,
@@ -64,6 +72,7 @@ from ..domain.living_myth import (
 )
 from ..domain.materials import MaterialListFilters, MaterialRecord, MaterialRevision, MaterialUpdate
 from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
+from ..domain.method_state import MethodStateCaptureRunRecord, MethodStateCaptureRunUpdate
 from ..domain.patterns import PatternHistoryEntry, PatternRecord, PatternType, PatternUpdate
 from ..domain.practices import PracticeSessionRecord, PracticeSessionStatus, PracticeSessionUpdate
 from ..domain.proactive import (
@@ -355,6 +364,171 @@ class InMemoryCirculatioRepository(CirculatioRepository):
             )
             record.update(deepcopy(updates))
             return deepcopy(record)
+
+    async def create_clarification_prompt(
+        self, record: ClarificationPromptRecord
+    ) -> ClarificationPromptRecord:
+        return await self._create_bucket_record(
+            record["userId"],
+            "clarification_prompts",
+            record,
+            "clarification prompt",
+        )
+
+    async def get_clarification_prompt(
+        self, user_id: Id, prompt_id: Id, *, include_deleted: bool = False
+    ) -> ClarificationPromptRecord:
+        return await self._get_bucket_record(
+            user_id,
+            "clarification_prompts",
+            prompt_id,
+            include_deleted,
+            "clarification prompt",
+        )
+
+    async def update_clarification_prompt(
+        self, user_id: Id, prompt_id: Id, updates: ClarificationPromptUpdate
+    ) -> ClarificationPromptRecord:
+        return await self._update_bucket_record(
+            user_id,
+            "clarification_prompts",
+            prompt_id,
+            updates,
+            "clarification prompt",
+        )
+
+    async def list_clarification_prompts(
+        self,
+        user_id: Id,
+        *,
+        status: ClarificationPromptStatus | None = None,
+        material_id: Id | None = None,
+        run_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[ClarificationPromptRecord]:
+        def predicate(item: ClarificationPromptRecord) -> bool:
+            if status is not None and item.get("status") != status:
+                return False
+            if material_id is not None and item.get("materialId") != material_id:
+                return False
+            if run_id is not None and item.get("runId") != run_id:
+                return False
+            return True
+
+        return await self._list_bucket_records(
+            user_id,
+            "clarification_prompts",
+            label="clarification prompt",
+            predicate=predicate,
+            limit=limit,
+        )
+
+    async def create_clarification_answer(
+        self, record: ClarificationAnswerRecord
+    ) -> ClarificationAnswerRecord:
+        return await self._create_bucket_record(
+            record["userId"],
+            "clarification_answers",
+            record,
+            "clarification answer",
+        )
+
+    async def get_clarification_answer(
+        self, user_id: Id, answer_id: Id, *, include_deleted: bool = False
+    ) -> ClarificationAnswerRecord:
+        return await self._get_bucket_record(
+            user_id,
+            "clarification_answers",
+            answer_id,
+            include_deleted,
+            "clarification answer",
+        )
+
+    async def update_clarification_answer(
+        self, user_id: Id, answer_id: Id, updates: ClarificationAnswerUpdate
+    ) -> ClarificationAnswerRecord:
+        return await self._update_bucket_record(
+            user_id,
+            "clarification_answers",
+            answer_id,
+            updates,
+            "clarification answer",
+        )
+
+    async def list_clarification_answers(
+        self,
+        user_id: Id,
+        *,
+        prompt_id: Id | None = None,
+        run_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[ClarificationAnswerRecord]:
+        def predicate(item: ClarificationAnswerRecord) -> bool:
+            if prompt_id is not None and item.get("promptId") != prompt_id:
+                return False
+            if run_id is not None and item.get("runId") != run_id:
+                return False
+            return True
+
+        return await self._list_bucket_records(
+            user_id,
+            "clarification_answers",
+            label="clarification answer",
+            predicate=predicate,
+            limit=limit,
+        )
+
+    async def create_method_state_capture_run(
+        self, record: MethodStateCaptureRunRecord
+    ) -> MethodStateCaptureRunRecord:
+        return await self._create_bucket_record(
+            record["userId"],
+            "method_state_capture_runs",
+            record,
+            "method state capture run",
+        )
+
+    async def get_method_state_capture_run(
+        self, user_id: Id, capture_run_id: Id, *, include_deleted: bool = False
+    ) -> MethodStateCaptureRunRecord:
+        return await self._get_bucket_record(
+            user_id,
+            "method_state_capture_runs",
+            capture_run_id,
+            include_deleted,
+            "method state capture run",
+        )
+
+    async def get_method_state_capture_run_by_idempotency_key(
+        self, user_id: Id, idempotency_key: str
+    ) -> MethodStateCaptureRunRecord | None:
+        async with self._lock:
+            bucket = self._bucket(user_id)
+            for record in bucket.method_state_capture_runs.values():
+                if record.get("idempotencyKey") == idempotency_key:
+                    return deepcopy(record)
+        return None
+
+    async def update_method_state_capture_run(
+        self, user_id: Id, capture_run_id: Id, updates: MethodStateCaptureRunUpdate
+    ) -> MethodStateCaptureRunRecord:
+        return await self._update_bucket_record(
+            user_id,
+            "method_state_capture_runs",
+            capture_run_id,
+            updates,
+            "method state capture run",
+        )
+
+    async def list_method_state_capture_runs(
+        self, user_id: Id, *, limit: int = 50
+    ) -> list[MethodStateCaptureRunRecord]:
+        return await self._list_bucket_records(
+            user_id,
+            "method_state_capture_runs",
+            label="method state capture run",
+            limit=limit,
+        )
 
     async def store_evidence_items(
         self, user_id: Id, items: list[EvidenceItem]
@@ -1509,6 +1683,32 @@ class InMemoryCirculatioRepository(CirculatioRepository):
         return await self._update_bucket_record(
             user_id, "adaptation_profiles", profile_id, updates, "adaptation profile"
         )
+
+    async def create_interaction_feedback(
+        self, record: InteractionFeedbackRecord
+    ) -> InteractionFeedbackRecord:
+        async with self._lock:
+            bucket = self._bucket(record["userId"])
+            bucket.interaction_feedback.insert(0, deepcopy(record))
+            return deepcopy(record)
+
+    async def list_interaction_feedback(
+        self,
+        user_id: Id,
+        *,
+        domain: str | None = None,
+        target_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[InteractionFeedbackRecord]:
+        async with self._lock:
+            items = [
+                deepcopy(item)
+                for item in self._bucket(user_id).interaction_feedback
+                if item.get("userId") == user_id
+                and (domain is None or item.get("domain") == domain)
+                and (target_id is None or item.get("targetId") == target_id)
+            ]
+            return items[:limit]
 
     async def create_journey(self, record: JourneyRecord) -> JourneyRecord:
         return await self._create_bucket_record(record["userId"], "journeys", record, "journey")

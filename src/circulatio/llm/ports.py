@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from ..domain.method_state import MethodStateRoutingInput
 from ..domain.types import (
     AnalysisPacketInput,
     CirculationSummaryInput,
@@ -16,6 +17,7 @@ from .contracts import (
     LlmAnalysisPacketOutput,
     LlmInterpretationOutput,
     LlmLivingMythReviewOutput,
+    LlmMethodStateRoutingOutput,
     LlmPracticeOutput,
     LlmRhythmicBriefOutput,
     LlmThresholdReviewOutput,
@@ -67,3 +69,10 @@ class CirculatioLlmPort(Protocol):
         window_end: str,
         raw_context: dict[str, object],
     ) -> LifeContextSnapshot: ...
+
+
+class CirculatioMethodStateLlmPort(Protocol):
+    async def route_method_state_response(
+        self,
+        input_data: MethodStateRoutingInput,
+    ) -> LlmMethodStateRoutingOutput: ...

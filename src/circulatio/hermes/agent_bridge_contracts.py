@@ -25,8 +25,11 @@ BridgeOperation = Literal[
     "circulatio.packet.analysis",
     "circulatio.practice.generate",
     "circulatio.practice.respond",
+    "circulatio.feedback.interpretation",
+    "circulatio.feedback.practice",
     "circulatio.briefs.generate",
     "circulatio.briefs.respond",
+    "circulatio.method_state.respond",
     "circulatio.proposals.approve",
     "circulatio.proposals.reject",
     "circulatio.proposals.list_pending",
@@ -39,6 +42,7 @@ BridgeOperation = Literal[
     "circulatio.graph.query",
     "circulatio.memory.kernel",
     "circulatio.dashboard.summary",
+    "circulatio.discovery",
     "circulatio.summary.alive_today",
     "circulatio.journey.page",
     "circulatio.journeys.create",
@@ -98,6 +102,8 @@ class BridgePendingProposal(TypedDict, total=False):
     reason: Required[str]
     evidenceIds: Required[list[Id]]
     payload: NotRequired[dict[str, object]]
+    sourceKind: NotRequired[str]
+    sourceId: NotRequired[Id]
 
 
 class BridgeResponseEnvelope(TypedDict):

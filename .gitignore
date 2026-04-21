@@ -7,3 +7,16 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Secrets / environment
+.env*
+!.env.example
+
+# Databases (user data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Local agent skill installations / state
+.agents/
+skills-lock.json

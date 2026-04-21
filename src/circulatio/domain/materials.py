@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import NotRequired, Required, TypedDict
 
 from .records import MaterialSource, RecordStatus, RevisionReason
-from .types import Id, ISODateString, MaterialType, PrivacyClass
+from .types import DreamDynamicsObservation, Id, ISODateString, MaterialType, PrivacyClass
 
 
 class DreamFigureRecord(TypedDict, total=False):
@@ -29,6 +29,7 @@ class StoredDreamStructure(TypedDict, total=False):
     egoStance: NotRequired[str]
     lysisQuality: NotRequired[str]
     seriesFeatureKeys: NotRequired[list[str]]
+    methodDynamics: NotRequired[list[DreamDynamicsObservation]]
 
 
 class MaterialRecord(TypedDict, total=False):

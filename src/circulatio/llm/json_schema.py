@@ -3,6 +3,23 @@ from __future__ import annotations
 import json
 from typing import Any
 
+CLARIFICATION_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "questionText": {"type": "string"},
+        "questionKey": {"type": "string"},
+        "intent": {"type": "string"},
+        "captureTarget": {"type": "string"},
+        "expectedAnswerKind": {"type": "string"},
+        "answerSlots": {"type": "object"},
+        "routingHints": {"type": "object"},
+        "supportingRefs": {"type": "array"},
+        "anchorRefs": {"type": "object"},
+        "consentScopes": {"type": "array"},
+    },
+    "required": ["questionText", "intent", "captureTarget", "expectedAnswerKind"],
+}
+
 INTERPRETATION_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -21,6 +38,8 @@ INTERPRETATION_OUTPUT_SCHEMA = {
         "proposalCandidates": {"type": "array"},
         "userFacingResponse": {"type": "string"},
         "clarifyingQuestion": {"type": "string"},
+        "clarificationPlan": CLARIFICATION_PLAN_SCHEMA,
+        "clarificationIntent": {"type": "object"},
     },
     "required": [
         "symbolMentions",
@@ -96,6 +115,24 @@ LIVING_MYTH_REVIEW_OUTPUT_SCHEMA = {
         "proposalCandidates": {"type": "array"},
     },
     "required": ["userFacingResponse", "mythicQuestions", "thresholdMarkers", "complexEncounters"],
+}
+
+METHOD_STATE_ROUTING_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "answerSummary": {"type": "string"},
+        "evidenceSpans": {"type": "array"},
+        "captureCandidates": {"type": "array"},
+        "followUpPrompts": {"type": "array"},
+        "routingWarnings": {"type": "array"},
+    },
+    "required": [
+        "answerSummary",
+        "evidenceSpans",
+        "captureCandidates",
+        "followUpPrompts",
+        "routingWarnings",
+    ],
 }
 
 ANALYSIS_PACKET_OUTPUT_SCHEMA = {

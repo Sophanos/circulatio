@@ -8,6 +8,7 @@ from ..domain.types import (
     AmplificationPromptSummary,
     AnalysisPacketInput,
     AnalysisPacketRecordRef,
+    ClarificationPlan,
     CollectiveAmplificationWritePayload,
     ComplexCandidateWritePayload,
     DepthReadinessAssessment,
@@ -26,6 +27,7 @@ from ..domain.types import (
     MaterialInterpretationInput,
     MemoryWritePlan,
     MemoryWriteProposal,
+    MethodContextSnapshot,
     MethodGateResult,
     MotifMention,
     Observation,
@@ -1881,11 +1883,246 @@ def build_typology_assessment_from_llm(candidate: object) -> TypologyAssessment 
     }
     signals = candidate.get("typologySignals")
     if isinstance(signals, list):
-        result["typologySignals"] = signals
+        for signal in signals[:6]:
+            if not isinstance(signal, dict):
+                continue
+            evidence_ids = _string_list(signal.get("evidenceIds"), limit=8, item_limit=80)
+            statement = truncate_text(signal.get("statement"), 220)
+            if not evidence_ids or not statement:
+                continue
+            function = _sanitize_choice(
+                signal.get("function"),
+                allowed={"thinking", "feeling", "sensation", "intuition"},
+                default="intuition",
+            )
+            orientation = _sanitize_choice(
+                signal.get("orientation"),
+                allowed={"introverted", "extraverted", "ambiguous"},
+                default="ambiguous",
+            )
+            result["typologySignals"].append(
+                {
+                    "id": str(signal.get("id") or create_id("typology_signal")),
+                    "category": _sanitize_choice(
+                        signal.get("category"),
+                        allowed={
+                            "linguistic_marker",
+                            "orientation_marker",
+                            "sensation_trigger",
+                            "fixation_or_overuse",
+                            "compensatory_marker",
+                            "longitudinal_pattern",
+                            "feedback_signal",
+                        },
+                        default="feedback_signal",
+                    ),
+                    "function": function,
+                    "orientation": orientation,
+                    "statement": statement,
+                    "strength": sanitize_confidence(signal.get("strength")),
+                    "evidenceIds": evidence_ids,
+                }
+            )
     hypotheses = candidate.get("typologyHypotheses")
     if isinstance(hypotheses, list):
-        result["typologyHypotheses"] = hypotheses
+        for item in hypotheses[:4]:
+            if not isinstance(item, dict):
+                continue
+            evidence_ids = _string_list(item.get("evidenceIds"), limit=8, item_limit=80)
+            if not evidence_ids:
+                continue
+            claim = truncate_text(item.get("claim"), 220)
+            user_test_prompt = truncate_text(item.get("userTestPrompt"), 220)
+            if not claim or not user_test_prompt:
+                continue
+            function = _sanitize_choice(
+                item.get("function"),
+                allowed={"thinking", "feeling", "sensation", "intuition"},
+                default="intuition",
+            )
+            role = _sanitize_choice(
+                item.get("role"),
+                allowed={"dominant", "auxiliary", "tertiary", "inferior", "compensation_link"},
+                default="compensation_link",
+            )
+            normalized_claim_key = truncate_text(
+                item.get("normalizedClaimKey"), 120
+            ) or normalize_claim_key(claim)
+            result["typologyHypotheses"].append(
+                {
+                    "id": str(item.get("id") or create_id("typology_hypothesis")),
+                    "claim": claim,
+                    "role": role,
+                    "function": function,
+                    "confidence": cast(
+                        object,
+                        _sanitize_typology_confidence(item.get("confidence")),
+                    ),
+                    "evidenceIds": evidence_ids,
+                    "counterevidenceIds": _string_list(
+                        item.get("counterevidenceIds"), limit=8, item_limit=80
+                    ),
+                    "userTestPrompt": user_test_prompt,
+                    "phrasingPolicy": "very_tentative",
+                    "normalizedClaimKey": normalized_claim_key,
+                }
+            )
+    result["typologyHypotheses"] = [
+        item for item in result["typologyHypotheses"] if item.get("evidenceIds")
+    ]
+    if not result["typologySignals"] and not result["typologyHypotheses"]:
+        return {
+            "status": "skipped",
+            "typologySignals": [],
+            "typologyHypotheses": [],
+            "userTestPrompt": result["userTestPrompt"],
+        }
+    if result["typologyHypotheses"]:
+        result["status"] = "hypotheses_available"
     return result
+
+
+_CLARIFICATION_CAPTURE_TARGETS: set[str] = {
+    "answer_only",
+    "body_state",
+    "conscious_attitude",
+    "goal",
+    "goal_tension",
+    "personal_amplification",
+    "reality_anchors",
+    "threshold_process",
+    "relational_scene",
+    "inner_outer_correspondence",
+    "numinous_encounter",
+    "aesthetic_resonance",
+    "consent_preference",
+    "interpretation_preference",
+    "typology_feedback",
+}
+
+
+def _effective_capture_target(
+    llm_target: str | None,
+    preferred_targets: list[str] | None,
+) -> str:
+    if llm_target and llm_target != "answer_only" and llm_target in _CLARIFICATION_CAPTURE_TARGETS:
+        return llm_target
+    for pt in preferred_targets or []:
+        if pt in _CLARIFICATION_CAPTURE_TARGETS:
+            return pt
+    return "answer_only"
+
+
+def build_clarification_plan_from_llm(
+    llm_output: LlmInterpretationOutput,
+    preferred_targets: list[str] | None = None,
+) -> ClarificationPlan | None:
+    clarifying_question = str(llm_output.get("clarifyingQuestion", "")).strip()
+    candidate = llm_output.get("clarificationPlan")
+    if isinstance(candidate, dict):
+        question_text = truncate_text(candidate.get("questionText"), 220) or clarifying_question
+        if question_text:
+            plan: ClarificationPlan = {
+                "questionText": question_text,
+                "intent": cast(
+                    object,
+                    _sanitize_choice(
+                        candidate.get("intent"),
+                        allowed={
+                            "personal_association",
+                            "body_signal",
+                            "conscious_stance",
+                            "goal_pressure",
+                            "reality_anchor",
+                            "threshold_orientation",
+                            "relational_scene",
+                            "consent_check",
+                            "interpretation_preference",
+                            "safety_pacing",
+                            "typology_feedback",
+                            "other",
+                        },
+                        default="other",
+                    ),
+                ),
+                "captureTarget": cast(
+                    object,
+                    _effective_capture_target(
+                        str(candidate.get("captureTarget") or "").strip() or None,
+                        preferred_targets,
+                    ),
+                ),
+                "expectedAnswerKind": cast(
+                    object,
+                    _sanitize_choice(
+                        candidate.get("expectedAnswerKind"),
+                        allowed={
+                            "free_text",
+                            "yes_no",
+                            "single_choice",
+                            "multi_choice",
+                            "body_state",
+                            "scale",
+                            "structured_payload",
+                        },
+                        default="free_text",
+                    ),
+                ),
+            }
+            question_key = truncate_text(candidate.get("questionKey"), 120)
+            if question_key:
+                plan["questionKey"] = question_key
+            answer_slots = candidate.get("answerSlots")
+            if isinstance(answer_slots, dict) and answer_slots:
+                plan["answerSlots"] = answer_slots
+            routing_hints = candidate.get("routingHints")
+            if isinstance(routing_hints, dict) and routing_hints:
+                plan["routingHints"] = routing_hints
+            supporting_refs = _string_list(candidate.get("supportingRefs"), limit=8, item_limit=80)
+            if supporting_refs:
+                plan["supportingRefs"] = supporting_refs
+            anchor_refs = candidate.get("anchorRefs")
+            if isinstance(anchor_refs, dict) and anchor_refs:
+                plan["anchorRefs"] = anchor_refs
+            consent_scopes = _string_list(candidate.get("consentScopes"), limit=6, item_limit=80)
+            if consent_scopes:
+                plan["consentScopes"] = consent_scopes
+            return plan
+
+    if not clarifying_question:
+        return None
+    plan: ClarificationPlan = {
+        "questionText": clarifying_question,
+        "intent": "other",
+        "captureTarget": _effective_capture_target(None, preferred_targets),
+        "expectedAnswerKind": "free_text",
+    }
+    clarification_intent = llm_output.get("clarificationIntent")
+    if isinstance(clarification_intent, dict):
+        ref_key = truncate_text(clarification_intent.get("refKey"), 120)
+        if ref_key:
+            plan["questionKey"] = ref_key
+        expected_targets = _string_list(
+            clarification_intent.get("expectedTargets"), limit=4, item_limit=80
+        )
+        if expected_targets:
+            plan["captureTarget"] = cast(
+                object,
+                _effective_capture_target(
+                    _capture_target_from_expected_targets(expected_targets),
+                    preferred_targets,
+                ),
+            )
+        plan["routingHints"] = {"expectedTargets": expected_targets}
+        anchor_refs = clarification_intent.get("anchorRefs")
+        if isinstance(anchor_refs, dict) and anchor_refs:
+            plan["anchorRefs"] = anchor_refs
+        consent_scopes = _string_list(
+            clarification_intent.get("consentScopes"), limit=6, item_limit=80
+        )
+        if consent_scopes:
+            plan["consentScopes"] = consent_scopes
+    return plan
 
 
 def evidence_ids_for_refs(
@@ -2064,7 +2301,35 @@ def build_analysis_packet_provenance(
     )
 
 
-def build_compensation_assessment(hypotheses: list[Hypothesis]) -> dict[str, object] | None:
+def build_compensation_assessment(
+    hypotheses: list[Hypothesis],
+    method_context: MethodContextSnapshot | None = None,
+) -> dict[str, object] | None:
+    method_state = method_context.get("methodState") if isinstance(method_context, dict) else None
+    compensation_tendencies = (
+        method_state.get("compensationTendencies") if isinstance(method_state, dict) else None
+    )
+    if isinstance(compensation_tendencies, list):
+        for item in compensation_tendencies:
+            if not isinstance(item, dict):
+                continue
+            evidence_ids = _string_list(item.get("evidenceIds"), limit=8, item_limit=80)
+            pattern_summary = truncate_text(item.get("patternSummary"), 220)
+            user_test_prompt = truncate_text(item.get("userTestPrompt"), 220)
+            if not evidence_ids or not pattern_summary or not user_test_prompt:
+                continue
+            return {
+                "claim": pattern_summary,
+                "confidence": cast(object, sanitize_confidence(item.get("confidence"), "low")),
+                "evidenceIds": evidence_ids,
+                "userTestPrompt": user_test_prompt,
+            }
+    return _build_compensation_assessment_from_hypotheses(hypotheses)
+
+
+def _build_compensation_assessment_from_hypotheses(
+    hypotheses: list[Hypothesis],
+) -> dict[str, object] | None:
     for hypothesis in hypotheses:
         if hypothesis["hypothesisType"] == "compensation":
             return {
@@ -2074,6 +2339,34 @@ def build_compensation_assessment(hypotheses: list[Hypothesis]) -> dict[str, obj
                 "userTestPrompt": hypothesis["userTestPrompt"],
             }
     return None
+
+
+def _capture_target_from_expected_targets(expected_targets: list[str]) -> str:
+    supported = {
+        "body_state",
+        "conscious_attitude",
+        "goal",
+        "goal_tension",
+        "personal_amplification",
+        "reality_anchors",
+        "threshold_process",
+        "relational_scene",
+        "inner_outer_correspondence",
+        "numinous_encounter",
+        "aesthetic_resonance",
+        "consent_preference",
+        "interpretation_preference",
+        "typology_feedback",
+    }
+    for item in expected_targets:
+        if item in supported:
+            return item
+    return "answer_only"
+
+
+def _sanitize_typology_confidence(value: object) -> str:
+    confidence = sanitize_confidence(value, "low")
+    return "medium" if confidence == "high" else confidence
 
 
 def is_suppressed(normalized_claim_key: str, memory: HermesMemoryContext) -> bool:

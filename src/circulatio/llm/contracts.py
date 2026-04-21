@@ -114,6 +114,29 @@ class LlmDreamSeriesSuggestionCandidate(TypedDict, total=False):
     compensationTrajectory: NotRequired[str]
 
 
+class LlmClarificationIntent(TypedDict, total=False):
+    refKey: Required[str]
+    questionText: Required[str]
+    expectedTargets: Required[list[str]]
+    anchorRefs: Required[dict[str, object]]
+    consentScopes: Required[list[str]]
+    storagePolicy: Required[str]
+    expiresAt: Required[str]
+
+
+class LlmClarificationPlanCandidate(TypedDict, total=False):
+    questionText: Required[str]
+    questionKey: NotRequired[str]
+    intent: Required[str]
+    captureTarget: Required[str]
+    expectedAnswerKind: Required[str]
+    answerSlots: NotRequired[dict[str, object]]
+    routingHints: NotRequired[dict[str, object]]
+    supportingRefs: NotRequired[list[str]]
+    anchorRefs: NotRequired[dict[str, object]]
+    consentScopes: NotRequired[list[str]]
+
+
 class LlmIndividuationCandidateBase(TypedDict, total=False):
     label: Required[str]
     summary: Required[str]
@@ -258,6 +281,8 @@ class LlmInterpretationOutput(TypedDict, total=False):
     proposalCandidates: Required[list[LlmProposalCandidate]]
     userFacingResponse: Required[str]
     clarifyingQuestion: NotRequired[str]
+    clarificationPlan: NotRequired[LlmClarificationPlanCandidate]
+    clarificationIntent: NotRequired[LlmClarificationIntent]
 
 
 class LlmWeeklyReviewOutput(TypedDict, total=False):
@@ -403,3 +428,28 @@ class LlmAnalysisPacketOutput(TypedDict, total=False):
     evidenceIds: NotRequired[list[str]]
     userFacingResponse: Required[str]
     supportingRefs: Required[list[str]]
+
+
+class LlmMethodStateEvidenceSpan(TypedDict, total=False):
+    refKey: Required[str]
+    quote: NotRequired[str]
+    summary: NotRequired[str]
+    targetKinds: Required[list[str]]
+
+
+class LlmMethodStateCaptureCandidate(TypedDict, total=False):
+    targetKind: Required[str]
+    application: Required[str]
+    confidence: Required[Literal["low", "medium", "high"]]
+    payload: Required[dict[str, object]]
+    supportingEvidenceRefs: Required[list[str]]
+    consentScopes: Required[list[str]]
+    reason: Required[str]
+
+
+class LlmMethodStateRoutingOutput(TypedDict, total=False):
+    answerSummary: Required[str]
+    evidenceSpans: Required[list[LlmMethodStateEvidenceSpan]]
+    captureCandidates: Required[list[LlmMethodStateCaptureCandidate]]
+    followUpPrompts: Required[list[str]]
+    routingWarnings: Required[list[str]]

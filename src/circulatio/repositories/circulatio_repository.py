@@ -10,6 +10,13 @@ from ..domain.amplifications import (
     PersonalAmplificationRecord,
     PersonalAmplificationUpdate,
 )
+from ..domain.clarifications import (
+    ClarificationAnswerRecord,
+    ClarificationAnswerUpdate,
+    ClarificationPromptRecord,
+    ClarificationPromptStatus,
+    ClarificationPromptUpdate,
+)
 from ..domain.conscious_attitude import (
     ConsciousAttitudeSnapshotFilters,
     ConsciousAttitudeSnapshotRecord,
@@ -28,6 +35,7 @@ from ..domain.dream_series import (
     DreamSeriesRecord,
     DreamSeriesUpdate,
 )
+from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.goals import GoalRecord, GoalTensionRecord, GoalTensionUpdate, GoalUpdate
 from ..domain.graph import GraphQuery, GraphQueryResult
 from ..domain.individuation import (
@@ -54,6 +62,7 @@ from ..domain.living_myth import (
 )
 from ..domain.materials import MaterialListFilters, MaterialRecord, MaterialRevision, MaterialUpdate
 from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
+from ..domain.method_state import MethodStateCaptureRunRecord, MethodStateCaptureRunUpdate
 from ..domain.patterns import PatternHistoryEntry, PatternRecord, PatternType, PatternUpdate
 from ..domain.practices import PracticeSessionRecord, PracticeSessionStatus, PracticeSessionUpdate
 from ..domain.proactive import (
@@ -167,6 +176,95 @@ class CirculatioRepository(GraphMemoryRepository):
     async def update_interpretation_run(
         self, user_id: Id, run_id: Id, updates: InterpretationRunUpdate
     ) -> InterpretationRunRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_clarification_prompt(
+        self, record: ClarificationPromptRecord
+    ) -> ClarificationPromptRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_clarification_prompt(
+        self, user_id: Id, prompt_id: Id, *, include_deleted: bool = False
+    ) -> ClarificationPromptRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_clarification_prompt(
+        self, user_id: Id, prompt_id: Id, updates: ClarificationPromptUpdate
+    ) -> ClarificationPromptRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_clarification_prompts(
+        self,
+        user_id: Id,
+        *,
+        status: ClarificationPromptStatus | None = None,
+        material_id: Id | None = None,
+        run_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[ClarificationPromptRecord]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_clarification_answer(
+        self, record: ClarificationAnswerRecord
+    ) -> ClarificationAnswerRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_clarification_answer(
+        self, user_id: Id, answer_id: Id, *, include_deleted: bool = False
+    ) -> ClarificationAnswerRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_clarification_answer(
+        self, user_id: Id, answer_id: Id, updates: ClarificationAnswerUpdate
+    ) -> ClarificationAnswerRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_clarification_answers(
+        self,
+        user_id: Id,
+        *,
+        prompt_id: Id | None = None,
+        run_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[ClarificationAnswerRecord]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_method_state_capture_run(
+        self, record: MethodStateCaptureRunRecord
+    ) -> MethodStateCaptureRunRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_method_state_capture_run(
+        self, user_id: Id, capture_run_id: Id, *, include_deleted: bool = False
+    ) -> MethodStateCaptureRunRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_method_state_capture_run_by_idempotency_key(
+        self, user_id: Id, idempotency_key: str
+    ) -> MethodStateCaptureRunRecord | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_method_state_capture_run(
+        self, user_id: Id, capture_run_id: Id, updates: MethodStateCaptureRunUpdate
+    ) -> MethodStateCaptureRunRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_method_state_capture_runs(
+        self, user_id: Id, *, limit: int = 50
+    ) -> list[MethodStateCaptureRunRecord]:
         raise NotImplementedError
 
     @abstractmethod
@@ -796,6 +894,23 @@ class CirculatioRepository(GraphMemoryRepository):
     async def update_adaptation_profile(
         self, user_id: Id, profile_id: Id, updates: UserAdaptationProfileUpdate
     ) -> UserAdaptationProfileRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_interaction_feedback(
+        self, record: InteractionFeedbackRecord
+    ) -> InteractionFeedbackRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_interaction_feedback(
+        self,
+        user_id: Id,
+        *,
+        domain: str | None = None,
+        target_id: Id | None = None,
+        limit: int = 50,
+    ) -> list[InteractionFeedbackRecord]:
         raise NotImplementedError
 
     @abstractmethod
