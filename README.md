@@ -8,12 +8,35 @@
 Circulatio is the symbolic backend that turns a host agent like Hermes into an individuation companion. It holds your dreams, body-states, reflections, charged events, and threshold material across time, then interprets them through a Jungian depth lens when *you* decide the moment is right.
 
 <p align="center">
-  <img src="docs/diagram.svg" alt="Minimal overview diagram describing Circulatio as the first individuation OS, holding dreams, body states, reflections, and charged events across time to surface pattern, depth, and individuation." width="100%" />
+  <img src="docs/diagram.svg" alt="Circulatio diagram: material enters the vessel (dreams, body states, reflections, charged events), passes through capture / hold / interpret, and becomes visible as pattern, journeys, living myth, and analysis packets — guarded by grounding, evidence, hypotheses, approval, and offline evolution." width="100%" />
 </p>
 
 It does not chase you. It does not gamify you. It does not collapse your symbols into productivity tips.
 
 It **holds** first. It **remembers** what you forget. It **surfaces patterns** you cannot yet hold alone. And when you ask, it **interprets** with evidence, cultural amplification, and care for your conscious situation.
+
+---
+
+## Quickstart
+
+```bash
+git clone https://github.com/Sophanos/circulatio.git
+cd circulatio
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+python -m pytest tests/
+```
+
+**Already installed?**
+```bash
+pip install -e ".[dev]" --upgrade
+```
+
+**Evaluate method quality:**
+```bash
+.venv/bin/python scripts/evaluate_circulatio_method.py --strict
+```
 
 ---
 
@@ -69,10 +92,10 @@ Circulatio is a **durable backend** with a Hermes plugin bridge. Hermes owns rou
 
 ```
 You → Hermes (routing, rhythm, gateway)
-        ↓
-   Circulatio (memory, graph, interpretation, context)
-        ↓
-   SQLite (canonical storage)
+         ↓
+    Circulatio (memory, graph, interpretation, context)
+         ↓
+    SQLite (canonical storage)
 ```
 
 ## Current State
@@ -96,16 +119,24 @@ The embedded Hermes/backend runtime now substantially covers the implemented bac
 - **Agent guide:** `AGENTS.md`
 - **What success feels like:** `docs/SUCCESS_VISION.md`
 
-## Dev Quick Start
+## Repo Layout
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-python -m pytest tests/
-.venv/bin/python scripts/evaluate_circulatio_method.py --strict
-# optional: stage a manual candidate review package
-.venv/bin/python scripts/evolve_circulatio_method.py --target prompt_fragments --strategy manual --prompt-fragments src/circulatio/llm/prompt_fragments.py
+```
+src/
+  circulatio/               # Core library
+    domain/                 # Types, records, graph vocab. No I/O.
+    application/            # CirculatioService orchestrates workflows.
+    core/                   # CirculatioCore, LLM orchestration, safety, evidence.
+    repositories/           # In-memory + SQLite. No external graph DB.
+    adapters/               # Context builder, Hermes/Life-OS adapters.
+    hermes/                 # Bridge contracts, router, runtime wiring.
+    llm/                    # Prompts, model adapter, JSON schema.
+  circulatio_hermes_plugin/ # Hermes plugin (tools, commands, schemas, yaml)
+
+tools/self_evolution/       # Offline Evolution OS builder tooling
+scripts/                    # Eval + evolution entry points
+tests/evals/                # Method eval fixtures (jsonl)
+docs/                       # Roadmap, spec, runbook, success vision, etc.
 ```
 
 ## The Bottom Line
