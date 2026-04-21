@@ -67,8 +67,8 @@ def parse_args(default_target_order: tuple[str, ...]) -> argparse.Namespace:
     parser.add_argument(
         "--judge-mode",
         choices=["absolute", "pairwise"],
-        default="absolute",
-        help="Judge scoring mode when advisory judging is enabled.",
+        default=None,
+        help="Optional judge scoring mode override when advisory judging is enabled.",
     )
     parser.add_argument(
         "--provider",

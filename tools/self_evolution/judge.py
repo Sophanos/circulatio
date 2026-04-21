@@ -57,7 +57,7 @@ class JudgeOptions:
     temperature: float = 0.0
     max_tokens: int = 900
     timeout_seconds: float | None = None
-    mode: str = "absolute"
+    mode: str | None = None
     candidate_id: str | None = None
 
 
@@ -86,7 +86,11 @@ async def run_judge_cases(
     judge_results: dict[str, JudgeResult] = {}
     for case_id, execution_output in execution_outputs.items():
         judge_config = case_judge_config(execution_output.case) or {}
-        mode = str(judge_config.get("mode") or options.mode)
+        mode = str(
+            options.mode
+            if options.mode is not None
+            else judge_config.get("mode") or "absolute"
+        )
         rubric = [str(item) for item in judge_config.get("rubric", []) if str(item)]
         if not rubric:
             rubric = list(DEFAULT_RUBRICS[target.kind])
@@ -200,7 +204,7 @@ def _judge_messages(
         payload["targetResponseId"] = "responseA" if first == "candidate" else "responseB"
         payload["comparisonPolicy"] = (
             "Score only targetResponseId while using the other response as blinded comparison "
-            "context. Do not assume either neutral label is baseline or candidate."
+            "context. Do not infer provenance or preference from either neutral label."
         )
     else:
         payload["output"] = execution_output.payload

@@ -150,6 +150,21 @@ class SelfEvolutionOptimizerTests(unittest.TestCase):
             self.assertTrue(Path(result["paths"]["report_md"]).exists())
             self.assertTrue(Path(result["paths"]["diff_patch"]).exists())
 
+    def test_manual_candidate_flow_requires_selected_target_coverage(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        baseline_path = repo_root / "src" / "circulatio" / "llm" / "prompt_fragments.py"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            candidate_path = Path(tmp_dir) / "prompt_fragments.py"
+            candidate_path.write_text(baseline_path.read_text())
+            with self.assertRaises(ValueError) as exc:
+                evolve_candidates(
+                    target_names=["prompt_fragments", "skill"],
+                    strategy="manual",
+                    candidate_paths={"prompt_fragments": candidate_path},
+                    out_dir=Path(tmp_dir) / "runs",
+                )
+        self.assertIn("requires candidate paths for every selected target", str(exc.exception))
+
     def test_manual_candidate_flow_records_failure_report(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         baseline = (repo_root / "src" / "circulatio" / "llm" / "prompt_fragments.py").read_text()

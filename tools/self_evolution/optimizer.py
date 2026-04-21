@@ -187,7 +187,7 @@ def _evaluate_stage(
         )
 
     baseline_execution_outputs_by_target: dict[str, dict[str, ExecutionCaseOutput]] | None = (
-        {} if judge_options is not None and judge_options.enabled and judge_options.mode == "pairwise" else None
+        {} if judge_options is not None and judge_options.enabled else None
     )
     baseline_reports = evaluate_targets(
         applicable_targets,
@@ -348,7 +348,7 @@ def _optimize_target(
 ) -> tuple[MaterializedCandidate | None, list[dict[str, object]], list[dict[str, object]]]:
     target = get_target(target_name)
     baseline_execution_outputs: dict[str, ExecutionCaseOutput] | None = (
-        {} if judge_options.enabled and judge_options.mode == "pairwise" else None
+        {} if judge_options.enabled else None
     )
     baseline_report = evaluate_target(
         target_name,

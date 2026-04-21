@@ -60,6 +60,29 @@ class SelfEvolutionMaterializerTests(unittest.TestCase):
         self.assertEqual(candidate.source_trace_ids, ["trace_runtime_hint"])
         self.assertEqual(candidate.edit_summary, ["RUNTIME_HINT_POLICY"])
 
+    def test_prompt_materializer_rejects_out_of_scope_constant(self) -> None:
+        materializer = PromptFragmentsMaterializer(get_target("prompt_fragments"))
+        proposal = {
+            "editSet": {
+                "prompt_constant_replacements": [
+                    {
+                        "constantName": "LIFE_CONTEXT_EVENT_LIMIT",
+                        "newText": "9",
+                        "reason": "This constant is outside the mutable prompt-policy boundary.",
+                    }
+                ]
+            },
+            "rationale": "This should fail mutation-boundary validation.",
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with self.assertRaises(ValueError) as exc:
+                materializer.materialize(
+                    candidate_id="prompt_fragments_cand_0002",
+                    proposal=proposal,
+                    output_dir=Path(tmp_dir),
+                )
+        self.assertIn("allowed mutation boundary", str(exc.exception))
+
     def test_skill_materializer_enforces_byte_limit(self) -> None:
         materializer = SkillMaterializer(get_target("skill"))
         proposal = {

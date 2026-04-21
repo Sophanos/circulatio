@@ -79,8 +79,8 @@ def parse_args(default_target_order: tuple[str, ...]) -> argparse.Namespace:
     parser.add_argument(
         "--judge-mode",
         choices=["absolute", "pairwise"],
-        default="absolute",
-        help="Judge scoring mode when advisory judging is enabled.",
+        default=None,
+        help="Optional judge scoring mode override when advisory judging is enabled.",
     )
     parser.add_argument(
         "--trace-jsonl",
@@ -248,9 +248,7 @@ def main() -> int:
             timeout_seconds=args.timeout_seconds,
             mode=args.judge_mode,
         )
-        baseline_execution_outputs_by_target = (
-            {} if judge_enabled and args.judge_mode == "pairwise" else None
-        )
+        baseline_execution_outputs_by_target = {} if judge_enabled else None
         baseline_reports = (
             evaluate_targets(
                 target_names,
