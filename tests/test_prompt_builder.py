@@ -94,9 +94,9 @@ class PromptBuilderTests(unittest.TestCase):
                         "language": "de",
                     },
                     {
-                        "label": "Carl Jung Depth Psychology",
-                        "url": "https://carljungdepthpsychologysite.blog/",
-                        "kind": "depth_psychology_archive",
+                        "label": "ARAS",
+                        "url": "https://aras.org/",
+                        "kind": "scholarly_reference",
                         "language": "en",
                     },
                 ],
@@ -106,7 +106,7 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertEqual(payload["trustedAmplificationSources"][0]["label"], "Symbolonline")
         self.assertEqual(
             payload["trustedAmplificationSources"][1]["url"],
-            "https://carljungdepthpsychologysite.blog/",
+            "https://aras.org/",
         )
         self.assertEqual(payload["methodContextSnapshot"]["activeCulturalFrames"][0]["label"], "Jungian amplification")
         self.assertIn("Some amplification will resonate", payload["instructions"]["sourcePolicy"])

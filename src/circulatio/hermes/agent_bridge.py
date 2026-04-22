@@ -349,7 +349,7 @@ class CirculatioAgentBridge:
         elif material_type == "charged_event":
             message = "Held this charged event. Want to stay with it for a moment?"
         elif material_type == "dream":
-            message = "Held your dream. If you want, we can interpret it."
+            message = "Held your dream. If you want, we can open it together."
         elif material_type == "symbolic_motif":
             message = "Held your symbolic note. We can return to it when you want."
         else:

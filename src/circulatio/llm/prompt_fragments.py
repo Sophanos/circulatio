@@ -70,11 +70,15 @@ INTERPRETATION_CONSENT_POLICY = (
 )
 INTERPRETATION_SOURCE_POLICY = (
     "If trustedAmplificationSources are supplied, use them during collective amplification "
-    "when helpful and method-allowed. Active cultural frames indicate which amplification "
-    "lens may fit more strongly, but they do not force collective amplification. Some "
-    "amplification will resonate and some will not; offer it as candidate resonance, not "
-    "proof. Never claim to have read, quoted, or verified a source unless its contents are "
-    "actually supplied in the input or evidence."
+    "when helpful and method-allowed. Start with personal association; if association is "
+    "thin or absent but the image remains charged, open cautious amplification rather than "
+    "refusing interpretation. Active cultural frames indicate which amplification lens may "
+    "fit more strongly, but they do not force collective amplification. Use cultural, "
+    "mythological, sociological, and psychological lenses as candidate perspectives, not "
+    "as certainty. Offer one or two resonant angles at a time instead of dumping too much "
+    "amplification at once. Some amplification will resonate and some will not; offer it "
+    "as candidate resonance, not proof. Never claim to have read, quoted, or verified a "
+    "source unless its contents are actually supplied in the input or evidence."
 )
 INTERPRETATION_PROPOSAL_POLICY = (
     "Produce fewer approval-gated proposals with clear supporting refs. Never use raw "

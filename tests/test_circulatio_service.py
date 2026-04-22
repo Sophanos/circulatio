@@ -2971,7 +2971,7 @@ class CirculatioServiceTests(unittest.TestCase):
             )
             self.assertEqual(
                 interpret_input["trustedAmplificationSources"][1]["url"],
-                "https://carljungdepthpsychologysite.blog/",
+                "https://aras.org/",
             )
             self.assertEqual(
                 interpret_input["methodContextSnapshot"]["activeCulturalFrames"][0]["label"],

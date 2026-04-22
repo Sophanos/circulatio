@@ -718,7 +718,7 @@ class HermesBridgePluginTests(unittest.TestCase):
             self.assertEqual(stored_symbolic["status"], "ok")
             self.assertEqual(stored_body["status"], "ok")
             self.assertEqual(
-                stored_dream["message"], "Held your dream. If you want, we can interpret it."
+                stored_dream["message"], "Held your dream. If you want, we can open it together."
             )
             self.assertEqual(
                 stored_reflection["message"],
@@ -772,7 +772,7 @@ class HermesBridgePluginTests(unittest.TestCase):
 
             self.assertEqual(stored["status"], "ok")
             self.assertEqual(
-                stored["message"], "Held your dream. If you want, we can interpret it."
+                stored["message"], "Held your dream. If you want, we can open it together."
             )
             self.assertEqual(stored["result"]["materialType"], "dream")
             self.assertEqual(
@@ -1293,7 +1293,15 @@ class HermesBridgePluginTests(unittest.TestCase):
             ctx.tools["circulatio_interpret_material"]["description"],
         )
         self.assertIn(
-            "relay that diagnostic plainly and stop",
+            "do not frame it as a backend failure",
+            ctx.tools["circulatio_interpret_material"]["description"],
+        )
+        self.assertIn(
+            "A valid first response may be a single question",
+            ctx.tools["circulatio_interpret_material"]["description"],
+        )
+        self.assertIn(
+            "usually 1-3 sentences with exactly one question",
             ctx.tools["circulatio_interpret_material"]["description"],
         )
         self.assertIn(

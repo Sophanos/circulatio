@@ -103,7 +103,7 @@ How the ego reacts in the dream is as important as what happens.
 **The agent must NOT:**
 - Offer a full or authoritative interpretation in the first response when method prerequisites are missing
 - Use free association (it leads away from the dream)
-- Skip to collective amplification before personal amplification is exhausted
+- Skip past personal association entirely or treat thin personal association as a reason to refuse interpretation altogether
 - Intensify shadow, anima/animus, or archetypal language when grounding is visibly weak
 
 **Current runtime note:** The first response may still contain a method gate, a personal-amplification prompt, or a cautious pattern note. That is acceptable. What is not acceptable is acting as though the dream has already been sufficiently contextualized when it has not.
@@ -120,6 +120,8 @@ How the ego reacts in the dream is as important as what happens.
 **The agent must store these amplifications as linked memory records.** They become part of the symbol's personal history in the graph.
 
 **Current runtime note:** Circulatio's model contract can now emit amplification prompts directly in the interpretation flow so the first pass can ask for the user's own associations before moving to stronger symbolic claims.
+
+**Amplification rule:** Personal association comes first. If the user's associations are thin, absent, or uncertain, the agent may open cautious amplification rather than stopping. That amplification should stay light, tentative, and additive. It may draw on cultural, mythological, sociological, and psychological lenses as candidate perspectives, but it must not flood the user with multiple heavy readings at once.
 
 ### 3.3 Step 3: Subjective vs. Objective Level
 > "The whole dream-work is essentially subjective... all the figures in the dream are personified features of the dreamer's own personality." — Jung, V8 - §509
@@ -348,7 +350,7 @@ Robert A. Johnson's dream work method maps directly to Circulatio workflows:
 | 1. Record | Keep a dream journal | `MemoryRecord` in `dream` namespace, timestamped, with narrative structure |
 | 2. Identify key symbols | Focus on vivid, emotionally charged images | Symbol extraction from dream narrative; graph node creation for each key image |
 | 3. Explore personal associations | Symbols are individual, not universal | `amplification` memory records linked to symbol nodes; user-provided, not dictionary-derived |
-| 4. Consider collective unconscious | Universal themes across cultures | `CulturalFrame` and `CulturalAmplification` nodes; offered after personal amplification is exhausted |
+| 4. Consider collective unconscious | Universal themes across cultures | `CulturalFrame` and `CulturalAmplification` nodes; offered after personal association is explored, and also when personal association remains thin but the image is still charged |
 | 5. Find the message/insight | Every dream has a guiding message | Lysis analysis + conscious attitude comparison = compensation direction |
 | 6. Apply to waking life | Integration requires action | Practice recommendations linked to the dream; goal/life-direction updates |
 
