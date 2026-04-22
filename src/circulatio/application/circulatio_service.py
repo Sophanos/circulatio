@@ -149,6 +149,7 @@ from .workflow_types import (
     SetJourneyStatusInput,
     StoreBodyStateResult,
     StoreMaterialWithIntakeContextResult,
+    SurfaceContextBundle,
     SymbolHistoryResult,
     ThreadAwareContinuityBundle,
     ThresholdReviewWorkflowResult,
@@ -1431,11 +1432,12 @@ class CirculatioService:
         payload: dict[str, object] | None = None,
         material_id: Id | None = None,
         include_dashboard: bool = False,
+        include_weekly_reviews: bool = False,
         memory_query: MemoryRetrievalQuery | None = None,
         explicit_question: str | None = None,
         safety_context: SafetyContext | None = None,
         sync_longitudinal: bool = False,
-    ) -> dict[str, object]:
+    ) -> SurfaceContextBundle:
         prepared_payload = (
             deepcopy(payload)
             if payload is not None
@@ -1496,19 +1498,31 @@ class CirculatioService:
                 user_id,
                 query=memory_query,
             )
-        return {
+        weekly_reviews = None
+        if include_weekly_reviews:
+            weekly_reviews = await self._repository.list_weekly_reviews(user_id, limit=5)
+        bundle: SurfaceContextBundle = {
             "preparedPayload": prepared_payload,
             "continuity": continuity,
-            "methodContextSnapshot": method_context,
             "threadDigests": thread_digests,
-            "dashboard": dashboard,
-            "memorySnapshot": memory_snapshot,
-            "recentPractices": coach_runtime["recentPractices"],
-            "journeys": coach_runtime["journeys"],
-            "existingBriefs": coach_runtime["existingBriefs"],
+            "recentPractices": cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            "journeys": cast(list[JourneyRecord], coach_runtime["journeys"]),
+            "existingBriefs": cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
             "profile": coach_runtime["profile"],
-            "adaptationSummary": coach_runtime["adaptationSummary"],
         }
+        if method_context is not None:
+            bundle["methodContextSnapshot"] = method_context
+        if dashboard is not None:
+            bundle["dashboard"] = dashboard
+        if memory_snapshot is not None:
+            bundle["memorySnapshot"] = memory_snapshot
+        if coach_runtime.get("adaptationSummary") is not None:
+            bundle["adaptationSummary"] = cast(
+                UserAdaptationProfileSummary, coach_runtime["adaptationSummary"]
+            )
+        if weekly_reviews is not None:
+            bundle["weeklyReviews"] = weekly_reviews
+        return bundle
 
     def _coach_expected_targets_from_context(
         self,
@@ -3849,40 +3863,30 @@ class CirculatioService:
         )
         max_invitations = min(max(int(input_data.get("maxInvitations", 3)), 0), 5)
         include_analysis_packet = bool(input_data.get("includeAnalysisPacket", True))
-        continuity, summary_input, summary = await self._build_ephemeral_circulation_summary(
+        bundle = await self._load_surface_context_bundle(
             user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
-            explicit_question=self._optional_str(input_data.get("explicitQuestion")),
+            include_dashboard=True,
+            include_weekly_reviews=True,
+            memory_query={},
             surface="journey_page",
+            explicit_question=self._optional_str(input_data.get("explicitQuestion")),
         )
-        dashboard = await self._repository.get_dashboard_summary(user_id=input_data["userId"])
-        weekly_reviews = await self._repository.list_weekly_reviews(input_data["userId"], limit=5)
-        memory_snapshot = await self._repository.build_memory_kernel_snapshot(input_data["userId"])
-        recent_practices = await self._repository.list_practice_sessions(
-            input_data["userId"],
-            statuses=["recommended", "accepted", "completed", "skipped"],
-            include_deleted=False,
-            limit=100,
-        )
-        journeys = await self._repository.list_journeys(
-            input_data["userId"],
-            include_deleted=False,
-            limit=50,
-        )
-        existing_briefs = await self._repository.list_proactive_briefs(
-            input_data["userId"],
-            include_deleted=False,
-            limit=100,
-        )
-        profile = await self._repository.get_adaptation_profile(input_data["userId"])
+        summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
+        summary = await self._core.generate_circulation_summary(summary_input)
+        dashboard = cast(DashboardSummary, bundle["dashboard"])
+        memory_snapshot = cast(MemoryKernelSnapshot, bundle["memorySnapshot"])
+        method_context = bundle.get("methodContextSnapshot")
+        thread_digests = bundle["threadDigests"]
+        recent_practices = bundle["recentPractices"]
+        journeys = bundle["journeys"]
+        existing_briefs = bundle["existingBriefs"]
+        weekly_reviews = bundle.get("weeklyReviews", [])
+        profile = bundle.get("profile")
         cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
-        adaptation_summary = self._adaptation_engine.summarize(profile)
-        method_context = summary_input.get("methodContextSnapshot")
-        thread_digests = cast(
-            list[ThreadDigest],
-            [item for item in summary_input.get("threadDigests", []) if isinstance(item, dict)],
-        )
+        adaptation_summary = bundle.get("adaptationSummary")
         generated_at = now_iso()
         seeds = self._proactive_engine.build_candidate_seeds(
             user_id=input_data["userId"],
@@ -4612,15 +4616,15 @@ class CirculatioService:
         )
         summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
         continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
-        memory_snapshot = cast(MemoryKernelSnapshot, bundle["memorySnapshot"])
-        dashboard = cast(DashboardSummary, bundle["dashboard"])
-        thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
-        recent_practices = cast(list[PracticeSessionRecord], bundle["recentPractices"])
-        journeys = cast(list[JourneyRecord], bundle["journeys"])
-        existing_briefs = cast(list[ProactiveBriefRecord], bundle["existingBriefs"])
-        profile = cast(dict[str, object] | None, bundle["profile"])
+        memory_snapshot = cast(MemoryKernelSnapshot, bundle.get("memorySnapshot"))
+        dashboard = cast(DashboardSummary, bundle.get("dashboard"))
+        thread_digests = bundle["threadDigests"]
+        recent_practices = bundle["recentPractices"]
+        journeys = bundle["journeys"]
+        existing_briefs = bundle["existingBriefs"]
+        profile = bundle.get("profile")
         cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
-        adaptation_summary = cast(UserAdaptationProfileSummary | None, bundle["adaptationSummary"])
+        adaptation_summary = bundle.get("adaptationSummary")
         method_context = summary_input.get("methodContextSnapshot")
         consent_status = self._consent_status(
             method_context.get("consentPreferences", []) if method_context else [],

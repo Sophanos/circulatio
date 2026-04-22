@@ -11,10 +11,10 @@ from ..domain.clarifications import (
 from ..domain.context import ContextSnapshot
 from ..domain.graph import GraphNodeType
 from ..domain.interpretations import InterpretationRunRecord
-from ..domain.journeys import JourneyStatus
+from ..domain.journeys import JourneyRecord, JourneyStatus
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialListFilters, MaterialRecord, StoredDreamStructure
-from ..domain.memory import MemoryNamespace, MemoryRetrievalRankingProfile
+from ..domain.memory import MemoryKernelSnapshot, MemoryNamespace, MemoryRetrievalRankingProfile
 from ..domain.method_state import (
     MethodStateAnchorRefs,
     MethodStateAppliedEntityRef,
@@ -26,6 +26,7 @@ from ..domain.patterns import PatternHistoryEntry, PatternRecord
 from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import ProactiveBriefRecord, RhythmBriefSource
 from ..domain.records import DeletionMode, MaterialSource
+from ..domain.reviews import DashboardSummary
 from ..domain.soma import BodyActivation, BodyStateRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
@@ -51,6 +52,7 @@ from ..domain.types import (
     SessionContext,
     ThreadDigest,
     ThresholdReviewResult,
+    UserAdaptationProfileSummary,
     UserAssociationInput,
 )
 
@@ -95,6 +97,21 @@ class ThreadAwareContinuityBundle(TypedDict, total=False):
     windowEnd: Required[str]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
     threadDigests: Required[list[ThreadDigest]]
+
+
+class SurfaceContextBundle(TypedDict, total=False):
+    preparedPayload: Required[dict[str, object]]
+    continuity: Required[ThreadAwareContinuityBundle]
+    methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: Required[list[ThreadDigest]]
+    dashboard: NotRequired[DashboardSummary]
+    memorySnapshot: NotRequired[MemoryKernelSnapshot]
+    recentPractices: NotRequired[list[PracticeSessionRecord]]
+    journeys: NotRequired[list[JourneyRecord]]
+    existingBriefs: NotRequired[list[ProactiveBriefRecord]]
+    profile: NotRequired[dict[str, object]]
+    adaptationSummary: NotRequired[UserAdaptationProfileSummary]
+    weeklyReviews: NotRequired[list[dict[str, object]]]
 
 
 IntakeContextVisibility = Literal["host_only"]

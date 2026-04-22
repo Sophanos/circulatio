@@ -3879,6 +3879,207 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_canonical_bundle_produces_consistent_thread_state_across_surfaces(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.create_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A river flows through a dark forest.",
+                    "materialDate": "2026-04-20T08:00:00Z",
+                }
+            )
+            await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Forest exploration",
+                    "currentQuestion": "What does the forest represent?",
+                }
+            )
+            store_result = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "The forest feels familiar.",
+                    "materialDate": "2026-04-21T10:00:00Z",
+                }
+            )
+            continuity = store_result["continuity"]
+            self.assertIn("threadDigests", continuity)
+            self.assertIn("generatedAt", continuity)
+            self.assertIn("windowStart", continuity)
+            self.assertIn("windowEnd", continuity)
+            store_digest_keys = {
+                d["threadKey"] for d in continuity["threadDigests"]
+            }
+            alive_result = await service.generate_alive_today(
+                user_id="user_1",
+                window_start="2026-04-14T00:00:00Z",
+                window_end="2026-04-21T23:59:59Z",
+            )
+            alive_digest_keys = {
+                d["threadKey"] for d in alive_result["continuity"]["threadDigests"]
+            }
+            self.assertTrue(store_digest_keys.issubset(alive_digest_keys))
+
+        asyncio.run(run())
+
+    def test_dream_series_appears_in_thread_digests_with_evidence(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            material = await service.create_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "I was in a house with many rooms.",
+                }
+            )
+            series = await repository.create_dream_series(
+                {
+                    "id": create_id("dream_series"),
+                    "userId": "user_1",
+                    "label": "House dreams",
+                    "status": "active",
+                    "confidence": "medium",
+                    "materialIds": [material["id"]],
+                    "symbolIds": [],
+                    "motifKeys": ["house"],
+                    "settingKeys": [],
+                    "figureKeys": [],
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+            result = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Thinking about the house dream.",
+                    "materialDate": "2026-04-21T10:00:00Z",
+                }
+            )
+            continuity = result["continuity"]
+            dream_digests = [
+                d for d in continuity["threadDigests"]
+                if d["kind"] == "dream_series"
+            ]
+            self.assertTrue(dream_digests)
+            self.assertEqual(
+                dream_digests[0]["evidenceIds"],
+                [material["id"]],
+            )
+
+        asyncio.run(run())
+
+    def test_post_write_continuity_refresh_from_practice_outcome(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            practice = await service._repository.create_practice_session(
+                {
+                    "id": create_id("practice_session"),
+                    "userId": "user_1",
+                    "practiceType": "grounding",
+                    "target": "body awareness",
+                    "reason": "grounding after dream",
+                    "instructions": [],
+                    "durationMinutes": 5,
+                    "contraindicationsChecked": [],
+                    "requiresConsent": False,
+                    "status": "recommended",
+                    "source": "manual",
+                    "followUpCount": 0,
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+            result = await service.record_practice_outcome(
+                user_id="user_1",
+                practice_session_id=practice["id"],
+                material_id=None,
+                outcome={
+                    "practiceType": "grounding",
+                    "outcome": "Felt more settled after grounding.",
+                },
+            )
+            self.assertIn("continuity", result)
+            continuity = result["continuity"]
+            self.assertIn("threadDigests", continuity)
+            self.assertIn("generatedAt", continuity)
+
+        asyncio.run(run())
+
+    def test_journey_page_uses_canonical_bundle(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.create_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A bridge over water.",
+                    "materialDate": "2026-04-20T08:00:00Z",
+                }
+            )
+            await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Water dreams",
+                    "currentQuestion": "What does the water mean?",
+                }
+            )
+            page = await service.generate_journey_page(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-14T00:00:00Z",
+                    "windowEnd": "2026-04-21T23:59:59Z",
+                }
+            )
+            self.assertIn("continuity", page)
+            self.assertIn("threadDigests", page["continuity"])
+            self.assertTrue(page["continuity"]["threadDigests"])
+            self.assertIn("aliveToday", page)
+            self.assertIn("weeklySurface", page)
+            self.assertIn("practiceContainer", page)
+
+        asyncio.run(run())
+
+    def test_longitudinal_signal_surface_readiness(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.create_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A recurring snake image.",
+                    "materialDate": "2026-04-15T08:00:00Z",
+                }
+            )
+            await service.create_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "The snake returns again.",
+                    "materialDate": "2026-04-20T08:00:00Z",
+                }
+            )
+            result = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Noticing the snake pattern.",
+                    "materialDate": "2026-04-21T10:00:00Z",
+                }
+            )
+            continuity = result["continuity"]
+            self.assertIn("threadDigests", continuity)
+            for digest in continuity["threadDigests"]:
+                self.assertIn("surfaceReadiness", digest)
+                self.assertIn("threadKey", digest)
+                self.assertIn("kind", digest)
+                self.assertIn("evidenceIds", digest)
+
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()
