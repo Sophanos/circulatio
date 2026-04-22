@@ -41,6 +41,17 @@ class CirculatioServiceTests(unittest.TestCase):
     def _service(self) -> tuple[InMemoryCirculatioRepository, CirculatioService, FakeCirculatioLlm]:
         repository = InMemoryCirculatioRepository()
         llm = FakeCirculatioLlm()
+        service = self._service_with_llm(repository=repository, llm=llm)
+        return repository, service, llm
+
+    def _service_with_llm(
+        self,
+        *,
+        repository: InMemoryCirculatioRepository | None = None,
+        llm: object,
+    ) -> CirculatioService:
+        if repository is None:
+            repository = InMemoryCirculatioRepository()
         core = CirculatioCore(repository, llm=llm)
         builder = CirculatioLifeContextBuilder(repository)
         context_adapter = ContextAdapter(
@@ -56,7 +67,7 @@ class CirculatioServiceTests(unittest.TestCase):
             method_state_llm=llm,
             trusted_amplification_sources=default_trusted_amplification_sources(),
         )
-        return repository, service, llm
+        return service
 
     def test_create_material_and_llm_interpretation_persists_run_and_evidence(self) -> None:
         async def run() -> None:
@@ -115,6 +126,204 @@ class CirculatioServiceTests(unittest.TestCase):
             runs = await repository.list_interpretation_runs("user_1")
             self.assertEqual({item["materialType"] for item in materials}, set(stored_types))
             self.assertEqual(runs, [])
+
+        asyncio.run(run())
+
+    def test_fallback_interpretations_allocate_fresh_practice_sessions(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            service = self._service_with_llm(repository=repository, llm=TimeoutLlm())
+            first = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A bear moved through the trees.",
+                }
+            )
+            second = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A wolf stood at the edge of the clearing.",
+                }
+            )
+            self.assertNotEqual(first["practiceSession"]["id"], second["practiceSession"]["id"])
+            self.assertEqual(first["interpretation"]["llmInterpretationHealth"]["status"], "opened")
+            self.assertEqual(second["interpretation"]["llmInterpretationHealth"]["status"], "opened")
+
+        asyncio.run(run())
+
+    def test_fallback_interpretation_creates_context_only_clarification(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            service = self._service_with_llm(repository=repository, llm=TimeoutLlm())
+            workflow = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A bear moved through the trees.",
+                }
+            )
+            self.assertEqual(workflow["interpretation"]["clarificationPlan"]["captureTarget"], "answer_only")
+            self.assertEqual(workflow["interpretation"]["clarificationIntent"]["expectedTargets"], [])
+            self.assertEqual(
+                workflow["interpretation"]["clarificationIntent"]["storagePolicy"],
+                "no_storage_without_confirmation",
+            )
+            self.assertEqual(workflow["pendingClarificationPrompts"][0]["captureTarget"], "answer_only")
+
+        asyncio.run(run())
+
+    def test_interpret_existing_material_reuses_latest_open_run_for_duplicate_bare_request(
+        self,
+    ) -> None:
+        async def run() -> None:
+            _, service, llm = self._service()
+            dream = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "There was a snake in the house.",
+                }
+            )
+            first = await service.interpret_existing_material(
+                user_id="user_1",
+                material_id=dream["id"],
+            )
+            second = await service.interpret_existing_material(
+                user_id="user_1",
+                material_id=dream["id"],
+            )
+            self.assertEqual(len(llm.interpret_calls), 1)
+            self.assertEqual(second["run"]["id"], first["run"]["id"])
+            self.assertEqual(second["practiceSession"]["id"], first["practiceSession"]["id"])
+            self.assertEqual(
+                second["interpretation"]["methodGate"]["depthLevel"],
+                "personal_amplification_needed",
+            )
+            self.assertEqual(len(second["pendingProposals"]), len(first["pendingProposals"]))
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_treats_fallback_clarification_as_context_only(
+        self,
+    ) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+            async def route_method_state_response(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise AssertionError("Fallback clarification answers should not hit method-state routing.")
+
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            service = self._service_with_llm(repository=repository, llm=TimeoutLlm())
+            workflow = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A bear moved through the trees.",
+                }
+            )
+            prompt = await repository.update_clarification_prompt(
+                "user_1",
+                workflow["pendingClarificationPrompts"][0]["id"],
+                {
+                    "captureTarget": "personal_amplification",
+                    "updatedAt": "2026-04-22T10:00:00Z",
+                },
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "fallback_clarification_answer_1",
+                    "source": "clarifying_answer",
+                    "responseText": "The image of the bear still feels the most alive.",
+                    "anchorRefs": {
+                        "promptId": prompt["id"],
+                        "materialId": workflow["material"]["id"],
+                        "runId": workflow["run"]["id"],
+                        "clarificationRefKey": workflow["interpretation"]["clarificationIntent"]["refKey"],
+                    },
+                    "expectedTargets": ["body_state", "personal_amplification"],
+                }
+            )
+            updated_prompt = await repository.get_clarification_prompt("user_1", prompt["id"])
+            answers = await repository.list_clarification_answers(
+                "user_1",
+                prompt_id=prompt["id"],
+            )
+            amplifications = await repository.list_personal_amplifications(
+                "user_1",
+                run_id=workflow["run"]["id"],
+            )
+            self.assertEqual(result["captureRun"]["status"], "no_capture")
+            self.assertEqual(result["warnings"], [])
+            self.assertEqual(updated_prompt["status"], "answered_unrouted")
+            self.assertEqual(updated_prompt["captureTarget"], "answer_only")
+            self.assertEqual(len(answers), 1)
+            self.assertEqual(answers[0]["captureTarget"], "answer_only")
+            self.assertEqual(answers[0]["routingStatus"], "unrouted")
+            self.assertEqual(amplifications, [])
+
+        asyncio.run(run())
+
+    def test_interpret_existing_material_does_not_reuse_answered_fallback_run(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+            async def route_method_state_response(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise AssertionError("Fallback clarification answers should not hit method-state routing.")
+
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            service = self._service_with_llm(repository=repository, llm=TimeoutLlm())
+            first = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A wolf stood at the edge of the clearing.",
+                }
+            )
+            await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "fallback_clarification_answer_2",
+                    "source": "clarifying_answer",
+                    "responseText": "The wolf at the edge still feels the most alive.",
+                    "anchorRefs": {
+                        "promptId": first["pendingClarificationPrompts"][0]["id"],
+                        "materialId": first["material"]["id"],
+                        "runId": first["run"]["id"],
+                        "clarificationRefKey": first["interpretation"]["clarificationIntent"]["refKey"],
+                    },
+                }
+            )
+            second = await service.interpret_existing_material(
+                user_id="user_1",
+                material_id=first["material"]["id"],
+            )
+            runs = await repository.list_interpretation_runs(
+                "user_1",
+                material_id=first["material"]["id"],
+            )
+            self.assertNotEqual(second["run"]["id"], first["run"]["id"])
+            self.assertEqual(len(runs), 2)
 
         asyncio.run(run())
 

@@ -110,23 +110,24 @@ _MATERIAL_EVIDENCE_TYPES = {"material_text_span", "dream_text_span", "prior_mate
 async def try_llm_interpretation(
     llm: CirculatioLlmPort | None,
     input_data: MaterialInterpretationInput,
-) -> LlmInterpretationOutput | None:
+) -> tuple[LlmInterpretationOutput | None, str]:
     if llm is None:
-        return None
+        return None, "llm_unavailable"
     try:
         output = await llm.interpret_material(input_data)
-    except Exception:
+    except Exception as exc:
         LOGGER.warning(
             "Circulatio interpretation LLM path failed; using minimal fallback.", exc_info=True
         )
-        return None
+        reason = "llm_unavailable" if "unavailable" in str(exc).lower() else "llm_execution_error"
+        return None, reason
     if not llm_output_has_content(output):
         LOGGER.warning(
             "Circulatio interpretation LLM path returned no usable structured "
             "content; using minimal fallback."
         )
-        return None
-    return output
+        return None, "llm_no_usable_structured_content"
+    return output, "structured_interpretation_available"
 
 
 def llm_output_has_content(output: LlmInterpretationOutput) -> bool:
@@ -156,7 +157,9 @@ def llm_output_has_content(output: LlmInterpretationOutput) -> bool:
 def build_llm_interpretation_health(
     *,
     source: str,
+    status: str | None,
     reason: str,
+    diagnostic_reason: str | None,
     symbol_mentions: list[SymbolMention],
     figure_mentions: list[FigureMention],
     motif_mentions: list[MotifMention],
@@ -164,8 +167,11 @@ def build_llm_interpretation_health(
     hypotheses: list[Hypothesis],
     proposal_candidates: list[MemoryWriteProposal] | list[LlmProposalCandidate],
 ) -> LlmInterpretationHealth:
-    return {
-        "status": "structured" if source == "llm" else "fallback",
+    result: LlmInterpretationHealth = {
+        "status": cast(
+            object,
+            status if status is not None else ("structured" if source == "llm" else "fallback"),
+        ),
         "reason": reason,
         "source": "llm" if source == "llm" else "fallback",
         "symbolMentions": len(symbol_mentions),
@@ -175,6 +181,9 @@ def build_llm_interpretation_health(
         "hypotheses": len(hypotheses),
         "proposalCandidates": len(proposal_candidates),
     }
+    if diagnostic_reason:
+        result["diagnosticReason"] = diagnostic_reason
+    return result
 
 
 def build_life_context_links_from_llm(

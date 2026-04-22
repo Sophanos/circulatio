@@ -244,9 +244,36 @@ class HermesBridgePluginTests(unittest.TestCase):
                 'reflect "A snake crossed the room."',
                 **self._kwargs(message_id="msg_schema_fallback"),
             )
-            self.assertIn("LLM schema: fallback via fallback", rendered)
-            self.assertIn("LLM schema reason: llm_missing_or_unusable_structured_output", rendered)
+            self.assertIn("LLM schema: opened via fallback", rendered)
+            self.assertIn("LLM schema reason: collaborative_opening_started", rendered)
             self.assertNotIn("Pending memory proposals - not written yet:", rendered)
+
+        asyncio.run(run())
+
+    def test_interpret_material_tool_normalizes_explicit_question_for_stored_material(self) -> None:
+        async def run() -> None:
+            runtime = self._install_in_memory_runtime()
+            material = await runtime.service.store_material(
+                {
+                    "userId": "hermes:default:local",
+                    "materialType": "dream",
+                    "text": "A bear attacked me and I ran through the forest.",
+                }
+            )
+            response = await runtime.bridge.dispatch(
+                build_tool_request(
+                    operation="circulatio.material.interpret",
+                    payload={
+                        "materialId": material["id"],
+                        "explicitQuestion": "Can we open this collaboratively?",
+                    },
+                    tool_name="circulatio_interpret_material",
+                    kwargs=self._tool_kwargs(call_id="tool_interpret_existing"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(response["result"]["materialId"], material["id"])
+            self.assertEqual(response["result"]["llmInterpretationHealth"]["status"], "structured")
 
         asyncio.run(run())
 

@@ -2432,9 +2432,10 @@ class TypologyAssessment(TypedDict, total=False):
 
 
 class LlmInterpretationHealth(TypedDict, total=False):
-    status: Required[Literal["structured", "fallback"]]
+    status: Required[Literal["structured", "fallback", "opened"]]
     reason: Required[str]
     source: Required[Literal["llm", "fallback"]]
+    diagnosticReason: NotRequired[str]
     symbolMentions: Required[int]
     figureMentions: Required[int]
     motifMentions: Required[int]
@@ -2444,9 +2445,10 @@ class LlmInterpretationHealth(TypedDict, total=False):
 
 
 class DepthEngineHealth(TypedDict, total=False):
-    status: Required[Literal["structured", "fallback"]]
+    status: Required[Literal["structured", "fallback", "opened"]]
     reason: Required[str]
     source: Required[Literal["llm", "depth_engine", "fallback"]]
+    diagnosticReason: NotRequired[str]
 
 
 class IndividuationAssessment(TypedDict, total=False):

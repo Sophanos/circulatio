@@ -158,7 +158,7 @@ class CirculatioCoreTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_narrative_only_llm_output_falls_back_cleanly(self) -> None:
+    def test_narrative_only_llm_output_opens_collaborative_thread(self) -> None:
         async def run() -> None:
             repo = InMemoryGraphMemoryRepository()
             core = CirculatioCore(repo, llm=NarrativeOnlyLlm())
@@ -171,8 +171,22 @@ class CirculatioCoreTests(unittest.TestCase):
             )
             self.assertEqual(result["symbolMentions"], [])
             self.assertEqual(result["memoryWritePlan"]["proposals"], [])
-            self.assertEqual(result["llmInterpretationHealth"]["status"], "fallback")
-            self.assertIn("did not return usable structured output", result["userFacingResponse"])
+            self.assertEqual(result["llmInterpretationHealth"]["status"], "opened")
+            self.assertEqual(
+                result["llmInterpretationHealth"]["reason"], "collaborative_opening_started"
+            )
+            self.assertEqual(
+                result["llmInterpretationHealth"]["diagnosticReason"],
+                "llm_no_usable_structured_content",
+            )
+            self.assertEqual(
+                result["userFacingResponse"],
+                "What part of the dream feels most alive right now?",
+            )
+            self.assertEqual(
+                result["clarificationPlan"]["captureTarget"], "personal_amplification"
+            )
+            self.assertEqual(result["methodGate"]["depthLevel"], "personal_amplification_needed")
 
         asyncio.run(run())
 

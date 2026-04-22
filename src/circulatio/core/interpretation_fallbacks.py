@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from ..domain.ids import create_id
@@ -43,13 +45,97 @@ _JOURNALING_FALLBACK: dict[str, object] = {
 }
 
 
+def _fresh_fallback_practice(template: dict[str, object]) -> dict[str, object]:
+    practice = deepcopy(template)
+    practice["id"] = create_id("practice")
+    return practice
+
+
+def _fallback_clarifying_question(input_data: MaterialInterpretationInput) -> str:
+    return (
+        "What part of the dream feels most alive right now?"
+        if input_data["materialType"] == "dream"
+        else "What image or feeling from this feels most alive right now?"
+    )
+
+
+def _fallback_clarification_ref_key(input_data: MaterialInterpretationInput) -> str:
+    return (
+        "clarify_dream_primary_image"
+        if input_data["materialType"] == "dream"
+        else "clarify_primary_image"
+    )
+
+
+def _fallback_clarification_intent(
+    *,
+    run_id: str,
+    material_id: str,
+    question_text: str,
+    ref_key: str,
+) -> dict[str, object]:
+    expires_at = (datetime.now(UTC) + timedelta(days=14)).replace(microsecond=0)
+    return {
+        "refKey": ref_key,
+        "questionText": question_text,
+        "expectedTargets": [],
+        "anchorRefs": {"runId": run_id, "materialId": material_id},
+        "consentScopes": [],
+        "storagePolicy": "no_storage_without_confirmation",
+        "expiresAt": expires_at.isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _fallback_clarification_plan(
+    *,
+    question_text: str,
+    ref_key: str,
+    run_id: str,
+    material_id: str,
+) -> dict[str, object]:
+    return {
+        "questionText": question_text,
+        "questionKey": ref_key,
+        "intent": "personal_association",
+        "captureTarget": "answer_only",
+        "expectedAnswerKind": "free_text",
+        "routingHints": {
+            "source": "fallback_collaborative_opening",
+            "continuationMode": "interpretation_context_only",
+            "anchorRefs": {"runId": run_id, "materialId": material_id},
+        },
+        "anchorRefs": {"runId": run_id, "materialId": material_id},
+        "consentScopes": [],
+    }
+
+
+def _fallback_method_gate(question_text: str) -> dict[str, object]:
+    return {
+        "depthLevel": "personal_amplification_needed",
+        "missingPrerequisites": ["personal_association"],
+        "blockedMoves": [
+            "symbolic_conclusion",
+            "collective_amplification",
+            "memory_write_proposals",
+        ],
+        "requiredPrompts": [
+            question_text,
+            "Ask for the user's own associations before offering symbolic framing.",
+        ],
+        "responseConstraints": [
+            "Ask exactly one question.",
+            "Stay with the image, action, or feeling that carries charge.",
+        ],
+    }
+
+
 def build_blocked_by_safety_result(
     *,
     run_id: str,
     material_id: str,
     safety: dict[str, object],
 ) -> InterpretationResult:
-    practice = _GROUNDING_FALLBACK
+    practice = _fresh_fallback_practice(_GROUNDING_FALLBACK)
     return {
         "runId": run_id,
         "materialId": material_id,
@@ -88,7 +174,29 @@ def build_unavailable_llm_result(
     safety: dict[str, object],
     evidence_ledger: EvidenceLedger,
     input_data: MaterialInterpretationInput,
+    fallback_reason: str,
 ) -> InterpretationResult:
+    observation_statement = {
+        "llm_unavailable": (
+            "The material was preserved, but the interpretation model was unavailable for this "
+            "pass, so Circulatio opened a collaborative question instead of forcing symbolic "
+            "conclusions or write proposals."
+        ),
+        "llm_execution_error": (
+            "The material was preserved, but the interpretation model could not complete this "
+            "pass, so Circulatio opened a collaborative question instead of forcing symbolic "
+            "conclusions or write proposals."
+        ),
+        "llm_no_usable_structured_content": (
+            "The material was preserved, but the interpretation model did not return usable "
+            "structured content, so Circulatio opened a collaborative question instead of "
+            "forcing symbolic conclusions or write proposals."
+        ),
+    }.get(
+        fallback_reason,
+        "The material was preserved, but Circulatio opened a collaborative question instead "
+        "of forcing symbolic conclusions or write proposals.",
+    )
     material_evidence_id = evidence_ledger.add(
         evidence_type="dream_text_span"
         if input_data["materialType"] == "dream"
@@ -107,11 +215,7 @@ def build_unavailable_llm_result(
         {
             "id": create_id("observation"),
             "kind": "structure",
-            "statement": (
-                "The material was preserved, but the LLM interpretation path did "
-                "not return usable structured output, so Circulatio is "
-                "withholding symbolic conclusions and write proposals for this run."
-            ),
+            "statement": observation_statement,
             "evidenceIds": [material_evidence_id],
         }
     ]
@@ -127,20 +231,28 @@ def build_unavailable_llm_result(
                 "evidenceIds": [link["evidenceId"] for link in life_context_links],
             }
         )
-    practice = _JOURNALING_FALLBACK
-    clarifying_question = (
-        "What part of the dream feels most alive right now?"
-        if input_data["materialType"] == "dream"
-        else "What image or feeling from this feels most alive right now?"
+    practice = _fresh_fallback_practice(_JOURNALING_FALLBACK)
+    clarifying_question = _fallback_clarifying_question(input_data)
+    clarification_ref_key = _fallback_clarification_ref_key(input_data)
+    clarification_intent = _fallback_clarification_intent(
+        run_id=run_id,
+        material_id=material_id,
+        question_text=clarifying_question,
+        ref_key=clarification_ref_key,
     )
-    user_facing_response = (
-        "The structured interpretation pass did not return usable structured output, "
-        "so I do not want to fake a reading.\n\n"
-        f"{clarifying_question}"
+    clarification_plan = _fallback_clarification_plan(
+        question_text=clarifying_question,
+        ref_key=clarification_ref_key,
+        run_id=run_id,
+        material_id=material_id,
     )
+    method_gate = _fallback_method_gate(clarifying_question)
+    user_facing_response = clarifying_question
     llm_health = build_llm_interpretation_health(
         source="fallback",
-        reason="llm_missing_or_unusable_structured_output",
+        status="opened",
+        reason="collaborative_opening_started",
+        diagnostic_reason=fallback_reason,
         symbol_mentions=[],
         figure_mentions=[],
         motif_mentions=[],
@@ -170,10 +282,14 @@ def build_unavailable_llm_result(
         },
         "userFacingResponse": user_facing_response,
         "clarifyingQuestion": clarifying_question,
+        "clarificationPlan": cast(object, clarification_plan),
+        "clarificationIntent": cast(object, clarification_intent),
+        "methodGate": cast(object, method_gate),
         "llmInterpretationHealth": llm_health,
         "depthEngineHealth": {
-            "status": "fallback",
-            "reason": "llm_missing_or_unusable_structured_output",
+            "status": "opened",
+            "reason": "collaborative_opening_started",
+            "diagnosticReason": fallback_reason,
             "source": "fallback",
         },
     }

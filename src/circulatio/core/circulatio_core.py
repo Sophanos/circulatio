@@ -135,7 +135,7 @@ class CirculatioCore:
             )
 
         evidence_ledger = EvidenceLedger(timestamp=timestamp)
-        llm_output = await try_llm_interpretation(self._llm, normalized_input)
+        llm_output, llm_fallback_reason = await try_llm_interpretation(self._llm, normalized_input)
         if llm_output is None:
             return build_unavailable_llm_result(
                 run_id=run_id,
@@ -143,6 +143,7 @@ class CirculatioCore:
                 safety=safety,
                 evidence_ledger=evidence_ledger,
                 input_data=normalized_input,
+                fallback_reason=llm_fallback_reason,
             )
 
         life_context_links, life_ref_map = build_life_context_links_from_llm(
@@ -271,7 +272,9 @@ class CirculatioCore:
             )
         llm_health = build_llm_interpretation_health(
             source="llm",
+            status="structured",
             reason="structured_interpretation_available",
+            diagnostic_reason=None,
             symbol_mentions=symbol_mentions,
             figure_mentions=figure_mentions,
             motif_mentions=motif_mentions,

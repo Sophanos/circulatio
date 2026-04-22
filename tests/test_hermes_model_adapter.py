@@ -47,9 +47,16 @@ class HermesModelAdapterTests(unittest.TestCase):
                     }
                 )
                 self.assertEqual(workflow["pendingProposals"], [])
-                self.assertIn(
-                    "did not return usable structured output",
+                self.assertEqual(
                     workflow["interpretation"]["userFacingResponse"],
+                    "What image or feeling from this feels most alive right now?",
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["llmInterpretationHealth"]["status"], "opened"
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["llmInterpretationHealth"]["diagnosticReason"],
+                    "llm_unavailable",
                 )
 
         asyncio.run(run())
@@ -532,12 +539,16 @@ class HermesModelAdapterTests(unittest.TestCase):
                     }
                 )
                 self.assertEqual(workflow["pendingProposals"], [])
-                self.assertIn(
-                    "did not return usable structured output",
+                self.assertEqual(
                     workflow["interpretation"]["userFacingResponse"],
+                    "What image or feeling from this feels most alive right now?",
                 )
                 self.assertEqual(
-                    workflow["interpretation"]["llmInterpretationHealth"]["status"], "fallback"
+                    workflow["interpretation"]["llmInterpretationHealth"]["status"], "opened"
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["llmInterpretationHealth"]["diagnosticReason"],
+                    "llm_execution_error",
                 )
 
         asyncio.run(run())
