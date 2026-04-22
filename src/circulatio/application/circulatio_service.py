@@ -2378,6 +2378,20 @@ class CirculatioService:
                     "updatedAt": now_iso(),
                 },
             )
+        reused = await self._maybe_reuse_latest_open_interpretation(
+            user_id=user_id,
+            material=material,
+            life_context_snapshot=life_context_snapshot,
+            life_os_window=life_os_window,
+            user_associations=user_associations,
+            explicit_question=explicit_question,
+            cultural_origins=cultural_origins,
+            safety_context=safety_context,
+            options=options,
+            dream_structure=dream_structure,
+        )
+        if reused is not None:
+            return reused
         material_input = await self._build_material_input(
             material=material,
             session_context=session_context,
@@ -2456,6 +2470,130 @@ class CirculatioService:
             },
         )
         return result
+
+    async def _maybe_reuse_latest_open_interpretation(
+        self,
+        *,
+        user_id: Id,
+        material: MaterialRecord,
+        life_context_snapshot: LifeContextSnapshot | None,
+        life_os_window: dict[str, str] | None,
+        user_associations: list[UserAssociationInput] | None,
+        explicit_question: str | None,
+        cultural_origins: list[dict[str, object]] | None,
+        safety_context: SafetyContext | None,
+        options: InterpretationOptions | None,
+        dream_structure: StoredDreamStructure | None,
+    ) -> MaterialWorkflowResult | None:
+        if (
+            life_context_snapshot is not None
+            or life_os_window is not None
+            or user_associations
+            or explicit_question
+            or cultural_origins
+            or safety_context is not None
+            or options is not None
+            or dream_structure is not None
+        ):
+            return None
+        latest_run_id = self._optional_str(material.get("latestInterpretationRunId"))
+        if not latest_run_id:
+            return None
+        try:
+            latest_run = await self._repository.get_interpretation_run(user_id, latest_run_id)
+        except EntityNotFoundError:
+            return None
+        if not self._interpretation_result_is_waiting_for_follow_up(latest_run):
+            return None
+        clarification_prompts = await self._repository.list_clarification_prompts(
+            user_id,
+            run_id=latest_run_id,
+            limit=20,
+        )
+        if clarification_prompts and not any(
+            str(item.get("status") or "").strip() == "pending" for item in clarification_prompts
+        ):
+            return None
+        return await self._materialize_interpretation_workflow(
+            user_id=user_id,
+            material=material,
+            run=latest_run,
+        )
+
+    def _interpretation_result_is_waiting_for_follow_up(self, run: InterpretationRunRecord) -> bool:
+        result = run.get("result")
+        if not isinstance(result, dict):
+            return False
+        if self._optional_str(result.get("clarifyingQuestion")):
+            return True
+        method_gate = result.get("methodGate")
+        if not isinstance(method_gate, dict):
+            return False
+        if any(str(item).strip() for item in method_gate.get("missingPrerequisites", [])):
+            return True
+        if any(str(item).strip() for item in method_gate.get("requiredPrompts", [])):
+            return True
+        return self._optional_str(method_gate.get("depthLevel")) in {
+            "grounding_only",
+            "observations_only",
+            "personal_amplification_needed",
+            "cautious_pattern_note",
+        }
+
+    async def _materialize_interpretation_workflow(
+        self,
+        *,
+        user_id: Id,
+        material: MaterialRecord,
+        run: InterpretationRunRecord,
+    ) -> MaterialWorkflowResult:
+        interpretation = deepcopy(run["result"])
+        pending_proposals: list[MemoryWriteProposal] = []
+        memory_write_plan = interpretation.get("memoryWritePlan")
+        proposals = (
+            memory_write_plan.get("proposals")
+            if isinstance(memory_write_plan, dict)
+            else None
+        )
+        if isinstance(proposals, list):
+            pending_proposals = [
+                deepcopy(proposal)
+                for proposal in proposals
+                if isinstance(proposal, dict)
+                and proposal.get("id")
+                and self._decision_status(run, str(proposal["id"])) == "pending"
+            ]
+        workflow: MaterialWorkflowResult = {
+            "material": deepcopy(material),
+            "run": deepcopy(run),
+            "interpretation": interpretation,
+            "pendingProposals": pending_proposals,
+        }
+        clarification_prompts = await self._repository.list_clarification_prompts(
+            user_id,
+            status="pending",
+            run_id=run["id"],
+            limit=20,
+        )
+        if clarification_prompts:
+            workflow["pendingClarificationPrompts"] = clarification_prompts
+        snapshot_id = self._optional_str(run.get("inputSnapshotId"))
+        if snapshot_id:
+            try:
+                workflow["contextSnapshot"] = await self._repository.get_context_snapshot(
+                    user_id, snapshot_id
+                )
+            except EntityNotFoundError:
+                pass
+        practice_session_id = self._optional_str(run.get("practiceRecommendationId"))
+        if practice_session_id:
+            try:
+                workflow["practiceSession"] = await self._repository.get_practice_session(
+                    user_id, practice_session_id
+                )
+            except EntityNotFoundError:
+                pass
+        return workflow
 
     async def approve_proposals(
         self,
@@ -2595,6 +2733,9 @@ class CirculatioService:
         }:
             raise ValidationError(f"Unsupported method-state source: {source}")
         anchor_refs = deepcopy(input_data.get("anchorRefs", {}))
+        anchor_refs_for_load = deepcopy(anchor_refs)
+        if source == "clarifying_answer":
+            anchor_refs_for_load.pop("promptId", None)
         if source not in {"body_note", "consent_update"} and not self._method_state_has_anchor(
             anchor_refs
         ):
@@ -2623,12 +2764,29 @@ class CirculatioService:
                 "tags": ["method-state", source],
             }
         )
-        anchors = await self._load_method_state_anchors(user_id=user_id, anchor_refs=anchor_refs)
+        anchors = await self._load_method_state_anchors(
+            user_id=user_id,
+            anchor_refs=anchor_refs_for_load,
+        )
+        clarification_prompt: ClarificationPromptRecord | None = None
+        if source == "clarifying_answer":
+            clarification_prompt = await self._resolve_clarification_prompt_for_method_state_response(
+                user_id=user_id,
+                anchor_refs=anchor_refs,
+                anchors=anchors,
+            )
         expected_targets = self._resolve_expected_capture_targets(
             source=source,
             expected_targets=input_data.get("expectedTargets", []),
             anchors=anchors,
         )
+        context_only_fallback = self._is_context_only_fallback_clarification(
+            anchors=anchors,
+            prompt=clarification_prompt,
+            expected_targets=expected_targets,
+        )
+        if context_only_fallback:
+            expected_targets = []
         capture_run_id = create_id("method_state_capture")
         empty_plan: MemoryWritePlan = {
             "runId": capture_run_id,
@@ -2677,7 +2835,7 @@ class CirculatioService:
         method_context = cast(MethodContextSnapshot, bundle["methodContextSnapshot"])
         thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
         warnings: list[str] = []
-        if not expected_targets:
+        if not expected_targets and not context_only_fallback:
             coach_loop_key = str(anchor_refs.get("coachLoopKey") or "").strip()
             if coach_loop_key:
                 expected_targets = self._coach_expected_targets_from_context(
@@ -2793,6 +2951,29 @@ class CirculatioService:
             warning = outcome.get("warning")
             if warning:
                 warnings.append(str(warning))
+
+        if source == "clarifying_answer":
+            await self._record_clarification_answer_from_method_state(
+                user_id=user_id,
+                prompt=clarification_prompt,
+                response_text=response_text,
+                response_material=response_material,
+                anchor_refs=anchor_refs,
+                applied_entity_refs=applied_entity_refs,
+                pending_proposals=pending_proposals,
+                warnings=warnings,
+                privacy_class=str(input_data.get("privacyClass") or "user_private"),
+                capture_target=cast(
+                    ClarificationCaptureTarget,
+                    "answer_only"
+                    if context_only_fallback
+                    else (
+                        clarification_prompt.get("captureTarget")
+                        if clarification_prompt is not None
+                        else "answer_only"
+                    ),
+                ),
+            )
 
         warnings = list(dict.fromkeys(str(item) for item in warnings if str(item).strip()))
         extraction_result = deepcopy(routing_output)
@@ -9071,6 +9252,230 @@ class CirculatioService:
 
     def _method_state_has_anchor(self, anchor_refs: dict[str, object]) -> bool:
         return any(str(value).strip() for value in anchor_refs.values() if value is not None)
+
+    async def _resolve_clarification_prompt_for_method_state_response(
+        self,
+        *,
+        user_id: Id,
+        anchor_refs: dict[str, object],
+        anchors: dict[str, object],
+    ) -> ClarificationPromptRecord | None:
+        prompt_id = self._optional_str(anchor_refs.get("promptId"))
+        if prompt_id:
+            try:
+                return await self._repository.get_clarification_prompt(user_id, prompt_id)
+            except EntityNotFoundError:
+                pass
+        run = anchors.get("run")
+        run_id = self._optional_str(anchor_refs.get("runId"))
+        if not run_id and isinstance(run, dict):
+            run_id = self._optional_str(run.get("id"))
+        if not run_id:
+            return None
+        prompts = await self._repository.list_clarification_prompts(
+            user_id,
+            run_id=run_id,
+            limit=20,
+        )
+        if not prompts:
+            return None
+        ref_keys: list[str] = []
+        explicit_ref_key = self._optional_str(anchor_refs.get("clarificationRefKey"))
+        if explicit_ref_key:
+            ref_keys.append(explicit_ref_key)
+        if isinstance(run, dict):
+            intent = run.get("result", {}).get("clarificationIntent")
+            if isinstance(intent, dict):
+                run_ref_key = self._optional_str(intent.get("refKey"))
+                if run_ref_key and run_ref_key not in ref_keys:
+                    ref_keys.append(run_ref_key)
+        for ref_key in ref_keys:
+            matches = [
+                item for item in prompts if self._clarification_prompt_matches_ref_key(item, ref_key)
+            ]
+            preferred = self._prefer_clarification_prompt(matches)
+            if preferred is not None:
+                return preferred
+        if len(prompts) == 1:
+            return prompts[0]
+        return self._prefer_clarification_prompt(prompts)
+
+    def _clarification_prompt_matches_ref_key(
+        self,
+        prompt: ClarificationPromptRecord,
+        ref_key: str,
+    ) -> bool:
+        if self._optional_str(prompt.get("questionKey")) == ref_key:
+            return True
+        routing_hints = prompt.get("routingHints")
+        if not isinstance(routing_hints, dict):
+            return False
+        anchor_refs = routing_hints.get("anchorRefs")
+        if not isinstance(anchor_refs, dict):
+            return False
+        return self._optional_str(anchor_refs.get("clarificationRefKey")) == ref_key
+
+    def _prefer_clarification_prompt(
+        self,
+        prompts: list[ClarificationPromptRecord],
+    ) -> ClarificationPromptRecord | None:
+        for prompt in prompts:
+            if self._optional_str(prompt.get("status")) == "pending":
+                return prompt
+        return prompts[0] if prompts else None
+
+    def _is_context_only_fallback_clarification(
+        self,
+        *,
+        anchors: dict[str, object],
+        prompt: ClarificationPromptRecord | None,
+        expected_targets: list[MethodStateCaptureTargetKind],
+    ) -> bool:
+        del expected_targets
+        if prompt is not None and self._optional_str(prompt.get("captureTarget")) == "answer_only":
+            return True
+        routing_hints = prompt.get("routingHints") if prompt is not None else None
+        if isinstance(routing_hints, dict):
+            if self._optional_str(routing_hints.get("source")) == "fallback_collaborative_opening":
+                return True
+            if (
+                self._optional_str(routing_hints.get("continuationMode"))
+                == "interpretation_context_only"
+            ):
+                return True
+        run = anchors.get("run")
+        if not isinstance(run, dict):
+            return False
+        result = run.get("result")
+        if not isinstance(result, dict):
+            return False
+        llm_health = result.get("llmInterpretationHealth")
+        if isinstance(llm_health, dict) and self._optional_str(llm_health.get("source")) == "fallback":
+            return True
+        depth_engine_health = result.get("depthEngineHealth")
+        if isinstance(depth_engine_health, dict) and (
+            self._optional_str(depth_engine_health.get("source")) == "fallback"
+        ):
+            return True
+        clarification_intent = result.get("clarificationIntent")
+        if not isinstance(clarification_intent, dict):
+            return False
+        return self._optional_str(clarification_intent.get("refKey")) in {
+            "clarify_dream_primary_image",
+            "clarify_primary_image",
+        }
+
+    async def _record_clarification_answer_from_method_state(
+        self,
+        *,
+        user_id: Id,
+        prompt: ClarificationPromptRecord | None,
+        response_text: str,
+        response_material: MaterialRecord,
+        anchor_refs: dict[str, object],
+        applied_entity_refs: list[MethodStateAppliedEntityRef],
+        pending_proposals: list[MemoryWriteProposal],
+        warnings: list[str],
+        privacy_class: str,
+        capture_target: ClarificationCaptureTarget,
+    ) -> ClarificationAnswerRecord | None:
+        if prompt is None:
+            return None
+        routing_status = "routed" if applied_entity_refs else "needs_review" if pending_proposals else "unrouted"
+        created_record_refs = [
+            {
+                "recordType": str(item.get("entityType") or ""),
+                "id": str(item.get("entityId") or ""),
+            }
+            for item in applied_entity_refs
+            if str(item.get("entityType") or "").strip()
+            and str(item.get("entityId") or "").strip()
+        ]
+        existing_answer_id = self._optional_str(prompt.get("answerRecordId"))
+        prompt_status = "answered" if routing_status == "routed" else "answered_unrouted"
+        if existing_answer_id:
+            existing_answer = await self._repository.get_clarification_answer(user_id, existing_answer_id)
+            if str(existing_answer.get("answerText") or "").strip() != response_text:
+                warnings.append("clarification_prompt_already_answered")
+                return existing_answer
+            prompt_updates: dict[str, object] = {}
+            if self._optional_str(prompt.get("status")) == "pending":
+                prompt_updates.update(
+                    {
+                        "status": prompt_status,
+                        "answerRecordId": existing_answer["id"],
+                        "answeredAt": str(
+                            existing_answer.get("updatedAt")
+                            or existing_answer.get("createdAt")
+                            or now_iso()
+                        ),
+                        "updatedAt": str(
+                            existing_answer.get("updatedAt")
+                            or existing_answer.get("createdAt")
+                            or now_iso()
+                        ),
+                    }
+                )
+            if self._optional_str(prompt.get("captureTarget")) != capture_target:
+                prompt_updates["captureTarget"] = capture_target
+            if prompt_updates:
+                await self._repository.update_clarification_prompt(
+                    user_id,
+                    prompt["id"],
+                    cast(dict[str, object], prompt_updates),
+                )
+            return existing_answer
+        timestamp = now_iso()
+        answer_record: ClarificationAnswerRecord = {
+            "id": create_id("clarification_answer"),
+            "userId": user_id,
+            "promptId": prompt["id"],
+            "answerText": response_text,
+            "captureTarget": capture_target,
+            "routingStatus": routing_status,
+            "createdRecordRefs": created_record_refs,
+            "privacyClass": privacy_class,
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
+        }
+        material_id = self._optional_str(prompt.get("materialId")) or self._optional_str(
+            anchor_refs.get("materialId")
+        )
+        if material_id:
+            answer_record["materialId"] = material_id
+        else:
+            answer_record["materialId"] = response_material["id"]
+        run_id = self._optional_str(prompt.get("runId")) or self._optional_str(anchor_refs.get("runId"))
+        if run_id:
+            answer_record["runId"] = run_id
+        validation_errors = [str(item) for item in warnings if str(item).strip()]
+        if validation_errors:
+            answer_record["validationErrors"] = validation_errors
+        stored_answer = await self._repository.create_clarification_answer(answer_record)
+        await self._repository.update_clarification_prompt(
+            user_id,
+            prompt["id"],
+            {
+                "captureTarget": capture_target,
+                "status": prompt_status,
+                "answerRecordId": stored_answer["id"],
+                "answeredAt": stored_answer["updatedAt"],
+                "updatedAt": stored_answer["updatedAt"],
+            },
+        )
+        await self._record_adaptation_signal(
+            user_id=user_id,
+            event_type="clarification_answered"
+            if routing_status == "routed"
+            else "clarification_unrouted",
+            signals={
+                "intent": prompt.get("intent") or "other",
+                "captureTarget": capture_target,
+                "expectedAnswerKind": prompt.get("expectedAnswerKind") or "free_text",
+                "routingStatus": routing_status,
+            },
+        )
+        return stored_answer
 
     async def _materialize_method_state_result(
         self,
