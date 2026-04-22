@@ -275,13 +275,13 @@ GET_MATERIAL_TOOL_SCHEMA = _schema(
 
 INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
-    "Open or continue collaborative interpretation for stored or raw Circulatio "
-    "material when the user asks what it means. Prefer storing first. A valid first "
-    "response may be a single question, amplification prompt, or method gate. Host "
-    "replies are usually 1-3 sentences with exactly one question. If gated, wait for "
-    "new input and do not call this tool again in the same turn with unchanged "
-    "material. This tool opens a collaborative inquiry; it is not a request for a "
-    "finished symbolic reading. If fallback, do not frame it as a backend failure.",
+    "Open or continue collaborative interpretation when the user asks what material "
+    "means. Prefer storing first. A valid first response may be a single question, "
+    "amplification prompt, or method gate. Keep host replies to usually 1-3 "
+    "sentences with exactly one question. If gated, wait for new input. If the "
+    "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
+    "do not call this tool again with unchanged material. If fallback, do not frame "
+    "it as a backend failure.",
     {
         "materialId": {"type": "string"},
         "materialType": {
@@ -675,7 +675,9 @@ SET_CONSENT_TOOL_SCHEMA = _schema(
 
 ANSWER_AMPLIFICATION_TOOL_SCHEMA = _schema(
     "circulatio_answer_amplification",
-    "Answer a pending amplification prompt or store a direct personal amplification.",
+    "Answer a pending amplification prompt or store a direct personal amplification. "
+    "Use this only when Hermes has a pending amplification prompt or already knows "
+    "canonicalName and surfaceText. Do not use it for generic fallback questions.",
     {
         "promptId": {"type": "string"},
         "materialId": {"type": "string"},
@@ -694,7 +696,7 @@ ANSWER_AMPLIFICATION_TOOL_SCHEMA = _schema(
 
 METHOD_STATE_RESPOND_TOOL_SCHEMA = _schema(
     "circulatio_method_state_respond",
-    "Process a context-bound follow-up response through Circulatio's method-state connector. Use this only when Hermes already knows the answer belongs to a prior Circulatio context such as a clarifying question, amplification prompt, body note, goal feedback, practice feedback, or other anchored follow-up. Do not use it as a generic capture-any intake.",
+    "Process a context-bound follow-up response through Circulatio's method-state connector. Use this only when Hermes already knows the answer belongs to a prior Circulatio context such as a clarifying question, amplification prompt, body note, goal feedback, practice feedback, or other anchored follow-up. For context-only fallback clarification answers, call this once to record the answer, then stop. A no_capture result with continuationState.nextAction = await_user_input is not a reason to retry interpretation. Do not use it as a generic capture-any intake.",
     {
         "responseText": {"type": "string"},
         "source": {
