@@ -334,7 +334,7 @@ class CirculatioAgentBridge:
     async def store_material(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
         material_type = str(payload["materialType"])
-        material = await self._service.store_material(
+        stored = await self._service.store_material_with_intake_context(
             {
                 "userId": request["userId"],
                 "materialType": material_type,  # type: ignore[typeddict-item]
@@ -342,6 +342,8 @@ class CirculatioAgentBridge:
                 **self._store_material_kwargs(payload),
             }
         )
+        material = stored["material"]
+        intake_context = stored["intakeContext"]
         if material_type == "reflection":
             message = "Held your reflection. Want to explore what comes up?"
         elif material_type == "charged_event":
@@ -363,6 +365,8 @@ class CirculatioAgentBridge:
             result={
                 "materialId": material["id"],
                 "materialType": material["materialType"],
+                "material": deepcopy(material),
+                "intakeContext": deepcopy(intake_context),
             },
             affected_entity_ids=[material["id"]],
         )

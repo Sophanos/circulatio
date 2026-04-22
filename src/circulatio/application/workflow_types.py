@@ -87,6 +87,106 @@ class MaterialWorkflowResult(TypedDict, total=False):
     practiceSession: NotRequired[PracticeSessionRecord]
 
 
+IntakeContextVisibility = Literal["host_only"]
+IntakeContextStatus = Literal["complete", "partial"]
+IntakeContextSourceKind = Literal["material", "dashboard", "method_context", "policy"]
+IntakeContextItemKind = Literal[
+    "stored_material",
+    "recent_material",
+    "recurring_symbol",
+    "active_pattern",
+    "recent_body_state",
+    "active_dream_series",
+    "recent_dream_dynamic",
+    "longitudinal_signal",
+    "active_journey",
+    "method_state",
+    "clarification_state",
+    "reality_anchor",
+    "threshold_process",
+    "relational_scene",
+    "living_myth_context",
+]
+IntakeMentionRecommendation = Literal[
+    "acknowledge_only",
+    "context_available_hold_first",
+    "grounding_first_hold_context",
+    "ask_one_clarification_only_if_user_invites",
+]
+IntakeFollowupQuestionStyle = Literal[
+    "none",
+    "single_gentle_question",
+    "grounding_orienting",
+    "clarify_before_depth",
+    "user_choice",
+]
+
+
+class IntakeAnchorMaterial(TypedDict, total=False):
+    id: Required[Id]
+    materialType: Required[MaterialType]
+    materialDate: Required[str]
+    title: NotRequired[str]
+    summary: NotRequired[str]
+    textPreview: NotRequired[str]
+    tags: Required[list[str]]
+
+
+class IntakeContextItem(TypedDict, total=False):
+    key: Required[str]
+    kind: Required[IntakeContextItemKind]
+    label: Required[str]
+    sourceKind: Required[IntakeContextSourceKind]
+    criteria: Required[list[str]]
+    entityRefs: Required[dict[str, list[Id]]]
+    evidenceIds: Required[list[Id]]
+    summary: NotRequired[str]
+    caution: NotRequired[str]
+
+
+class IntakeHostGuidance(TypedDict):
+    holdFirst: bool
+    allowAutoInterpretation: bool
+    maxQuestions: int
+    mentionRecommendation: IntakeMentionRecommendation
+    followupQuestionStyle: IntakeFollowupQuestionStyle
+    reasons: list[str]
+
+
+class IntakeContextSourceCounts(TypedDict):
+    recentMaterialCount: int
+    recurringSymbolCount: int
+    activePatternCount: int
+    activeJourneyCount: int
+    longitudinalSignalCount: int
+    intakeItemCount: int
+    pendingProposalCount: int
+
+
+class IntakeContextPacket(TypedDict):
+    packetId: Id
+    visibility: IntakeContextVisibility
+    status: IntakeContextStatus
+    source: str
+    generatedAt: str
+    userId: Id
+    materialId: Id
+    materialType: MaterialType
+    windowStart: str
+    windowEnd: str
+    anchorMaterial: IntakeAnchorMaterial
+    hostGuidance: IntakeHostGuidance
+    items: list[IntakeContextItem]
+    entityRefs: dict[str, list[Id]]
+    sourceCounts: IntakeContextSourceCounts
+    warnings: list[str]
+
+
+class StoreMaterialWithIntakeContextResult(TypedDict):
+    material: MaterialRecord
+    intakeContext: IntakeContextPacket
+
+
 class ApproveProposalsInput(TypedDict, total=False):
     userId: Required[Id]
     runId: Required[Id]

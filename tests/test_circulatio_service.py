@@ -118,6 +118,172 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_store_material_with_intake_context_returns_host_only_factual_packet(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            prior_material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "The authority thread has been circling all week.",
+                    "materialDate": "2026-04-14T09:00:00Z",
+                }
+            )
+            goal = await service.upsert_goal(
+                {
+                    "userId": "user_1",
+                    "label": "Speak more directly",
+                    "status": "active",
+                    "linkedMaterialIds": [prior_material["id"]],
+                }
+            )
+            await service.store_body_state(
+                {
+                    "userId": "user_1",
+                    "sensation": "tightness",
+                    "observedAt": "2026-04-16T09:00:00Z",
+                    "bodyRegion": "chest",
+                    "activation": "high",
+                    "linkedGoalIds": [goal["id"]],
+                    "linkedMaterialIds": [prior_material["id"]],
+                }
+            )
+            await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Authority thread",
+                    "currentQuestion": "How do I stay in contact without collapsing?",
+                    "relatedMaterialIds": [prior_material["id"]],
+                    "relatedGoalIds": [goal["id"]],
+                }
+            )
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is steady enough for careful reflection.",
+                    "anchorSummary": "Work and relationships are holding.",
+                    "workDailyLifeContinuity": "stable",
+                    "sleepBodyRegulation": "stable",
+                    "relationshipContact": "available",
+                    "reflectiveCapacity": "steady",
+                    "groundingRecommendation": "pace_gently",
+                }
+            )
+
+            workflow = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A bear waited at the doorway.",
+                    "materialDate": "2026-04-18T10:00:00Z",
+                }
+            )
+
+            packet = workflow["intakeContext"]
+            self.assertEqual(workflow["material"]["id"], packet["materialId"])
+            self.assertEqual(packet["visibility"], "host_only")
+            self.assertEqual(packet["source"], "circulatio-post-store")
+            self.assertTrue(packet["hostGuidance"]["holdFirst"])
+            self.assertFalse(packet["hostGuidance"]["allowAutoInterpretation"])
+            self.assertLessEqual(packet["hostGuidance"]["maxQuestions"], 1)
+            self.assertEqual(packet["windowStart"], "2026-04-11T10:00:00Z")
+            self.assertEqual(packet["windowEnd"], "2026-04-18T10:00:00Z")
+            criteria = {
+                criterion for item in packet["items"] for criterion in item.get("criteria", [])
+            }
+            self.assertIn("method_context_recent_body_state", criteria)
+            self.assertIn("method_context_active_journey", criteria)
+            self.assertIn("method_context_reality_anchor", criteria)
+            self.assertIn("dashboard_recent_material", criteria)
+            runs = await repository.list_interpretation_runs("user_1")
+            self.assertEqual(runs, [])
+            self.assertEqual(workflow["material"]["linkedContextSnapshotIds"], [])
+
+        asyncio.run(run())
+
+    def test_store_material_with_intake_context_handles_empty_context_without_interpretation(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            workflow = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A quiet note.",
+                    "materialDate": "2026-04-18T10:00:00Z",
+                }
+            )
+
+            packet = workflow["intakeContext"]
+            self.assertEqual(packet["status"], "complete")
+            self.assertEqual(packet["items"], [])
+            self.assertTrue(packet["hostGuidance"]["holdFirst"])
+            self.assertFalse(packet["hostGuidance"]["allowAutoInterpretation"])
+            self.assertEqual(packet["hostGuidance"]["mentionRecommendation"], "acknowledge_only")
+            self.assertEqual(packet["hostGuidance"]["followupQuestionStyle"], "none")
+            runs = await repository.list_interpretation_runs("user_1")
+            self.assertEqual(runs, [])
+
+        asyncio.run(run())
+
+    def test_store_material_with_intake_context_returns_partial_packet_when_projection_fails(
+        self,
+    ) -> None:
+        class FaultyProjectionRepository(InMemoryCirculatioRepository):
+            async def build_method_context_snapshot_from_records(
+                self,
+                user_id: str,
+                *,
+                window_start: str,
+                window_end: str,
+                material_id: str | None = None,
+            ):
+                del user_id, window_start, window_end, material_id
+                raise RuntimeError("method context unavailable")
+
+            async def get_dashboard_summary(self, user_id: str):
+                del user_id
+                raise RuntimeError("dashboard unavailable")
+
+        async def run() -> None:
+            repository = FaultyProjectionRepository()
+            llm = FakeCirculatioLlm()
+            core = CirculatioCore(repository, llm=llm)
+            builder = CirculatioLifeContextBuilder(repository)
+            context_adapter = ContextAdapter(
+                repository,
+                life_os=FakeLifeOs(),
+                life_context_builder=builder,
+                method_context_builder=CirculatioMethodContextBuilder(repository),
+            )
+            service = CirculatioService(
+                repository,
+                core,
+                context_adapter=context_adapter,
+                method_state_llm=llm,
+                trusted_amplification_sources=default_trusted_amplification_sources(),
+            )
+
+            workflow = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Something happened, but I only want it held.",
+                }
+            )
+
+            packet = workflow["intakeContext"]
+            self.assertEqual(packet["status"], "partial")
+            self.assertIn("method_context_unavailable", packet["warnings"])
+            self.assertIn("dashboard_summary_unavailable", packet["warnings"])
+            self.assertIn("intake_context_partial", packet["warnings"])
+            self.assertEqual(workflow["material"]["id"], packet["materialId"])
+            materials = await repository.list_materials("user_1")
+            self.assertEqual(len(materials), 1)
+
+        asyncio.run(run())
+
     def test_store_body_state_creates_real_body_state_and_optional_soma_note(self) -> None:
         async def run() -> None:
             repository, service, _ = self._service()

@@ -724,6 +724,18 @@ class HermesBridgePluginTests(unittest.TestCase):
                 stored_reflection["message"],
                 "Held your reflection. Want to explore what comes up?",
             )
+            self.assertIn("intakeContext", stored_dream["result"])
+            self.assertEqual(stored_dream["result"]["intakeContext"]["visibility"], "host_only")
+            self.assertTrue(stored_dream["result"]["intakeContext"]["hostGuidance"]["holdFirst"])
+            self.assertFalse(
+                stored_dream["result"]["intakeContext"]["hostGuidance"]["allowAutoInterpretation"]
+            )
+            self.assertIn("material", stored_dream["result"])
+            self.assertEqual(
+                stored_dream["result"]["material"]["id"],
+                stored_dream["result"]["materialId"],
+            )
+            self.assertEqual(stored_dream["pendingProposals"], [])
             runtime = get_runtime("default")
             materials = await runtime.service.repository.list_materials("hermes:default:local")
             runs = await runtime.service.repository.list_interpretation_runs("hermes:default:local")
@@ -745,6 +757,42 @@ class HermesBridgePluginTests(unittest.TestCase):
             self.assertTrue(weave["result"]["summaryId"])
             reviews = await runtime.service.repository.list_weekly_reviews("hermes:default:local")
             self.assertEqual(reviews, [])
+
+        asyncio.run(run())
+
+    def test_store_tool_returns_intake_context_without_auto_interpretation(self) -> None:
+        async def run() -> None:
+            self._install_fake_runtime()
+            stored = json.loads(
+                await store_dream_tool(
+                    {"text": "A fox waited by the gate."},
+                    **self._tool_kwargs(call_id="tool_store_intake_context"),
+                )
+            )
+
+            self.assertEqual(stored["status"], "ok")
+            self.assertEqual(
+                stored["message"], "Held your dream. If you want, we can interpret it."
+            )
+            self.assertEqual(stored["result"]["materialType"], "dream")
+            self.assertEqual(
+                stored["result"]["intakeContext"]["materialId"],
+                stored["result"]["materialId"],
+            )
+            self.assertEqual(
+                stored["result"]["material"]["id"],
+                stored["result"]["materialId"],
+            )
+            self.assertEqual(stored["result"]["intakeContext"]["visibility"], "host_only")
+            self.assertTrue(stored["result"]["intakeContext"]["hostGuidance"]["holdFirst"])
+            self.assertFalse(
+                stored["result"]["intakeContext"]["hostGuidance"]["allowAutoInterpretation"]
+            )
+            self.assertEqual(stored["pendingProposals"], [])
+
+            runtime = get_runtime("default")
+            runs = await runtime.service.repository.list_interpretation_runs("hermes:default:local")
+            self.assertEqual(runs, [])
 
         asyncio.run(run())
 

@@ -2,7 +2,7 @@
 
 Quick reference for safety, evidence, typology, and demos. Read `ENGINEERING_GUIDE.md` for implementation details and `INTERPRETATION_ENGINE_SPEC.md` for Jungian method.
 
-**Implementation status (April 2026):** The current runtime includes the bounded read-only `discovery` digest, read-mostly journey pages, autonomous low-risk journey-container writes through Hermes tool exposure, threshold review, living myth review, bounded analysis packets, review-proposal approval/rejection, approval-gated Phase 8/9 durable writes, and an offline Evolution OS for prompt fragments, the Circulatio host skill, and tool descriptions. Use those workflows as workflows, not as direct deterministic memory writes.
+**Implementation status (April 2026):** The current runtime includes the bounded read-only `discovery` digest, read-mostly journey pages, autonomous low-risk journey-container writes through Hermes tool exposure, threshold review, living myth review, bounded analysis packets, review-proposal approval/rejection, approval-gated Phase 8/9 durable writes, a host-only post-store `intakeContext` packet for hold-first material capture, and an offline Evolution OS for prompt fragments, the Circulatio host skill, and tool descriptions. Use those workflows as workflows, not as direct deterministic memory writes.
 
 ---
 
@@ -124,6 +124,7 @@ Disallowed language: "You are a thinking type.", "This proves your inferior func
 ## 4. Method-State Connector Guardrails
 
 - Hermes/host must call the connector explicitly. Do not expose or simulate a hidden capture-any route.
+- Hold-first store tools may return a host-only `intakeContext` packet in the bridge/tool `result`. Hosts may use it for immediate conversational continuity, but must not treat it as durable state, user-facing interpretation, or a license to append symbolic meaning to the public acknowledgement text.
 - `circulatio.method_state.respond` requires anchors for clarifying answers, freeform follow-ups, relational-scene notes, dream-dynamics notes, goal feedback, and practice feedback. Only explicit `body_note` and `consent_update` may omit anchors.
 - Direct writes are limited to explicit user-reported operational state. Projection hypotheses, inner/outer correspondence, typology lenses, dream-series claims, and living-myth synthesis stay approval-gated.
 - Re-check consent and safety at capture time and again at proposal approval time.

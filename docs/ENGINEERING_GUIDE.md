@@ -118,6 +118,7 @@ The codebase now already contains the Phase 4-7 substrate that later work should
 * Domain records now exist for conscious attitude, personal amplification, body states, goals, dream series, culture, adaptation, journeys, and proactive briefs.
 * `CirculatioCore` accepts LLM-produced `methodGate`, `depthReadiness`, amplification prompts, dream-series suggestions, and richer practice metadata.
 * Hermes/plugin surfaces now support hold-first storage for dreams, events, reflections, symbolic notes, and body states, plus `alive_today`, the bounded read-only `discovery` digest, journey-page assembly, low-risk journey-container management, label-based journey resolution, explicit `/circulation journey ...` QA commands, interpretation, review, and approval flows.
+* Hold-first material storage now also returns an additive, non-persisted `intakeContext` packet at the Hermes bridge boundary. That packet is built only from lightweight post-store projections (`build_method_context_snapshot_from_records()` plus `get_dashboard_summary()`), is explicitly `host_only`, remains factual and bounded, does not create interpretation runs/context snapshots, and does not change the brief public acknowledgement text.
 
 ### Current Phase 8/9 Snapshot
 
@@ -176,6 +177,48 @@ Circulatio now includes a repo-local, offline Evolution OS layer: optimize text 
 ```
 
 This is the current offline builder path. The repo does **not** yet ship reflection/pareto search or provider-backed execution/judge gates; it ships the extraction points, datasets, reports, and constraints needed to add those later without weakening runtime boundaries.
+
+### Journey CLI Comparative Evals
+
+Circulatio now also includes a separate repo-local Journey CLI comparison layer under
+`tools/journey_cli_eval/` and `scripts/evaluate_journey_cli.py`.
+
+**Purpose:**
+
+* compare local external coding CLIs such as `kimi`, `codex`, and `opencode` against the Hermes
+  routing contract for journey-family cases
+* keep the comparison strictly local, opt-in, and artifact-producing
+* map failures back to the right owner: method evals, backend service tests, bridge tests, or real
+  host smoke
+
+**Boundary:**
+
+* subprocess adapters only; no provider API client is introduced
+* missing CLIs skip unless `--require-adapters` is passed
+* the harness runs in disposable temp workspaces and must not use the main repo as subprocess cwd
+* no prompt mutation, no runtime mutation, and no hidden capture-any ingress are introduced
+* findings are review inputs, not backend truth and not a replacement for `CirculatioService`, the
+  Hermes bridge tests, or `scripts/hermes_host_smoke.py`
+
+**Primary assets:**
+
+* `tests/evals/journey_cli/schema/journey_case.schema.json`
+* `tests/evals/journey_cli/*.jsonl`
+* `tests/evals/journey_cli/README.md`
+* `tools/journey_cli_eval/` package modules for dataset loading, prompt packaging, adapter
+  execution, normalization, scoring, caching, traces, reporting, and run orchestration
+* `scripts/evaluate_journey_cli.py`
+
+**Local workflow:**
+
+```bash
+.venv/bin/python -m unittest tests.test_journey_cli_eval
+.venv/bin/python scripts/evaluate_journey_cli.py --adapter fake --strict
+```
+
+This layer is complementary to Evolution OS. It sharpens the routing contract and surfaces drift,
+but it does not change the adoption gates: method-eval pass, normal repo tests, and explicit human
+review still decide whether a later artifact change is acceptable.
 
 ### What Should Be Reused
 

@@ -520,7 +520,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 
 ### Phase 6: Proactive Runtime ✅
 
-**Implementation status (April 2026):** The embedded Hermes/backend runtime now includes `alive_today`, the bounded read-only `discovery` digest, read-mostly journey pages, low-risk autonomous journey-container writes through Hermes tool exposure, explicit `/circulation journey ...` lifecycle commands for QA/debug/demo, label-based journey resolution for lightweight host writes, weekly review cadence, rhythmic briefs, and a repo-owned external Hermes-host smoke harness. Durable journey containers are organizational records, not symbolic truth claims; interpretation-derived symbolic memory remains approval-gated.
+**Implementation status (April 2026):** The embedded Hermes/backend runtime now includes `alive_today`, the bounded read-only `discovery` digest, read-mostly journey pages, low-risk autonomous journey-container writes through Hermes tool exposure, explicit `/circulation journey ...` lifecycle commands for QA/debug/demo, label-based journey resolution for lightweight host writes, weekly review cadence, rhythmic briefs, a lightweight host-only post-store `IntakeContextPacket`, and a repo-owned external Hermes-host smoke harness. Durable journey containers are organizational records, not symbolic truth claims; interpretation-derived symbolic memory remains approval-gated, and the post-store intake packet stays bounded, factual, and non-persistent.
 
 **Coach OS refinement (April 2026):** Phase 6 now also exposes a single derived backend operating contract, `coachState`, on every enriched `MethodContextSnapshot`. `coachState` is not a new symbolic ontology. It is the shared runtime layer that tells `alive_today`, rhythmic briefs, journey pages, practice follow-up, and anchored reply routing which bounded coach loop is live, what one move is appropriate now, which moves are withheld, and when a curated resource invitation is safer than another prompt.
 
@@ -543,6 +543,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - Practice follow-up loops
 - Curated resource invitations for grounding, somatic tracking, journaling, and gentler follow-up when depth work should not intensify
 - Purpose-built host context packets so Hermes-agent and later hosts can request bounded context for a specific job instead of dumping whole history
+  - `IntakeContextPacket` for hold-first material capture, derived immediately after persistence from bounded method-context/dashboard projections and marked `host_only`
   - `TopicContextPacket`
   - `ThresholdPacket`
   - `RelationalFieldPacket`

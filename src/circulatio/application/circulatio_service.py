@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -108,6 +109,11 @@ from .workflow_types import (
     GenerateRhythmicBriefsInput,
     GenerateThresholdReviewInput,
     GetJourneyInput,
+    IntakeAnchorMaterial,
+    IntakeContextItem,
+    IntakeContextPacket,
+    IntakeContextSourceCounts,
+    IntakeHostGuidance,
     JourneyAliveTodaySurface,
     JourneyAnalysisPacketItem,
     JourneyAnalysisPacketPreview,
@@ -136,6 +142,7 @@ from .workflow_types import (
     SetCulturalFrameInput,
     SetJourneyStatusInput,
     StoreBodyStateResult,
+    StoreMaterialWithIntakeContextResult,
     SymbolHistoryResult,
     ThresholdReviewWorkflowResult,
     UpdateJourneyInput,
@@ -143,6 +150,8 @@ from .workflow_types import (
     UpsertGoalTensionInput,
     UpsertThresholdProcessInput,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 _METHOD_STATE_POLICY_TARGETS_BY_BLOCKED_MOVE: dict[
     str, tuple[MethodStateCaptureTargetKind, ...]
@@ -197,6 +206,98 @@ class CirculatioService:
         payload = deepcopy(input_data)
         payload.setdefault("source", "hermes_ui")
         return await self.create_material(payload)
+
+    async def store_material_with_intake_context(
+        self,
+        input_data: CreateMaterialInput,
+    ) -> StoreMaterialWithIntakeContextResult:
+        payload = deepcopy(input_data)
+        payload.setdefault("source", "hermes_ui")
+        material = await self.create_material(payload)
+        window_start, window_end = self._resolve_window(
+            anchor=str(material.get("materialDate") or material.get("createdAt") or ""),
+        )
+        warnings: list[str] = []
+        method_context: MethodContextSnapshot | None = None
+        dashboard: DashboardSummary | None = None
+        try:
+            method_snapshot = await self._repository.build_method_context_snapshot_from_records(
+                material["userId"],
+                window_start=window_start,
+                window_end=window_end,
+                material_id=material["id"],
+            )
+            method_context = self._enrich_method_context_snapshot(
+                method_snapshot,
+                window_start=window_start,
+                window_end=window_end,
+                surface="generic",
+            )
+        except Exception:
+            LOGGER.exception(
+                "Post-store method context derivation failed for material %s",
+                material["id"],
+            )
+            warnings.append("method_context_unavailable")
+        try:
+            dashboard = await self._repository.get_dashboard_summary(material["userId"])
+        except Exception:
+            LOGGER.exception(
+                "Post-store dashboard summary derivation failed for material %s",
+                material["id"],
+            )
+            warnings.append("dashboard_summary_unavailable")
+        warnings = list(dict.fromkeys(warnings))
+        if warnings:
+            warnings.append("intake_context_partial")
+        try:
+            intake_context = self._build_intake_context_packet(
+                material=material,
+                window_start=window_start,
+                window_end=window_end,
+                method_context=method_context,
+                dashboard=dashboard,
+                warnings=warnings,
+            )
+        except Exception:
+            LOGGER.exception(
+                "Post-store intake context packet derivation failed for material %s",
+                material["id"],
+            )
+            fallback_warnings = list(
+                dict.fromkeys([*warnings, "intake_context_unavailable", "intake_context_partial"])
+            )
+            intake_context = {
+                "packetId": create_id("intake_context"),
+                "visibility": "host_only",
+                "status": "partial",
+                "source": "circulatio-post-store",
+                "generatedAt": now_iso(),
+                "userId": material["userId"],
+                "materialId": material["id"],
+                "materialType": material["materialType"],
+                "windowStart": window_start,
+                "windowEnd": window_end,
+                "anchorMaterial": self._intake_anchor_material(material),
+                "hostGuidance": self._build_intake_host_guidance(
+                    method_context=method_context,
+                    item_count=0,
+                    warnings=fallback_warnings,
+                ),
+                "items": [],
+                "entityRefs": {},
+                "sourceCounts": {
+                    "recentMaterialCount": 0,
+                    "recurringSymbolCount": 0,
+                    "activePatternCount": 0,
+                    "activeJourneyCount": 0,
+                    "longitudinalSignalCount": 0,
+                    "intakeItemCount": 0,
+                    "pendingProposalCount": 0,
+                },
+                "warnings": fallback_warnings,
+            }
+        return {"material": material, "intakeContext": intake_context}
 
     async def create_material(self, input_data: CreateMaterialInput) -> MaterialRecord:
         text = (input_data.get("text") or "").strip()
@@ -6150,6 +6251,1076 @@ class CirculatioService:
                     continue
                 lines.append(f"- {item['label']}")
         return "\n".join(lines)
+
+    def _build_intake_context_packet(
+        self,
+        *,
+        material: MaterialRecord,
+        window_start: str,
+        window_end: str,
+        method_context: MethodContextSnapshot | None,
+        dashboard: DashboardSummary | None,
+        warnings: list[str],
+    ) -> IntakeContextPacket:
+        items: list[IntakeContextItem] = []
+        seen_keys: set[str] = set()
+        for item in self._intake_items_from_method_context(
+            material=material,
+            method_context=method_context,
+        ):
+            self._add_intake_item(items, item=item, seen_keys=seen_keys)
+        for item in self._intake_items_from_dashboard(
+            material=material,
+            dashboard=dashboard,
+        ):
+            self._add_intake_item(items, item=item, seen_keys=seen_keys)
+        source_counts: IntakeContextSourceCounts = {
+            "recentMaterialCount": sum(
+                1
+                for record in (dashboard or {}).get("recentMaterials", [])
+                if isinstance(record, dict)
+                and self._optional_str(record.get("id"))
+                and self._optional_str(record.get("id")) != material["id"]
+            ),
+            "recurringSymbolCount": sum(
+                1
+                for record in (dashboard or {}).get("recurringSymbols", [])
+                if isinstance(record, dict) and self._optional_str(record.get("id"))
+            ),
+            "activePatternCount": sum(
+                1
+                for record in (dashboard or {}).get("activePatterns", [])
+                if isinstance(record, dict) and self._optional_str(record.get("id"))
+            ),
+            "activeJourneyCount": sum(
+                1
+                for record in (method_context or {}).get("activeJourneys", [])
+                if isinstance(record, dict) and self._optional_str(record.get("id"))
+            ),
+            "longitudinalSignalCount": sum(
+                1
+                for record in (method_context or {}).get("longitudinalSignals", [])
+                if isinstance(record, dict) and self._optional_str(record.get("id"))
+            ),
+            "intakeItemCount": len(items),
+            "pendingProposalCount": int((dashboard or {}).get("pendingProposalCount", 0) or 0),
+        }
+        packet_warnings = list(dict.fromkeys(warnings))
+        return {
+            "packetId": create_id("intake_context"),
+            "visibility": "host_only",
+            "status": "partial" if packet_warnings else "complete",
+            "source": "circulatio-post-store",
+            "generatedAt": now_iso(),
+            "userId": material["userId"],
+            "materialId": material["id"],
+            "materialType": material["materialType"],
+            "windowStart": window_start,
+            "windowEnd": window_end,
+            "anchorMaterial": self._intake_anchor_material(material),
+            "hostGuidance": self._build_intake_host_guidance(
+                method_context=method_context,
+                item_count=len(items),
+                warnings=packet_warnings,
+            ),
+            "items": items,
+            "entityRefs": self._aggregate_intake_entity_refs(items),
+            "sourceCounts": source_counts,
+            "warnings": packet_warnings,
+        }
+
+    def _intake_anchor_material(self, material: MaterialRecord) -> IntakeAnchorMaterial:
+        anchor: IntakeAnchorMaterial = {
+            "id": material["id"],
+            "materialType": material["materialType"],
+            "materialDate": str(
+                material.get("materialDate") or material.get("createdAt") or now_iso()
+            ),
+            "tags": [
+                str(item) for item in material.get("tags", []) if isinstance(item, str) and item
+            ],
+        }
+        title = self._truncate_intake_text(material.get("title"), limit=120)
+        summary = self._truncate_intake_text(material.get("summary"), limit=220)
+        text_preview = self._truncate_intake_text(material.get("text"), limit=220)
+        if title:
+            anchor["title"] = title
+        if summary:
+            anchor["summary"] = summary
+        if text_preview:
+            anchor["textPreview"] = text_preview
+        return anchor
+
+    def _intake_items_from_dashboard(
+        self,
+        *,
+        material: MaterialRecord,
+        dashboard: DashboardSummary | None,
+    ) -> list[IntakeContextItem]:
+        if dashboard is None:
+            return []
+        items: list[IntakeContextItem] = []
+        seen_keys: set[str] = set()
+        recent_materials = [
+            record
+            for record in dashboard.get("recentMaterials", [])
+            if isinstance(record, dict)
+            and self._optional_str(record.get("id"))
+            and self._optional_str(record.get("id")) != material["id"]
+        ]
+        for recent in recent_materials[:3]:
+            recent_id = str(recent["id"])
+            item: IntakeContextItem = {
+                "key": f"recent_material:{recent_id}",
+                "kind": "recent_material",
+                "label": self._discovery_material_label(cast(MaterialRecord, recent)),
+                "sourceKind": "dashboard",
+                "criteria": ["dashboard_recent_material"],
+                "entityRefs": {"materials": [recent_id]},
+                "evidenceIds": [],
+            }
+            summary = self._truncate_intake_text(recent.get("summary"), limit=180) or (
+                self._truncate_intake_text(recent.get("text"), limit=180)
+            )
+            if summary:
+                item["summary"] = summary
+            self._add_intake_item(items, item=item, seen_keys=seen_keys)
+        for symbol in dashboard.get("recurringSymbols", [])[:3]:
+            if not isinstance(symbol, dict):
+                continue
+            symbol_id = self._optional_str(symbol.get("id"))
+            canonical_name = self._optional_str(symbol.get("canonicalName"))
+            if not symbol_id or not canonical_name:
+                continue
+            recurrence_count = int(symbol.get("recurrenceCount", 0) or 0)
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"symbol:{symbol_id}",
+                    "kind": "recurring_symbol",
+                    "label": self._compact_page_text(canonical_name, max_length=60),
+                    "summary": (
+                        f"Recurring symbol with {recurrence_count} recorded appearance(s)."
+                        if recurrence_count > 0
+                        else "Recurring symbol surfaced in the dashboard."
+                    ),
+                    "sourceKind": "dashboard",
+                    "criteria": [
+                        "dashboard_recurring_symbol",
+                        f"symbol_recurrence_count:{recurrence_count}",
+                    ],
+                    "entityRefs": {"symbols": [symbol_id]},
+                    "evidenceIds": [],
+                },
+                seen_keys=seen_keys,
+            )
+        for pattern in dashboard.get("activePatterns", [])[:3]:
+            if not isinstance(pattern, dict):
+                continue
+            pattern_id = self._optional_str(pattern.get("id"))
+            label = self._optional_str(pattern.get("label"))
+            if not pattern_id or not label:
+                continue
+            evidence_ids = [
+                str(value)
+                for value in pattern.get("evidenceIds", [])
+                if isinstance(value, str) and value
+            ]
+            item = {
+                "key": f"pattern:{pattern_id}",
+                "kind": "active_pattern",
+                "label": self._compact_page_text(label, max_length=60),
+                "sourceKind": "dashboard",
+                "criteria": ["dashboard_active_pattern"],
+                "entityRefs": {"patterns": [pattern_id]},
+                "evidenceIds": evidence_ids,
+            }
+            summary = self._truncate_intake_text(pattern.get("formulation"), limit=180)
+            if summary:
+                item["summary"] = summary
+            else:
+                item["summary"] = "Active pattern surfaced in the dashboard."
+            self._add_intake_item(items, item=item, seen_keys=seen_keys)
+        return items
+
+    def _intake_items_from_method_context(
+        self,
+        *,
+        material: MaterialRecord,
+        method_context: MethodContextSnapshot | None,
+    ) -> list[IntakeContextItem]:
+        if method_context is None:
+            return []
+        items: list[IntakeContextItem] = []
+        seen_keys: set[str] = set()
+        current_material_id = material["id"]
+        method_state_item_count = 0
+        context_item_count = 0
+        method_state = (
+            method_context.get("methodState")
+            if isinstance(method_context.get("methodState"), dict)
+            else None
+        )
+        clarification_state = (
+            method_context.get("clarificationState")
+            if isinstance(method_context.get("clarificationState"), dict)
+            else None
+        )
+        individuation_context = (
+            method_context.get("individuationContext")
+            if isinstance(method_context.get("individuationContext"), dict)
+            else None
+        )
+        living_myth_context = (
+            method_context.get("livingMythContext")
+            if isinstance(method_context.get("livingMythContext"), dict)
+            else None
+        )
+
+        if isinstance(individuation_context, dict):
+            reality_anchor = individuation_context.get("realityAnchors")
+            if isinstance(reality_anchor, dict):
+                anchor_id = self._optional_str(reality_anchor.get("id"))
+                if anchor_id:
+                    anchor_item: IntakeContextItem = {
+                        "key": f"reality_anchor:{anchor_id}",
+                        "kind": "reality_anchor",
+                        "label": self._compact_page_text(
+                            str(reality_anchor.get("label") or "Reality anchors"),
+                            max_length=60,
+                        ),
+                        "sourceKind": "method_context",
+                        "criteria": ["method_context_reality_anchor"],
+                        "entityRefs": {"entities": [anchor_id]},
+                        "evidenceIds": [
+                            str(value)
+                            for value in reality_anchor.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                    }
+                    summary = self._truncate_intake_text(
+                        reality_anchor.get("anchorSummary") or reality_anchor.get("summary"),
+                        limit=180,
+                    )
+                    if summary:
+                        anchor_item["summary"] = summary
+                    grounding_recommendation = self._optional_str(
+                        reality_anchor.get("groundingRecommendation")
+                    )
+                    if grounding_recommendation == "grounding_first":
+                        anchor_item["caution"] = "Grounding first."
+                    elif grounding_recommendation == "pace_gently":
+                        anchor_item["caution"] = "Pace gently."
+                    if self._add_intake_item(items, item=anchor_item, seen_keys=seen_keys):
+                        context_item_count += 1
+
+        if isinstance(method_state, dict):
+            method_state_ref_ids = self._method_state_discovery_ref_ids(method_state)
+            method_state_evidence_ids = self._method_state_discovery_evidence_ids(method_state)
+            summary = self._method_state_discovery_summary(method_state)
+            if (
+                summary
+                and (method_state_ref_ids or method_state_evidence_ids)
+                and self._add_intake_item(
+                    items,
+                    item={
+                        "key": "method_state:current",
+                        "kind": "method_state",
+                        "label": "Method state",
+                        "summary": self._truncate_intake_text(summary, limit=180) or summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_context_method_state"],
+                        "entityRefs": {"entities": method_state_ref_ids},
+                        "evidenceIds": method_state_evidence_ids,
+                    },
+                    seen_keys=seen_keys,
+                )
+            ):
+                method_state_item_count += 1
+
+        if isinstance(clarification_state, dict):
+            pending_prompts = [
+                prompt
+                for prompt in clarification_state.get("pendingPrompts", [])
+                if isinstance(prompt, dict) and self._optional_str(prompt.get("id"))
+            ]
+            if pending_prompts:
+                prompt_ids = [str(prompt["id"]) for prompt in pending_prompts[:2]]
+                first_prompt = pending_prompts[0]
+                summary = self._truncate_intake_text(
+                    first_prompt.get("questionText"), limit=180
+                ) or (f"{len(pending_prompts)} pending clarification prompt(s).")
+                self._add_intake_item(
+                    items,
+                    item={
+                        "key": "clarification_state:pending",
+                        "kind": "clarification_state",
+                        "label": "Pending clarification",
+                        "summary": summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["clarification_state_pending"],
+                        "entityRefs": {"entities": prompt_ids},
+                        "evidenceIds": [],
+                    },
+                    seen_keys=seen_keys,
+                )
+            recently_unrouted = [
+                answer
+                for answer in clarification_state.get("recentlyUnrouted", [])
+                if isinstance(answer, dict) and self._optional_str(answer.get("id"))
+            ]
+            avoid_repeat = [
+                str(item)
+                for item in clarification_state.get("avoidRepeatQuestionKeys", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            if recently_unrouted or avoid_repeat:
+                criteria: list[str] = []
+                summary_parts: list[str] = []
+                entity_refs: dict[str, list[Id]] = {}
+                if recently_unrouted:
+                    criteria.append("clarification_state_recently_unrouted")
+                    first_unrouted = recently_unrouted[0]
+                    summary_parts.append(
+                        self._clarification_friction_discovery_summary(first_unrouted)
+                    )
+                    answer_id = self._optional_str(first_unrouted.get("id"))
+                    if answer_id:
+                        entity_refs["entities"] = [answer_id]
+                    material_id = self._optional_str(first_unrouted.get("materialId"))
+                    if material_id:
+                        entity_refs["materials"] = [material_id]
+                if avoid_repeat:
+                    criteria.append("clarification_state_avoid_repeat")
+                    summary_parts.append("Avoid repeating the same clarification question.")
+                self._add_intake_item(
+                    items,
+                    item={
+                        "key": "clarification_state:pacing",
+                        "kind": "clarification_state",
+                        "label": "Clarification pacing",
+                        "summary": self._truncate_intake_text(" ".join(summary_parts), limit=180)
+                        or "Clarification pacing is active.",
+                        "sourceKind": "method_context",
+                        "criteria": criteria,
+                        "entityRefs": entity_refs,
+                        "evidenceIds": [],
+                    },
+                    seen_keys=seen_keys,
+                )
+
+        for body_state in method_context.get("recentBodyStates", [])[:2]:
+            if not isinstance(body_state, dict):
+                continue
+            body_state_id = self._optional_str(body_state.get("id"))
+            sensation = self._optional_str(body_state.get("sensation"))
+            if not body_state_id or not sensation:
+                continue
+            region = self._optional_str(body_state.get("bodyRegion"))
+            activation = self._optional_str(body_state.get("activation"))
+            tone = self._optional_str(body_state.get("tone"))
+            fragments = [f"{sensation}{f' in the {region}' if region else ''}."]
+            if activation:
+                fragments.append(f"Activation: {activation.replace('_', ' ')}.")
+            if tone:
+                fragments.append(f"Tone: {tone.replace('_', ' ')}.")
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"body_state:{body_state_id}",
+                    "kind": "recent_body_state",
+                    "label": self._compact_page_text(sensation, max_length=60),
+                    "summary": " ".join(fragments),
+                    "sourceKind": "method_context",
+                    "criteria": ["method_context_recent_body_state"],
+                    "entityRefs": {"bodyStates": [body_state_id]},
+                    "evidenceIds": [],
+                },
+                seen_keys=seen_keys,
+            )
+
+        for journey in method_context.get("activeJourneys", [])[:3]:
+            if not isinstance(journey, dict):
+                continue
+            journey_id = self._optional_str(journey.get("id"))
+            label = self._optional_str(journey.get("label"))
+            if not journey_id or not label:
+                continue
+            criteria = ["method_context_active_journey"]
+            related_material_ids = [
+                str(item)
+                for item in journey.get("relatedMaterialIds", [])
+                if isinstance(item, str) and item
+            ]
+            if current_material_id in related_material_ids:
+                criteria.append("current_material_already_linked")
+            entity_refs: dict[str, list[Id]] = {"journeys": [journey_id]}
+            if related_material_ids:
+                entity_refs["materials"] = related_material_ids[:5]
+            related_symbol_ids = [
+                str(item)
+                for item in journey.get("relatedSymbolIds", [])
+                if isinstance(item, str) and item
+            ]
+            if related_symbol_ids:
+                entity_refs["symbols"] = related_symbol_ids[:5]
+            related_pattern_ids = [
+                str(item)
+                for item in journey.get("relatedPatternIds", [])
+                if isinstance(item, str) and item
+            ]
+            if related_pattern_ids:
+                entity_refs["patterns"] = related_pattern_ids[:5]
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"journey:{journey_id}",
+                    "kind": "active_journey",
+                    "label": self._compact_page_text(label, max_length=60),
+                    "summary": self._truncate_intake_text(
+                        journey.get("currentQuestion"),
+                        limit=180,
+                    )
+                    or "Active journey thread.",
+                    "sourceKind": "method_context",
+                    "criteria": criteria,
+                    "entityRefs": entity_refs,
+                    "evidenceIds": [],
+                },
+                seen_keys=seen_keys,
+            )
+
+        for series in method_context.get("activeDreamSeries", [])[:3]:
+            if not isinstance(series, dict):
+                continue
+            series_id = self._optional_str(series.get("id"))
+            label = self._optional_str(series.get("label"))
+            if not series_id or not label:
+                continue
+            criteria = ["method_context_active_dream_series"]
+            material_ids = [
+                str(item)
+                for item in series.get("materialIds", [])
+                if isinstance(item, str) and item
+            ]
+            if current_material_id in material_ids:
+                criteria.append("current_material_already_linked")
+            summary = (
+                self._truncate_intake_text(series.get("progressionSummary"), limit=180)
+                or self._truncate_intake_text(series.get("egoTrajectory"), limit=180)
+                or self._truncate_intake_text(series.get("compensationTrajectory"), limit=180)
+                or f"Active dream series with {len(material_ids)} linked material(s)."
+            )
+            entity_refs = {"dreamSeries": [series_id]}
+            if material_ids:
+                entity_refs["materials"] = material_ids[:5]
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"dream_series:{series_id}",
+                    "kind": "active_dream_series",
+                    "label": self._compact_page_text(label, max_length=60),
+                    "summary": summary,
+                    "sourceKind": "method_context",
+                    "criteria": criteria,
+                    "entityRefs": entity_refs,
+                    "evidenceIds": [],
+                },
+                seen_keys=seen_keys,
+            )
+
+        for dynamic in method_context.get("recentDreamDynamics", [])[:3]:
+            if not isinstance(dynamic, dict):
+                continue
+            material_id = self._optional_str(dynamic.get("materialId"))
+            if not material_id:
+                continue
+            summary = (
+                self._truncate_intake_text(dynamic.get("summary"), limit=180)
+                or self._truncate_intake_text(dynamic.get("dynamicSummary"), limit=180)
+                or self._truncate_intake_text(dynamic.get("label"), limit=180)
+                or self._truncate_intake_text(dynamic.get("motif"), limit=180)
+            )
+            if not summary:
+                ego_stance = self._optional_str(dynamic.get("egoStance"))
+                action_summary = self._optional_str(dynamic.get("actionSummary"))
+                if ego_stance and action_summary:
+                    summary = self._truncate_intake_text(
+                        f"{ego_stance}: {action_summary}",
+                        limit=180,
+                    )
+                elif action_summary:
+                    summary = self._truncate_intake_text(action_summary, limit=180)
+            if not summary:
+                continue
+            evidence_ids = [
+                str(value)
+                for value in dynamic.get("evidenceIds", [])
+                if isinstance(value, str) and value
+            ]
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"recent_dream_dynamic:{material_id}",
+                    "kind": "recent_dream_dynamic",
+                    "label": self._compact_page_text(
+                        self._optional_str(dynamic.get("egoStance")) or "Dream dynamics",
+                        max_length=60,
+                    ),
+                    "summary": summary,
+                    "sourceKind": "method_context",
+                    "criteria": ["method_context_recent_dream_dynamic"],
+                    "entityRefs": {"materials": [material_id]},
+                    "evidenceIds": evidence_ids,
+                },
+                seen_keys=seen_keys,
+            )
+
+        for signal in method_context.get("longitudinalSignals", [])[:3]:
+            if not isinstance(signal, dict):
+                continue
+            signal_id = self._optional_str(signal.get("id"))
+            signal_type = self._optional_str(signal.get("signalType"))
+            summary = self._truncate_intake_text(signal.get("summary"), limit=180)
+            if not signal_id or not signal_type or not summary:
+                continue
+            strength = self._optional_str(signal.get("strength"))
+            if strength:
+                summary = f"{summary} Strength: {strength}."
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"longitudinal_signal:{signal_id}",
+                    "kind": "longitudinal_signal",
+                    "label": signal_type.replace("_", " ").title(),
+                    "summary": summary,
+                    "sourceKind": "method_context",
+                    "criteria": [
+                        "method_context_longitudinal_signal",
+                        f"longitudinal_signal:{signal_type}",
+                    ],
+                    "entityRefs": {
+                        "entities": [
+                            str(value)
+                            for value in signal.get("sourceEntityIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                        "materials": [
+                            str(value)
+                            for value in signal.get("materialIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                    },
+                    "evidenceIds": [],
+                },
+                seen_keys=seen_keys,
+            )
+
+        if isinstance(method_state, dict):
+            relational_field = method_state.get("relationalField")
+            if (
+                method_state_item_count < 4
+                and isinstance(relational_field, dict)
+                and (summary := self._relational_field_discovery_summary(relational_field))
+            ):
+                entity_ids = self._method_state_section_ref_ids(relational_field)
+                active_scene_ids = [
+                    str(item)
+                    for item in relational_field.get("activeSceneIds", [])
+                    if isinstance(item, str) and item
+                ]
+                if active_scene_ids:
+                    entity_ids = self._merge_ids(
+                        entity_ids,
+                        active_scene_ids,
+                    )
+                relationship_contact = self._optional_str(
+                    relational_field.get("relationshipContact")
+                )
+                isolation_risk = self._optional_str(relational_field.get("isolationRisk"))
+                recurring_affect = [
+                    str(item).strip()
+                    for item in relational_field.get("recurringAffect", [])
+                    if str(item).strip()
+                ]
+                evidence_ids = self._method_state_section_evidence_ids(relational_field)
+                has_relational_signal = bool(
+                    entity_ids
+                    or evidence_ids
+                    or recurring_affect
+                    or relationship_contact not in {None, "unknown"}
+                    or isolation_risk not in {None, "unknown"}
+                )
+                if has_relational_signal and self._add_intake_item(
+                    items,
+                    item={
+                        "key": "method_state:relational_field",
+                        "kind": "method_state",
+                        "label": "Relational field",
+                        "summary": self._truncate_intake_text(summary, limit=180) or summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_state_relational_field"],
+                        "entityRefs": {"entities": entity_ids},
+                        "evidenceIds": evidence_ids,
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    method_state_item_count += 1
+            questioning_preference = method_state.get("questioningPreference")
+            if (
+                method_state_item_count < 4
+                and isinstance(questioning_preference, dict)
+                and (
+                    summary := self._questioning_preference_discovery_summary(
+                        questioning_preference
+                    )
+                )
+            ):
+                if self._add_intake_item(
+                    items,
+                    item={
+                        "key": "method_state:questioning_preference",
+                        "kind": "method_state",
+                        "label": "Questioning preference",
+                        "summary": self._truncate_intake_text(summary, limit=180) or summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_state_questioning_preference"],
+                        "entityRefs": {
+                            "entities": self._method_state_section_ref_ids(questioning_preference)
+                        },
+                        "evidenceIds": self._method_state_section_evidence_ids(
+                            questioning_preference
+                        ),
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    method_state_item_count += 1
+            active_goal_tension = method_state.get("activeGoalTension")
+            if method_state_item_count < 4 and isinstance(active_goal_tension, dict):
+                summary = self._truncate_intake_text(
+                    active_goal_tension.get("summary")
+                    or active_goal_tension.get("balancingDirection"),
+                    limit=180,
+                )
+                if summary and self._add_intake_item(
+                    items,
+                    item={
+                        "key": "method_state:active_goal_tension",
+                        "kind": "method_state",
+                        "label": "Goal tension",
+                        "summary": summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_state_active_goal_tension"],
+                        "entityRefs": {
+                            "entities": self._method_state_section_ref_ids(active_goal_tension),
+                            "goals": [
+                                str(item)
+                                for item in active_goal_tension.get("linkedGoalIds", [])
+                                if isinstance(item, str) and item
+                            ][:5],
+                        },
+                        "evidenceIds": self._method_state_section_evidence_ids(active_goal_tension),
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    method_state_item_count += 1
+            practice_loop = method_state.get("practiceLoop")
+            if method_state_item_count < 4 and isinstance(practice_loop, dict):
+                fragments: list[str] = []
+                outcome_trend = self._optional_str(practice_loop.get("recentOutcomeTrend"))
+                if outcome_trend:
+                    fragments.append(f"Practice trend: {outcome_trend.replace('_', ' ')}.")
+                intensity = self._optional_str(practice_loop.get("recommendedIntensity"))
+                if intensity:
+                    fragments.append(f"Recommended intensity: {intensity.replace('_', ' ')}.")
+                modalities = [
+                    str(item).replace("_", " ")
+                    for item in practice_loop.get("preferredModalities", [])
+                    if str(item).strip()
+                ]
+                if modalities:
+                    fragments.append(f"Preferred modalities: {', '.join(modalities[:2])}.")
+                max_duration = practice_loop.get("maxDurationMinutes")
+                if isinstance(max_duration, int) and max_duration > 0:
+                    fragments.append(f"Max duration: {max_duration} minutes.")
+                summary = " ".join(fragments)
+                if summary and self._add_intake_item(
+                    items,
+                    item={
+                        "key": "method_state:practice_loop",
+                        "kind": "method_state",
+                        "label": "Practice loop",
+                        "summary": self._truncate_intake_text(summary, limit=180) or summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_state_practice_loop"],
+                        "entityRefs": {
+                            "entities": self._method_state_section_ref_ids(practice_loop)
+                        },
+                        "evidenceIds": self._method_state_section_evidence_ids(practice_loop),
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    method_state_item_count += 1
+            typology_state = method_state.get("typologyMethodState")
+            if (
+                method_state_item_count < 4
+                and isinstance(typology_state, dict)
+                and (summary := self._typology_method_state_discovery_summary(typology_state))
+            ):
+                if self._add_intake_item(
+                    items,
+                    item={
+                        "key": "method_state:typology",
+                        "kind": "method_state",
+                        "label": "Typology method state",
+                        "summary": self._truncate_intake_text(summary, limit=180) or summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_state_typology_method_state"],
+                        "entityRefs": {
+                            "entities": self._merge_ids(
+                                self._method_state_section_ref_ids(typology_state),
+                                [
+                                    str(item)
+                                    for item in typology_state.get("activeLensIds", [])
+                                    if isinstance(item, str) and item
+                                ],
+                            )
+                        },
+                        "evidenceIds": self._method_state_section_evidence_ids(typology_state),
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    method_state_item_count += 1
+
+        if isinstance(individuation_context, dict):
+            for threshold in individuation_context.get("thresholdProcesses", [])[:3]:
+                if context_item_count >= 3 or not isinstance(threshold, dict):
+                    break
+                threshold_id = self._optional_str(threshold.get("id"))
+                label = self._optional_str(threshold.get("label"))
+                summary = self._truncate_intake_text(
+                    threshold.get("summary") or threshold.get("whatIsEnding"),
+                    limit=180,
+                )
+                if not threshold_id or not label or not summary:
+                    continue
+                if self._add_intake_item(
+                    items,
+                    item={
+                        "key": f"threshold_process:{threshold_id}",
+                        "kind": "threshold_process",
+                        "label": self._compact_page_text(label, max_length=60),
+                        "summary": summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_context_threshold_process"],
+                        "entityRefs": {"entities": [threshold_id]},
+                        "evidenceIds": [
+                            str(value)
+                            for value in threshold.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    context_item_count += 1
+            for scene in individuation_context.get("relationalScenes", [])[:3]:
+                if context_item_count >= 3 or not isinstance(scene, dict):
+                    break
+                scene_id = self._optional_str(scene.get("id"))
+                label = self._optional_str(scene.get("label"))
+                summary = self._truncate_intake_text(
+                    scene.get("sceneSummary") or scene.get("summary"),
+                    limit=180,
+                )
+                if not scene_id or not label or not summary:
+                    continue
+                if self._add_intake_item(
+                    items,
+                    item={
+                        "key": f"relational_scene:{scene_id}",
+                        "kind": "relational_scene",
+                        "label": self._compact_page_text(label, max_length=60),
+                        "summary": summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["method_context_relational_scene"],
+                        "entityRefs": {"entities": [scene_id]},
+                        "evidenceIds": [
+                            str(value)
+                            for value in scene.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    context_item_count += 1
+
+        if isinstance(living_myth_context, dict):
+            symbolic_wellbeing = living_myth_context.get("latestSymbolicWellbeing")
+            if context_item_count < 3 and isinstance(symbolic_wellbeing, dict):
+                wellbeing_id = self._optional_str(symbolic_wellbeing.get("id"))
+                label = self._optional_str(symbolic_wellbeing.get("label"))
+                summary = self._truncate_intake_text(
+                    symbolic_wellbeing.get("capacitySummary") or symbolic_wellbeing.get("summary"),
+                    limit=180,
+                )
+                if (
+                    wellbeing_id
+                    and label
+                    and summary
+                    and self._add_intake_item(
+                        items,
+                        item={
+                            "key": f"living_myth_wellbeing:{wellbeing_id}",
+                            "kind": "living_myth_context",
+                            "label": self._compact_page_text(label, max_length=60),
+                            "summary": summary,
+                            "sourceKind": "method_context",
+                            "criteria": ["living_myth_symbolic_wellbeing"],
+                            "entityRefs": {"entities": [wellbeing_id]},
+                            "evidenceIds": [
+                                str(value)
+                                for value in symbolic_wellbeing.get("evidenceIds", [])
+                                if isinstance(value, str) and value
+                            ],
+                        },
+                        seen_keys=seen_keys,
+                    )
+                ):
+                    context_item_count += 1
+            current_life_chapter = living_myth_context.get("currentLifeChapter")
+            if context_item_count < 3 and isinstance(current_life_chapter, dict):
+                chapter_id = self._optional_str(current_life_chapter.get("id"))
+                label = self._optional_str(
+                    current_life_chapter.get("chapterLabel") or current_life_chapter.get("label")
+                )
+                summary = self._truncate_intake_text(
+                    current_life_chapter.get("chapterSummary")
+                    or current_life_chapter.get("summary"),
+                    limit=180,
+                )
+                if (
+                    chapter_id
+                    and label
+                    and summary
+                    and self._add_intake_item(
+                        items,
+                        item={
+                            "key": f"living_myth_chapter:{chapter_id}",
+                            "kind": "living_myth_context",
+                            "label": self._compact_page_text(label, max_length=60),
+                            "summary": summary,
+                            "sourceKind": "method_context",
+                            "criteria": ["living_myth_current_chapter"],
+                            "entityRefs": {"entities": [chapter_id]},
+                            "evidenceIds": [
+                                str(value)
+                                for value in current_life_chapter.get("evidenceIds", [])
+                                if isinstance(value, str) and value
+                            ],
+                        },
+                        seen_keys=seen_keys,
+                    )
+                ):
+                    context_item_count += 1
+            for question in living_myth_context.get("activeMythicQuestions", [])[:3]:
+                if context_item_count >= 3 or not isinstance(question, dict):
+                    break
+                question_id = self._optional_str(question.get("id"))
+                label = self._optional_str(question.get("label"))
+                summary = self._truncate_intake_text(
+                    question.get("questionText") or question.get("summary"),
+                    limit=180,
+                )
+                if not question_id or not label or not summary:
+                    continue
+                if self._add_intake_item(
+                    items,
+                    item={
+                        "key": f"living_myth_question:{question_id}",
+                        "kind": "living_myth_context",
+                        "label": self._compact_page_text(label, max_length=60),
+                        "summary": summary,
+                        "sourceKind": "method_context",
+                        "criteria": ["living_myth_active_question"],
+                        "entityRefs": {"entities": [question_id]},
+                        "evidenceIds": [
+                            str(value)
+                            for value in question.get("evidenceIds", [])
+                            if isinstance(value, str) and value
+                        ],
+                    },
+                    seen_keys=seen_keys,
+                ):
+                    context_item_count += 1
+        return items
+
+    def _build_intake_host_guidance(
+        self,
+        *,
+        method_context: MethodContextSnapshot | None,
+        item_count: int,
+        warnings: list[str],
+    ) -> IntakeHostGuidance:
+        mention_recommendation = "acknowledge_only"
+        followup_question_style = "none"
+        max_questions = 1
+        reasons = ["store_hold_first", "auto_interpretation_disabled"]
+        method_state = (
+            method_context.get("methodState")
+            if isinstance((method_context or {}).get("methodState"), dict)
+            else None
+        )
+        clarification_state = (
+            method_context.get("clarificationState")
+            if isinstance((method_context or {}).get("clarificationState"), dict)
+            else None
+        )
+        coach_state = (
+            method_context.get("coachState")
+            if isinstance((method_context or {}).get("coachState"), dict)
+            else None
+        )
+        if method_context is not None:
+            reasons.append("method_context_available")
+        grounding_recommendation = None
+        if isinstance(method_state, dict):
+            grounding = method_state.get("grounding")
+            if isinstance(grounding, dict):
+                grounding_recommendation = self._optional_str(grounding.get("recommendation"))
+        if grounding_recommendation is None:
+            individuation_context = (
+                method_context.get("individuationContext")
+                if isinstance((method_context or {}).get("individuationContext"), dict)
+                else None
+            )
+            if isinstance(individuation_context, dict):
+                reality_anchor = individuation_context.get("realityAnchors")
+                if isinstance(reality_anchor, dict):
+                    grounding_recommendation = self._optional_str(
+                        reality_anchor.get("groundingRecommendation")
+                    )
+        if grounding_recommendation == "grounding_first" or (
+            isinstance(coach_state, dict)
+            and isinstance(coach_state.get("globalConstraints"), dict)
+            and self._optional_str(coach_state["globalConstraints"].get("depthLevel"))
+            == "grounding_only"
+        ):
+            mention_recommendation = "grounding_first_hold_context"
+            followup_question_style = "grounding_orienting"
+            reasons.append("grounding_first")
+        elif isinstance(clarification_state, dict) and (
+            clarification_state.get("pendingPrompts")
+            or clarification_state.get("avoidRepeatQuestionKeys")
+            or clarification_state.get("recentlyUnrouted")
+        ):
+            mention_recommendation = "ask_one_clarification_only_if_user_invites"
+            followup_question_style = "clarify_before_depth"
+            reasons.append("clarification_state_present")
+        elif item_count > 0:
+            mention_recommendation = "context_available_hold_first"
+            followup_question_style = "single_gentle_question"
+            reasons.append("context_items_available")
+        questioning_preference = (
+            method_state.get("questioningPreference")
+            if isinstance(method_state, dict)
+            and isinstance(method_state.get("questioningPreference"), dict)
+            else None
+        )
+        if isinstance(questioning_preference, dict):
+            preferred_styles = [
+                str(item)
+                for item in questioning_preference.get("preferredQuestionStyles", [])
+                if isinstance(item, str) and item
+            ]
+            if (
+                followup_question_style == "single_gentle_question"
+                and "choice_based" in preferred_styles
+            ):
+                followup_question_style = "user_choice"
+                reasons.append("questioning_preference_choice_based")
+        if isinstance(coach_state, dict):
+            global_constraints = (
+                coach_state.get("globalConstraints")
+                if isinstance(coach_state.get("globalConstraints"), dict)
+                else None
+            )
+            if isinstance(global_constraints, dict):
+                constrained_max_questions = global_constraints.get("maxQuestionsPerTurn")
+                if isinstance(constrained_max_questions, int) and constrained_max_questions < 1:
+                    max_questions = 0
+                    followup_question_style = "none"
+                    reasons.append("questions_blocked")
+        if warnings:
+            reasons.append("partial_context")
+        return {
+            "holdFirst": True,
+            "allowAutoInterpretation": False,
+            "maxQuestions": max_questions,
+            "mentionRecommendation": cast(
+                Literal[
+                    "acknowledge_only",
+                    "context_available_hold_first",
+                    "grounding_first_hold_context",
+                    "ask_one_clarification_only_if_user_invites",
+                ],
+                mention_recommendation,
+            ),
+            "followupQuestionStyle": cast(
+                Literal[
+                    "none",
+                    "single_gentle_question",
+                    "grounding_orienting",
+                    "clarify_before_depth",
+                    "user_choice",
+                ],
+                followup_question_style,
+            ),
+            "reasons": list(dict.fromkeys(reasons)),
+        }
+
+    def _aggregate_intake_entity_refs(
+        self,
+        items: list[IntakeContextItem],
+    ) -> dict[str, list[Id]]:
+        entity_refs: dict[str, list[Id]] = {}
+        for item in items:
+            for entity_type, ref_ids in item.get("entityRefs", {}).items():
+                if not isinstance(ref_ids, list):
+                    continue
+                normalized_ids = [
+                    str(value) for value in ref_ids if isinstance(value, str) and value
+                ]
+                if not normalized_ids:
+                    continue
+                entity_refs[entity_type] = self._merge_ids(
+                    entity_refs.get(entity_type, []),
+                    normalized_ids,
+                )
+        return entity_refs
+
+    def _add_intake_item(
+        self,
+        items: list[IntakeContextItem],
+        *,
+        item: IntakeContextItem,
+        seen_keys: set[str],
+        max_items: int = 12,
+    ) -> bool:
+        if len(items) >= max_items or item["key"] in seen_keys:
+            return False
+        seen_keys.add(item["key"])
+        items.append(item)
+        return True
+
+    def _truncate_intake_text(self, value: object, *, limit: int = 220) -> str | None:
+        if value is None:
+            return None
+        text = " ".join(str(value).split())
+        if not text:
+            return None
+        if len(text) <= limit:
+            return text
+        return text[: limit - 3].rstrip() + "..."
 
     async def _build_ephemeral_circulation_summary(
         self,
