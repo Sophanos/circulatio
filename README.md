@@ -70,28 +70,6 @@ Circulatio is a **durable backend** with a Hermes plugin bridge. Hermes owns rou
 - **Analysis surfaces** — threshold reviews, living myth reviews, and bounded analysis packets
 - **Practice lifecycle** — recommendations, follow-ups, and integration, held lightly
 
-```mermaid
-flowchart LR
-    A([You share]) -->|dream body reflection event| B[Hermes<br/>route store]
-    B --> C[Circulatio<br/>memory graph context]
-    C --> D[(SQLite)]
-
-    C --> E[Typed Namespaces]
-    E --> F[dream body reflection<br/>event scene attitude threshold]
-
-    C --> G[Derived Graph]
-    G --> H[Dream Symbol Figure<br/>Complex BodyState Series]
-
-    H --> I[Personal Amplification<br/>your associations first]
-    I -->|if blank| J[Collective Amplification<br/>cultural mythic parallel]
-
-    H --> K[Interpret on Request]
-    K --> L[context associations<br/>storage comparison<br/>question practice]
-    L --> M{Approve?}
-    M -->|yes| N[Durable Write]
-    M -->|no| O[No Guilt]
-```
-
 ## What Is Possible
 
 - **Hold without hurry.** Drop a dream, a body sensation, a charged moment. It waits. It does not interpret until you ask, or until the pattern itself demands attention.
