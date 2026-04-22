@@ -71,57 +71,25 @@ Circulatio is a **durable backend** with a Hermes plugin bridge. Hermes owns rou
 - **Practice lifecycle** — recommendations, follow-ups, and integration, held lightly
 
 ```mermaid
-flowchart TD
-    User["You"] -->|dream, body state, reflection, event| Hermes["Hermes<br/>(routing, rhythm, gateway)"]
-    Hermes -->|store first| Circulatio["Circulatio<br/>(memory, graph, interpretation, context)"]
-    Circulatio -->|canonical storage| SQLite[(SQLite)]
+flowchart LR
+    A([You share]) -->|dream body reflection event| B[Hermes<br/>route store]
+    B --> C[Circulatio<br/>memory graph context]
+    C --> D[(SQLite)]
 
-    subgraph MemoryNamespaces["Typed Memory Namespaces"]
-        D[dream]
-        BS[body_state]
-        R[reflection]
-        E[event]
-        RE[relational_scene]
-        CA[conscious_attitude]
-        TP[threshold_process]
-    end
+    C --> E[Typed Namespaces]
+    E --> F[dream body reflection<br/>event scene attitude threshold]
 
-    Circulatio --> MemoryNamespaces
+    C --> G[Derived Graph]
+    G --> H[Dream Symbol Figure<br/>Complex BodyState Series]
 
-    subgraph DerivedGraph["Derived Graph (query-time projections)"]
-        DN[Dream Node]
-        SN[Symbol Node]
-        FN[Figure Node]
-        CN[Complex Node]
-        BSN[BodyState Node]
-        DS[DreamSeries]
-        RS[RelationalScene]
-        RA[RealityAnchor]
-    end
+    H --> I[Personal Amplification<br/>your associations first]
+    I -->|if blank| J[Collective Amplification<br/>cultural mythic parallel]
 
-    MemoryNamespaces -->|entities + edges| DerivedGraph
-
-    subgraph Amplification["Amplification Chain"]
-        PA["Personal Amplification<br/>(user's associations, memories, feelings)"]
-        CO["Collective Amplification<br/>(cultural frames, mythic parallels)<br/>OFFERED ONLY AFTER<br/>personal is exhausted"]
-    end
-
-    SN --> PA
-    PA -->|if personal blank| CO
-
-    subgraph Interpretation["Interpretation Engine (on request)"]
-        IG["1. Gather context"]
-        PA2["2. Ask personal associations"]
-        SA["3. Store as linked records"]
-        CM["4. Compare lysis vs conscious attitude"]
-        PQ["5. Present as question, not conclusion"]
-        PR["6. Generate practice / active imagination"]
-    end
-
-    DerivedGraph --> Interpretation
-    Interpretation -->|proposals| AP["Approval Gate"]
-    AP -->|user approves| DW["Durable Symbolic Writes"]
-    AP -->|user declines| DROP["Held lightly — no guilt"]
+    H --> K[Interpret on Request]
+    K --> L[context associations<br/>storage comparison<br/>question practice]
+    L --> M{Approve?}
+    M -->|yes| N[Durable Write]
+    M -->|no| O[No Guilt]
 ```
 
 ## What Is Possible
