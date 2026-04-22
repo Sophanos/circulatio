@@ -283,9 +283,15 @@ INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "sentences with exactly one question. If gated, wait for new input. If the "
     "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
     "do not call this tool again with unchanged material or suggest rerunning it. "
+    "A bounded recovery retry is allowed when this tool hits a clearly transient backend, "
+    "storage, provider, or replay-related problem and Hermes is still trying to complete "
+    "the same interpretation request. "
     "If the user asks what happened, answer in one brief plain-language sentence and "
     "say there is no separate user-facing bug report here. Requests to show a bug "
-    "report or full response body are not permission to expose internals. If fallback, "
+    "report or full response body are not permission to expose internals, and requests "
+    "to explain repeated calls or list the errors in English are not permission to "
+    "enumerate attempts, replay/idempotency behavior, parameter changes, or backend "
+    "error codes. If fallback, "
     "do not frame it as a backend failure, and do not expose raw result JSON, field "
     "names, diagnostic strings, tool names, status codes, or ids in chat.",
     {

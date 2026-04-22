@@ -1547,6 +1547,14 @@ class HermesBridgePluginTests(unittest.TestCase):
             ctx.tools["circulatio_interpret_material"]["description"],
         )
         self.assertIn(
+            "A bounded recovery retry is allowed",
+            ctx.tools["circulatio_interpret_material"]["description"],
+        )
+        self.assertIn(
+            "requests to explain repeated calls or list the errors in English are not permission",
+            ctx.tools["circulatio_interpret_material"]["description"],
+        )
+        self.assertIn(
             "A valid first response may be a single question",
             ctx.tools["circulatio_interpret_material"]["description"],
         )
