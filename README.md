@@ -2,9 +2,7 @@
 
 > A symbolic memory backend for inner work.
 
-**Circulatio is a longitudinal hermeneutic continuity substrate.** It stores dreams, reflections, body states, symbolic notes, and charged events, then relates them across time through a disciplined depth method — not as data, but as living material. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system framing.
-
-Circulatio is a Python backend and Hermes plugin that surfaces patterns across time.
+**Circulatio holds your inner life across time.** It stores dreams, reflections, body states, and charged events, then relates them through a disciplined depth method — not as data, but as living material.
 
 It is built around one idea:
 
@@ -81,9 +79,9 @@ Explore longer-term patterns:
 
 ## Architecture
 
-Circulatio is a durable backend for symbolic memory, with a Hermes plugin bridge on top.
+Circulatio is a durable backend for symbolic memory. It can embed in a host agent today (Hermes) and adapt to other hosts later. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system stack, scalability thesis, and builder-psyche separation.
 
-Hermes handles routing, sessions, and scheduling. Circulatio handles:
+The host handles routing, sessions, and scheduling. Circulatio handles:
 - **Memory kernel** — typed, privacy-classed, provenance-bound
 - **Graph engine** — derived symbol-to-symbol projections, no external graph DB
 - **Context derivation** — native life-context built from your own records

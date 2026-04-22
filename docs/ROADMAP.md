@@ -7,6 +7,8 @@ This is the single source of truth for what Circulatio does and why it matters. 
 
 **Circulatio is a soul OS for soul-making.**
 
+For the architectural stack, scalability thesis, and builder-psyche separation, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 Hermes connects the days. Circulatio connects the depths. Together they build **soul + soma + spirit** — the whole person, not the optimized one.
 
 It helps you build a living relationship with your own unconscious through your dreams, your body, and the patterns that shape your life. It is not a therapist, not a chatbot, not a wellness tracker. It is a collaborative witness that remembers what you forget, sees what you cannot yet see, and stays with you while you do the work.

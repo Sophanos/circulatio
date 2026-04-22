@@ -1,6 +1,6 @@
 > **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
-> **Consolidated docs:** See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules.
+> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing, scalability thesis, and builder-psyche separation. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules.
 
 # Circulatio Engineering Guide
 ## Technical Specification For Builders
@@ -54,6 +54,7 @@ No new top-level domain concepts can be added without updating this document.
 8. **Your memory is your value.** The user forgets. You must not. This is why the graph and memory kernel are sacred.
 9. **Proactive is gentle.** Surface patterns only when they are ripe. Never create anxiety to drive engagement.
 10. **The user should need you less over time.** Success is obsolescence — the user becomes their own Circulatio.
+11. **Continuity before conclusion.** The graph and memory kernel serve continuity; the method layer serves interpretation; integration happens only after both are present.
 
 ---
 
