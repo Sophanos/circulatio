@@ -1,18 +1,19 @@
 # Circulatio
 
-> A symbolic memory backend for inner work.
+Every app captures. Almost none help you become.
 
-**Circulatio holds your inner life across time.** It stores dreams, reflections, body states, and charged events, then relates them through a disciplined depth method — not as data, but as living material.
+Circulatio is a companion system for inner work. It holds your dreams, body states, reflections, and charged events — not as data to warehouse, but as living material for meaning.
 
-It is built around one idea:
+Symbols are personal, yet they belong to something older than you. The snake in your cellar is yours, but it is also centuries of myth, literature, and human experience speaking through you. Circulatio traces these threads: your own recurring images, their echoes in culture and history, and the direction your soul is trying to take.
 
 **Hold first, interpret later, approve before writing symbolic memory.**
 
-Unlike journaling apps that only collect notes, or chatbots that interpret instantly, Circulatio creates a longitudinal symbolic memory:
-- raw material is stored without pressure
-- interpretation is deliberate, not automatic
-- symbolic claims become proposals first
-- durable memory writes happen only with explicit approval
+Journals store. Chatbots react. Circulatio creates meaning and continuity:
+
+- **Capture without performing insight.** Drop a fragment when you're raw; return to it when you're ready.
+- **It remembers the threads you would lose.** A dream in March, a body state in June — held until the pattern speaks.
+- **You remain the author of your own symbols.** Nothing becomes "true" about you without your witness.
+- **Your images become a language you recognize.** Not generic meanings. Your own recurring vocabulary, deepening over time.
 
 It does not diagnose, gamify, or optimize.  
 It holds, remembers, and helps patterns become visible.

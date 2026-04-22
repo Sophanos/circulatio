@@ -1,6 +1,6 @@
 > **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
-> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing, scalability thesis, and builder-psyche separation. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules.
+> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing, scalability thesis, and builder-psyche separation. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `JOURNEY_FAMILIES.md` for the derived longitudinal journey families and eval-case framing used to test backend continuity, pacing, and host behavior.
 
 # Circulatio Engineering Guide
 ## Technical Specification For Builders
