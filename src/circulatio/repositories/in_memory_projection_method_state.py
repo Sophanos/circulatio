@@ -204,9 +204,16 @@ def build_clarification_state_summary_locked(
         if routing_status == "routed":
             recently_answered.append(summary)
         elif routing_status in {"unrouted", "needs_review"}:
+            if routing_status == "unrouted" and answer.get("captureTarget") == "answer_only":
+                continue
             recently_unrouted.append(summary)
 
-    if not pending_prompts and not recently_answered and not recently_unrouted:
+    if (
+        not pending_prompts
+        and not recently_answered
+        and not recently_unrouted
+        and not avoid_repeat_question_keys
+    ):
         return None
     return {
         "pendingPrompts": pending_prompts[:5],

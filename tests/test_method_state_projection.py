@@ -402,7 +402,9 @@ class MethodStateProjectionTests(unittest.TestCase):
             method_state = snapshot["methodState"]
             assert isinstance(method_state, dict)
             grounding = method_state["grounding"]
-            self.assertIn("Recent practice outcomes increased activation.", grounding["strainSignals"])
+            self.assertIn(
+                "Recent practice outcomes increased activation.", grounding["strainSignals"]
+            )
             self.assertIn("evidence_practice_1", grounding["evidenceIds"])
 
         asyncio.run(run())
@@ -535,6 +537,53 @@ class MethodStateProjectionTests(unittest.TestCase):
             practice = result["practiceRecommendation"]
             self.assertEqual(practice["targetedTensionId"], "canonical_tension")
             self.assertEqual(practice["durationMinutes"], 5)
+
+        asyncio.run(run())
+
+    def test_answer_only_unrouted_clarification_does_not_count_as_friction(self) -> None:
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            await repository.create_clarification_prompt(
+                {
+                    "id": "clarification_prompt_fallback",
+                    "userId": "user_1",
+                    "materialId": "material_1",
+                    "runId": "run_1",
+                    "questionText": "What image feels most alive right now?",
+                    "questionKey": "fallback_image",
+                    "intent": "personal_association",
+                    "captureTarget": "answer_only",
+                    "expectedAnswerKind": "free_text",
+                    "status": "answered_unrouted",
+                    "privacyClass": "session_only",
+                    "createdAt": "2026-04-18T08:00:00Z",
+                    "updatedAt": "2026-04-18T08:05:00Z",
+                    "answeredAt": "2026-04-18T08:05:00Z",
+                    "answerRecordId": "clarification_answer_fallback",
+                }
+            )
+            await repository.create_clarification_answer(
+                {
+                    "id": "clarification_answer_fallback",
+                    "userId": "user_1",
+                    "promptId": "clarification_prompt_fallback",
+                    "materialId": "material_1",
+                    "runId": "run_1",
+                    "answerText": "The door frame keeps carrying the charge.",
+                    "captureTarget": "answer_only",
+                    "routingStatus": "unrouted",
+                    "createdRecordRefs": [],
+                    "privacyClass": "session_only",
+                    "createdAt": "2026-04-18T08:05:00Z",
+                    "updatedAt": "2026-04-18T08:05:00Z",
+                }
+            )
+            snapshot = await self._build_snapshot(repository)
+            clarification_state = snapshot.get("clarificationState")
+            self.assertIsNotNone(clarification_state)
+            assert clarification_state is not None
+            self.assertEqual(clarification_state["recentlyUnrouted"], [])
+            self.assertIn("fallback_image", clarification_state["avoidRepeatQuestionKeys"])
 
         asyncio.run(run())
 
