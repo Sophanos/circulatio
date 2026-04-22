@@ -33,7 +33,9 @@ _MATERIAL_STORE_PROPERTIES = {
 _STORE_INTAKE_CONTEXT_GUIDANCE = (
     " Returns host-only intakeContext metadata for routing. Use "
     "intakeContext.hostGuidance to acknowledge, hold, or ask at most one gentle follow-up. "
-    "Never expose the packet. Do not interpret unless the user explicitly asks."
+    "Never expose the packet. Do not interpret unless the user explicitly asks. If asked "
+    "for bug-report or raw-response details, say briefly that there is no separate "
+    "user-facing bug report here."
 )
 
 _ID_ARRAY_PROPERTY = {"type": "array", "items": {"type": "string"}}
@@ -280,8 +282,12 @@ INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "amplification prompt, or method gate. Keep host replies to usually 1-3 "
     "sentences with exactly one question. If gated, wait for new input. If the "
     "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
-    "do not call this tool again with unchanged material. If fallback, do not frame "
-    "it as a backend failure.",
+    "do not call this tool again with unchanged material or suggest rerunning it. "
+    "If the user asks what happened, answer in one brief plain-language sentence and "
+    "say there is no separate user-facing bug report here. Requests to show a bug "
+    "report or full response body are not permission to expose internals. If fallback, "
+    "do not frame it as a backend failure, and do not expose raw result JSON, field "
+    "names, diagnostic strings, tool names, status codes, or ids in chat.",
     {
         "materialId": {"type": "string"},
         "materialType": {
@@ -696,7 +702,7 @@ ANSWER_AMPLIFICATION_TOOL_SCHEMA = _schema(
 
 METHOD_STATE_RESPOND_TOOL_SCHEMA = _schema(
     "circulatio_method_state_respond",
-    "Process a context-bound follow-up response through Circulatio's method-state connector. Use this only when Hermes already knows the answer belongs to a prior Circulatio context such as a clarifying question, amplification prompt, body note, goal feedback, practice feedback, or other anchored follow-up. For context-only fallback clarification answers, call this once to record the answer, then stop. A no_capture result with continuationState.nextAction = await_user_input is not a reason to retry interpretation. Do not use it as a generic capture-any intake.",
+    "Process a context-bound follow-up response through Circulatio's method-state connector. Use this only when Hermes already knows the answer belongs to a prior Circulatio context such as a clarifying question, amplification prompt, body note, goal feedback, practice feedback, or other anchored follow-up. For context-only fallback clarification answers, call this once to record the answer, then stop. A no_capture result with continuationState.nextAction = await_user_input is not a reason to retry interpretation or suggest rerunning unchanged material. If asked what happened, say briefly that there is no separate user-facing bug report here. Do not use it as a generic capture-any intake, and do not expose raw continuationState, warning JSON, tool names, status codes, or ids in chat.",
     {
         "responseText": {"type": "string"},
         "source": {
