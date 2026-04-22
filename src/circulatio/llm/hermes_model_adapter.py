@@ -103,11 +103,35 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
             else os.environ.get("CIRCULATIO_LLM_TIMEOUT_SECONDS"),
             default=30.0,
         )
+        self._interpret_timeout_seconds = self._normalize_timeout_seconds(
+            os.environ.get("CIRCULATIO_INTERPRET_TIMEOUT_SECONDS"),
+            default=12.0,
+        )
         self._debug_llm = os.environ.get("CIRCULATIO_DEBUG_LLM") == "1"
 
     async def interpret_material(
         self,
         input_data: MaterialInterpretationInput,
+    ) -> LlmInterpretationOutput:
+        timeout_seconds = self._effective_interpret_timeout_seconds()
+        if timeout_seconds is None:
+            return await self._interpret_material_with_timeout_budget(
+                input_data,
+                timeout_seconds=None,
+            )
+        return await asyncio.wait_for(
+            self._interpret_material_with_timeout_budget(
+                input_data,
+                timeout_seconds=timeout_seconds,
+            ),
+            timeout=timeout_seconds,
+        )
+
+    async def _interpret_material_with_timeout_budget(
+        self,
+        input_data: MaterialInterpretationInput,
+        *,
+        timeout_seconds: float | None,
     ) -> LlmInterpretationOutput:
         messages = build_interpretation_messages(input_data)
         client = self._load_auxiliary_client()
@@ -117,6 +141,7 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
             max_tokens=self._max_interpret_tokens,
             schema=INTERPRETATION_OUTPUT_SCHEMA,
             schema_name="circulatio_interpretation",
+            timeout_seconds=timeout_seconds,
         )
         output = self._normalize_interpretation_output(payload)
         contract = self._assess_interpretation_output(output)
@@ -131,6 +156,7 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
                 messages=messages,
                 output=output,
                 max_tokens=self._max_interpret_tokens,
+                timeout_seconds=timeout_seconds,
             )
             if repaired is not None:
                 repaired_contract = self._assess_interpretation_output(repaired)
@@ -386,14 +412,47 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
                 schema=METHOD_STATE_ROUTING_OUTPUT_SCHEMA,
                 schema_name="circulatio_method_state_routing",
             )
-        except Exception as exc:
-            self._debug_log_llm_event("method_state_routing_failed", error=exc)
+        except TimeoutError as exc:
+            warning = "method_state_routing_timeout"
+            self._debug_log_llm_event(
+                warning,
+                error=exc,
+                details={"warning": warning, "errorType": type(exc).__name__},
+            )
             return {
                 "answerSummary": "",
                 "evidenceSpans": [],
                 "captureCandidates": [],
                 "followUpPrompts": [],
-                "routingWarnings": ["method_state_routing_failed"],
+                "routingWarnings": [warning],
+            }
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            warning = "method_state_routing_contract_failed"
+            self._debug_log_llm_event(
+                warning,
+                error=exc,
+                details={"warning": warning, "errorType": type(exc).__name__},
+            )
+            return {
+                "answerSummary": "",
+                "evidenceSpans": [],
+                "captureCandidates": [],
+                "followUpPrompts": [],
+                "routingWarnings": [warning],
+            }
+        except Exception as exc:
+            warning = "method_state_routing_provider_failed"
+            self._debug_log_llm_event(
+                warning,
+                error=exc,
+                details={"warning": warning, "errorType": type(exc).__name__},
+            )
+            return {
+                "answerSummary": "",
+                "evidenceSpans": [],
+                "captureCandidates": [],
+                "followUpPrompts": [],
+                "routingWarnings": [warning],
             }
         return self._normalize_method_state_routing_output(payload)
 
@@ -780,6 +839,7 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
         messages: list[dict[str, str]],
         output: LlmInterpretationOutput,
         max_tokens: int,
+        timeout_seconds: float | None = None,
     ) -> LlmInterpretationOutput | None:
         repair_messages = messages + [
             {
@@ -812,6 +872,7 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
                 client,
                 repair_messages,
                 max_tokens=max_tokens,
+                timeout_seconds=timeout_seconds,
             )
         except Exception as exc:
             self._debug_log_llm_event(
@@ -1128,6 +1189,13 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
         if timeout <= 0:
             return None
         return timeout
+
+    def _effective_interpret_timeout_seconds(self) -> float | None:
+        if self._interpret_timeout_seconds is None:
+            return self._request_timeout_seconds
+        if self._request_timeout_seconds is None:
+            return self._interpret_timeout_seconds
+        return min(self._interpret_timeout_seconds, self._request_timeout_seconds)
 
     async def _call_llm_with_timeout(
         self,
