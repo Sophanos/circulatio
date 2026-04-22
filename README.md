@@ -136,3 +136,17 @@ What it holds to:
 
 If you want an AI that optimizes your day, look elsewhere.  
 If you want a companion that remembers what you forget and sees what you cannot yet hold alone, you are in the right place.
+
+---
+
+## Further Reading
+
+| Document | Read this to... |
+|----------|----------------|
+| [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Understand the system stack and scalability thesis |
+| [`ROADMAP.md`](docs/ROADMAP.md) | See user outcomes, use cases, and development phases |
+| [`ENGINEERING_GUIDE.md`](docs/ENGINEERING_GUIDE.md) | Build or contribute to the codebase |
+| [`INTERPRETATION_ENGINE_SPEC.md`](docs/INTERPRETATION_ENGINE_SPEC.md) | Understand the Jungian hermeneutic method |
+| [`SELF_EVOLUTION_OS.md`](docs/SELF_EVOLUTION_OS.md) | Learn how the method evolves offline |
+
+The method quality command in Quickstart runs against explicit rubrics defined in the offline Evolution OS. It does not mutate live state.
