@@ -1,8 +1,23 @@
 # Circulatio
 
-> A companion for soul-making, where pattern and meaning surface.
+> A symbolic memory backend for inner work.
 
-A memory system for depth. Circulatio collects dreams, body states, reflections, and charged events — then surfaces long-term patterns on your timing, with your consent. It does not diagnose, gamify, or optimize. It **holds**, **remembers**, and **interprets** only when you ask.
+**Circulatio is a longitudinal hermeneutic continuity substrate.** It stores dreams, reflections, body states, symbolic notes, and charged events, then relates them across time through a disciplined depth method — not as data, but as living material. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system framing.
+
+Circulatio is a Python backend and Hermes plugin that surfaces patterns across time.
+
+It is built around one idea:
+
+**Hold first, interpret later, approve before writing symbolic memory.**
+
+Unlike journaling apps that only collect notes, or chatbots that interpret instantly, Circulatio creates a longitudinal symbolic memory:
+- raw material is stored without pressure
+- interpretation is deliberate, not automatic
+- symbolic claims become proposals first
+- durable memory writes happen only with explicit approval
+
+It does not diagnose, gamify, or optimize.  
+It holds, remembers, and helps patterns become visible.
 
 <p align="center">
   <img src="docs/diagram.svg" alt="Circulatio diagram: material enters the vessel (dreams, body states, reflections, charged events), passes through capture / hold / interpret, and becomes visible as pattern, journeys, living myth, and analysis packets — guarded by grounding, evidence, hypotheses, approval, and offline evolution." width="100%" />
@@ -33,14 +48,54 @@ pip install -e ".[dev]" --upgrade
 
 ---
 
-## What This Is
+## First workflow
 
-Circulatio is for people doing inner work — not as an escape from life, but as the ground beneath it.
+Store material without interpreting it yet:
 
-- You remember dreams and sense they mean something, but you do not know how to read them.
-- You feel patterns repeating and want to understand them at depth, not just manage symptoms.
-- You believe the body carries intelligence and want to connect somatic experience with symbolic life.
-- You want a **witness** that accumulates with you, not a dashboard that reports on you.
+```bash
+/circulation dream "I walked through a house and found a snake in the cellar."
+```
+
+Ask for interpretation when you are ready:
+
+```bash
+/circulation reflect "A snake image kept returning after the conflict."
+```
+
+Review what Circulatio proposes before it becomes memory:
+
+```bash
+/circulation approve last p1
+/circulation reject last p1 --reason "do not save this"
+```
+
+Explore longer-term patterns:
+
+```bash
+/circulation discovery --query "snake and chest tension" --limit 4
+/circulation review threshold
+/circulation review week
+```
+
+---
+
+## Architecture
+
+Circulatio is a durable backend for symbolic memory, with a Hermes plugin bridge on top.
+
+Hermes handles routing, sessions, and scheduling. Circulatio handles:
+- **Memory kernel** — typed, privacy-classed, provenance-bound
+- **Graph engine** — derived symbol-to-symbol projections, no external graph DB
+- **Context derivation** — native life-context built from your own records
+- **LLM-first interpretation** — structured depth output with safety backstops
+- **Approval flows** — symbolic writes are proposals until you accept them
+- **Proactive runtime** — `alive_today`, rhythmic briefs, journey pages, and weekly reviews
+- **Read surfaces** — discovery, journey pages, threshold reviews, living myth reviews, and bounded analysis packets
+- **Practice lifecycle** — recommendations, follow-ups, and integration, held lightly
+
+It can run in-memory for testing or with a SQLite-backed profile runtime for durable local use.
+
+---
 
 ## The Daily Rhythm
 
@@ -51,26 +106,7 @@ Circulatio is for people doing inner work — not as an escape from life, but as
 | **Evening** | You ask: *"What is alive today?"* It weaves the morning's tension into the recurring water symbol, offers a cultural parallel as invitation, and asks a gentle question. |
 | **Weekly** | A deeper synthesis: what recurred, what shifted, what was avoided, what new symbol emerged, what goal tension is visible. You read it like a journal you did not write alone. |
 
-## Architecture
-
-Circulatio is a **durable backend** with a Hermes plugin bridge. Hermes owns routing, session orchestration, and scheduling. Circulatio owns:
-
-- **Memory kernel** — typed, privacy-classed, provenance-bound
-- **Graph engine** — derived symbol-to-symbol projections, no external graph DB
-- **Context derivation** — native life-context built from your own records
-- **Coach operating contract** — derived `coachState` attached to enriched method context
-- **LLM-first interpretation** — structured depth output with safety backstops
-- **Approval flows** — symbolic writes are proposals until you accept them
-- **Proactive runtime** — `alive_today`, rhythmic briefs, journey pages, and weekly reviews
-- **Practice lifecycle** — recommendations, follow-ups, and integration, held lightly
-
-## What It Does
-
-- **Hold without hurry.** Drop a dream or body sensation; it waits until you ask.
-- **See pattern across time.** Recurring symbols surface as weight, not coincidence.
-- **Depth when ready.** Interpretation is offered, never imposed.
-- **Body as symbol.** Somatic tension is held as message, not managed as symptom.
-- **A witness that accumulates.** It remembers what you forget and surfaces what you cannot yet hold alone.
+---
 
 ## How It Interprets
 
@@ -82,6 +118,8 @@ Circulatio does not guess meanings from a symbol dictionary. It follows a hermen
 - **Containment before depth.** Grounding is assessed before shadow or archetypal language is offered.
 
 See [`docs/INTERPRETATION_ENGINE_SPEC.md`](docs/INTERPRETATION_ENGINE_SPEC.md) for the full method.
+
+---
 
 ## The Bottom Line
 
