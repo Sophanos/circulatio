@@ -2551,9 +2551,7 @@ class CirculatioService:
         pending_proposals: list[MemoryWriteProposal] = []
         memory_write_plan = interpretation.get("memoryWritePlan")
         proposals = (
-            memory_write_plan.get("proposals")
-            if isinstance(memory_write_plan, dict)
-            else None
+            memory_write_plan.get("proposals") if isinstance(memory_write_plan, dict) else None
         )
         if isinstance(proposals, list):
             pending_proposals = [
@@ -2770,10 +2768,12 @@ class CirculatioService:
         )
         clarification_prompt: ClarificationPromptRecord | None = None
         if source == "clarifying_answer":
-            clarification_prompt = await self._resolve_clarification_prompt_for_method_state_response(
-                user_id=user_id,
-                anchor_refs=anchor_refs,
-                anchors=anchors,
+            clarification_prompt = (
+                await self._resolve_clarification_prompt_for_method_state_response(
+                    user_id=user_id,
+                    anchor_refs=anchor_refs,
+                    anchors=anchors,
+                )
             )
         expected_targets = self._resolve_expected_capture_targets(
             source=source,
@@ -9291,7 +9291,9 @@ class CirculatioService:
                     ref_keys.append(run_ref_key)
         for ref_key in ref_keys:
             matches = [
-                item for item in prompts if self._clarification_prompt_matches_ref_key(item, ref_key)
+                item
+                for item in prompts
+                if self._clarification_prompt_matches_ref_key(item, ref_key)
             ]
             preferred = self._prefer_clarification_prompt(matches)
             if preferred is not None:
@@ -9350,7 +9352,10 @@ class CirculatioService:
         if not isinstance(result, dict):
             return False
         llm_health = result.get("llmInterpretationHealth")
-        if isinstance(llm_health, dict) and self._optional_str(llm_health.get("source")) == "fallback":
+        if (
+            isinstance(llm_health, dict)
+            and self._optional_str(llm_health.get("source")) == "fallback"
+        ):
             return True
         depth_engine_health = result.get("depthEngineHealth")
         if isinstance(depth_engine_health, dict) and (
@@ -9381,20 +9386,23 @@ class CirculatioService:
     ) -> ClarificationAnswerRecord | None:
         if prompt is None:
             return None
-        routing_status = "routed" if applied_entity_refs else "needs_review" if pending_proposals else "unrouted"
+        routing_status = (
+            "routed" if applied_entity_refs else "needs_review" if pending_proposals else "unrouted"
+        )
         created_record_refs = [
             {
                 "recordType": str(item.get("entityType") or ""),
                 "id": str(item.get("entityId") or ""),
             }
             for item in applied_entity_refs
-            if str(item.get("entityType") or "").strip()
-            and str(item.get("entityId") or "").strip()
+            if str(item.get("entityType") or "").strip() and str(item.get("entityId") or "").strip()
         ]
         existing_answer_id = self._optional_str(prompt.get("answerRecordId"))
         prompt_status = "answered" if routing_status == "routed" else "answered_unrouted"
         if existing_answer_id:
-            existing_answer = await self._repository.get_clarification_answer(user_id, existing_answer_id)
+            existing_answer = await self._repository.get_clarification_answer(
+                user_id, existing_answer_id
+            )
             if str(existing_answer.get("answerText") or "").strip() != response_text:
                 warnings.append("clarification_prompt_already_answered")
                 return existing_answer
@@ -9445,7 +9453,9 @@ class CirculatioService:
             answer_record["materialId"] = material_id
         else:
             answer_record["materialId"] = response_material["id"]
-        run_id = self._optional_str(prompt.get("runId")) or self._optional_str(anchor_refs.get("runId"))
+        run_id = self._optional_str(prompt.get("runId")) or self._optional_str(
+            anchor_refs.get("runId")
+        )
         if run_id:
             answer_record["runId"] = run_id
         validation_errors = [str(item) for item in warnings if str(item).strip()]

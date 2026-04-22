@@ -2132,8 +2132,7 @@ class CirculatioAgentBridge:
                 if str(item).strip()
             ]
             storage_policy = (
-                self._optional_string(clarification_intent.get("storagePolicy"))
-                or storage_policy
+                self._optional_string(clarification_intent.get("storagePolicy")) or storage_policy
             )
         return {
             "kind": "waiting_for_follow_up",
@@ -2151,11 +2150,7 @@ class CirculatioAgentBridge:
         source: str,
         workflow: dict[str, object],
     ) -> dict[str, object]:
-        warnings = {
-            str(item)
-            for item in workflow.get("warnings", [])
-            if str(item).strip()
-        }
+        warnings = {str(item) for item in workflow.get("warnings", []) if str(item).strip()}
         provider_unavailable = bool(
             warnings
             & {
