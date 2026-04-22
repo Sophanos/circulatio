@@ -1,0 +1,79 @@
+{
+  "cacheKey": "ab2e81506250901757b48dfe66ecb354cfd14c4f2112aaa6c1e91ddc5e167320",
+  "normalized": {
+    "adapter": "codex",
+    "case_id": "embodied_recurrence_001",
+    "parse_status": "failed",
+    "payload": {
+      "caseId": "embodied_recurrence_001",
+      "globalNotes": [],
+      "parseStatus": "failed",
+      "turnResults": []
+    },
+    "raw_text": "{\"type\":\"thread.started\",\"thread_id\":\"019db61c-3b29-74e1-b74e-c58096d96446\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"error\",\"message\":\"{\\n  \\\"type\\\": \\\"error\\\",\\n  \\\"error\\\": {\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"code\\\": \\\"invalid_json_schema\\\",\\n    \\\"message\\\": \\\"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'turnResults', 'items', 'properties', 'writeActions', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'autonomous'.\\\",\\n    \\\"param\\\": \\\"text.format.schema\\\"\\n  },\\n  \\\"status\\\": 400\\n}\"}\n{\"type\":\"turn.failed\",\"error\":{\"message\":\"{\\n  \\\"type\\\": \\\"error\\\",\\n  \\\"error\\\": {\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"code\\\": \\\"invalid_json_schema\\\",\\n    \\\"message\\\": \\\"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'turnResults', 'items', 'properties', 'writeActions', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'autonomous'.\\\",\\n    \\\"param\\\": \\\"text.format.schema\\\"\\n  },\\n  \\\"status\\\": 400\\n}\"}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "codex",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "embodied_recurrence_001",
+    "command_display": [
+      "codex",
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "--sandbox",
+      "read-only",
+      "--output-schema",
+      "<OUTPUT_SCHEMA_FILE>"
+    ],
+    "command_hash": "28156428c1a1d820fa2cc2cb98b57b336ede002efda7f05e0ecccd3d359e955a",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T165316Z/codex/embodied_recurrence_001",
+    "duration_ms": 3616,
+    "error": null,
+    "exit_code": 1,
+    "started_at": "2026-04-22T16:53:16.639684+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T165316Z/raw/codex/embodied_recurrence_001.stderr",
+    "stderr_sha256": "3e75d28a6681c31400a3f0fcb564c7613fd42796fb83294e4d53fea86bcbd401",
+    "stderr_text": "Reading prompt from stdin...\n",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T165316Z/raw/codex/embodied_recurrence_001.stdout",
+    "stdout_sha256": "22296cd4cba1de52129684750ecfe6e73db5736a868b4a1821543ad72ec5cfd8",
+    "stdout_text": "{\"type\":\"thread.started\",\"thread_id\":\"019db61c-3b29-74e1-b74e-c58096d96446\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"error\",\"message\":\"{\\n  \\\"type\\\": \\\"error\\\",\\n  \\\"error\\\": {\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"code\\\": \\\"invalid_json_schema\\\",\\n    \\\"message\\\": \\\"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'turnResults', 'items', 'properties', 'writeActions', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'autonomous'.\\\",\\n    \\\"param\\\": \\\"text.format.schema\\\"\\n  },\\n  \\\"status\\\": 400\\n}\"}\n{\"type\":\"turn.failed\",\"error\":{\"message\":\"{\\n  \\\"type\\\": \\\"error\\\",\\n  \\\"error\\\": {\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"code\\\": \\\"invalid_json_schema\\\",\\n    \\\"message\\\": \\\"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'turnResults', 'items', 'properties', 'writeActions', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'autonomous'.\\\",\\n    \\\"param\\\": \\\"text.format.schema\\\"\\n  },\\n  \\\"status\\\": 400\\n}\"}}\n",
+    "timed_out": false,
+    "version": "codex-cli 0.122.0",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "codex",
+    "case_id": "embodied_recurrence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [
+      "embodied_recurrence_001: output was not valid JSON (failed).",
+      "embodied_recurrence_001:t1 missing turn result."
+    ],
+    "gate_type": "deterministic",
+    "max_score": 2,
+    "passed": false,
+    "result_kind": "journey_cli",
+    "score": 0,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "failed",
+      "turnSignals": [
+        {
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "6cdf696e-49f6-4e9e-87d9-b2f10b728e75"
+    ]
+  },
+  "stderrText": "Reading prompt from stdin...\n",
+  "stdoutText": "{\"type\":\"thread.started\",\"thread_id\":\"019db61c-3b29-74e1-b74e-c58096d96446\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"error\",\"message\":\"{\\n  \\\"type\\\": \\\"error\\\",\\n  \\\"error\\\": {\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"code\\\": \\\"invalid_json_schema\\\",\\n    \\\"message\\\": \\\"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'turnResults', 'items', 'properties', 'writeActions', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'autonomous'.\\\",\\n    \\\"param\\\": \\\"text.format.schema\\\"\\n  },\\n  \\\"status\\\": 400\\n}\"}\n{\"type\":\"turn.failed\",\"error\":{\"message\":\"{\\n  \\\"type\\\": \\\"error\\\",\\n  \\\"error\\\": {\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"code\\\": \\\"invalid_json_schema\\\",\\n    \\\"message\\\": \\\"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'turnResults', 'items', 'properties', 'writeActions', 'items'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'autonomous'.\\\",\\n    \\\"param\\\": \\\"text.format.schema\\\"\\n  },\\n  \\\"status\\\": 400\\n}\"}}\n"
+}

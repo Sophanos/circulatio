@@ -1,0 +1,109 @@
+{
+  "cacheKey": "896f53acdeb5be1cd9bb2663e3cb9fb176fed3610cb466d1757c36225adb3ec4",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "practice_reentry_003",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "practice_reentry_003",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "practice_outcome"
+          ],
+          "confidence": 1.0,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "Got it. What did that resistance feel like in the body?",
+          "performedHostInterpretation": false,
+          "rationale": "This is an anchored follow-up to a completed body_scan_5 practice session. The user's response describes a mixed outcome and belongs routed through circulatio_method_state_respond to capture practice_outcome. No interpretation is warranted; the appropriate next move is a gentle practice follow-up asking about the felt sense of resistance.",
+          "readActions": [],
+          "selectedMoveKind": "ask_practice_followup",
+          "selectedSurface": "practice_followup",
+          "selectedToolSequence": [
+            "circulatio_method_state_respond"
+          ],
+          "toolArgsSummary": {
+            "contextType": "practice_followup",
+            "responseText": "It softened a bit, but part of me resisted staying there."
+          },
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "practice_response",
+              "requiresApproval": false,
+              "tool": "circulatio_method_state_respond"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878211216,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db631d08d001uIznpm6dglx9K3\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878256709,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db6326aa2001GJRG7QXxoSA2ZB\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_003\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_method_state_respond\\\"],\\\"toolArgsSummary\\\":{\\\"responseText\\\":\\\"It softened a bit, but part of me resisted staying there.\\\",\\\"contextType\\\":\\\"practice_followup\\\"},\\\"selectedSurface\\\":\\\"practice_followup\\\",\\\"selectedMoveKind\\\":\\\"ask_practice_followup\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"practice_outcome\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"practice_response\\\",\\\"tool\\\":\\\"circulatio_method_state_respond\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Got it. What did that resistance feel like in the body?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"This is an anchored follow-up to a completed body_scan_5 practice session. The user's response describes a mixed outcome and belongs routed through circulatio_method_state_respond to capture practice_outcome. No interpretation is warranted; the appropriate next move is a gentle practice follow-up asking about the felt sense of resistance.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878250658,\"end\":1776878256703}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878256713,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db63282460011PwZQp7j0QrB0I\",\"reason\":\"stop\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-finish\",\"tokens\":{\"total\":28128,\"input\":16059,\"output\":-77,\"reasoning\":2162,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008471916}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "practice_reentry_003",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "e990ee678a1e8e939c03eed4e9a809ec782f417c41d25f20d194a9aa1b46c034",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/practice_reentry_003",
+    "duration_ms": 53410,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:16:43.331699+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/practice_reentry_003.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/practice_reentry_003.stdout",
+    "stdout_sha256": "b9173444974594a8723ce9f4136f865b60e33db3c1b40faea33eb291ccc9ea2b",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878211216,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db631d08d001uIznpm6dglx9K3\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878256709,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db6326aa2001GJRG7QXxoSA2ZB\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_003\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_method_state_respond\\\"],\\\"toolArgsSummary\\\":{\\\"responseText\\\":\\\"It softened a bit, but part of me resisted staying there.\\\",\\\"contextType\\\":\\\"practice_followup\\\"},\\\"selectedSurface\\\":\\\"practice_followup\\\",\\\"selectedMoveKind\\\":\\\"ask_practice_followup\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"practice_outcome\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"practice_response\\\",\\\"tool\\\":\\\"circulatio_method_state_respond\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Got it. What did that resistance feel like in the body?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"This is an anchored follow-up to a completed body_scan_5 practice session. The user's response describes a mixed outcome and belongs routed through circulatio_method_state_respond to capture practice_outcome. No interpretation is warranted; the appropriate next move is a gentle practice follow-up asking about the felt sense of resistance.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878250658,\"end\":1776878256703}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878256713,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db63282460011PwZQp7j0QrB0I\",\"reason\":\"stop\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-finish\",\"tokens\":{\"total\":28128,\"input\":16059,\"output\":-77,\"reasoning\":2162,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008471916}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "practice_reentry_003",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_method_state_respond"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "4c199c20-d182-4a63-9cf3-8593462660e6"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878211216,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db631d08d001uIznpm6dglx9K3\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878256709,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db6326aa2001GJRG7QXxoSA2ZB\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_003\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_method_state_respond\\\"],\\\"toolArgsSummary\\\":{\\\"responseText\\\":\\\"It softened a bit, but part of me resisted staying there.\\\",\\\"contextType\\\":\\\"practice_followup\\\"},\\\"selectedSurface\\\":\\\"practice_followup\\\",\\\"selectedMoveKind\\\":\\\"ask_practice_followup\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"practice_outcome\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"practice_response\\\",\\\"tool\\\":\\\"circulatio_method_state_respond\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Got it. What did that resistance feel like in the body?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"This is an anchored follow-up to a completed body_scan_5 practice session. The user's response describes a mixed outcome and belongs routed through circulatio_method_state_respond to capture practice_outcome. No interpretation is warranted; the appropriate next move is a gentle practice follow-up asking about the felt sense of resistance.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878250658,\"end\":1776878256703}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878256713,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db63282460011PwZQp7j0QrB0I\",\"reason\":\"stop\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-finish\",\"tokens\":{\"total\":28128,\"input\":16059,\"output\":-77,\"reasoning\":2162,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008471916}}\n"
+}

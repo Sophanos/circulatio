@@ -1,0 +1,106 @@
+{
+  "cacheKey": "272dff1287611eedf274e944f3bc2854a9eb763ff043a5782876ae002f78cb4c",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "thought_loop_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "thought_loop_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "goal_tension"
+          ],
+          "confidence": 1.0,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I hear you \u2014 that loop can feel relentless. What are you trying to hold together when the analyzing starts?",
+          "performedHostInterpretation": false,
+          "rationale": "Ambient reflective note matches ThoughtLoopTypology signals. Store-first via circulatio_store_reflection, then select alive_today surface with ask_goal_tension move to hold the tension without identity claims or archetypal escalation.",
+          "readActions": [],
+          "selectedMoveKind": "ask_goal_tension",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_store_reflection"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "material",
+              "requiresApproval": false,
+              "tool": "circulatio_store_reflection"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776877977231,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62e3e8c001Z5TNjBp17y7tJv\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878025464,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62ee6a0001BiDrvAdUGfPsRw\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"thought_loop_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_reflection\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_goal_tension\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"goal_tension\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"material\\\",\\\"tool\\\":\\\"circulatio_store_reflection\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I hear you \u2014 that loop can feel relentless. What are you trying to hold together when the analyzing starts?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient reflective note matches ThoughtLoopTypology signals. Store-first via circulatio_store_reflection, then select alive_today surface with ask_goal_tension move to hold the tension without identity claims or archetypal escalation.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878020256,\"end\":1776878025462}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878025466,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62efaf9001zqv2j3kRCh821Y\",\"reason\":\"stop\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"step-finish\",\"tokens\":{\"total\":27976,\"input\":15924,\"output\":38,\"reasoning\":2030,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008405936}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "thought_loop_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "e32a48847315c6045f92d97d3bd163f061f9deb78d508f7982884378912c7bf1",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/thought_loop_001",
+    "duration_ms": 54386,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:12:51.106311+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/thought_loop_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/thought_loop_001.stdout",
+    "stdout_sha256": "74eb141fc904fdd9e7116c69cdd1f960bc8e991d92725dbcb95dfc4744710080",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776877977231,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62e3e8c001Z5TNjBp17y7tJv\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878025464,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62ee6a0001BiDrvAdUGfPsRw\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"thought_loop_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_reflection\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_goal_tension\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"goal_tension\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"material\\\",\\\"tool\\\":\\\"circulatio_store_reflection\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I hear you \u2014 that loop can feel relentless. What are you trying to hold together when the analyzing starts?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient reflective note matches ThoughtLoopTypology signals. Store-first via circulatio_store_reflection, then select alive_today surface with ask_goal_tension move to hold the tension without identity claims or archetypal escalation.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878020256,\"end\":1776878025462}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878025466,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62efaf9001zqv2j3kRCh821Y\",\"reason\":\"stop\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"step-finish\",\"tokens\":{\"total\":27976,\"input\":15924,\"output\":38,\"reasoning\":2030,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008405936}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "thought_loop_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "63893604-4d8f-4963-86da-7f5dffd270dc"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776877977231,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62e3e8c001Z5TNjBp17y7tJv\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878025464,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62ee6a0001BiDrvAdUGfPsRw\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"thought_loop_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_reflection\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_goal_tension\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"goal_tension\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"material\\\",\\\"tool\\\":\\\"circulatio_store_reflection\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I hear you \u2014 that loop can feel relentless. What are you trying to hold together when the analyzing starts?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient reflective note matches ThoughtLoopTypology signals. Store-first via circulatio_store_reflection, then select alive_today surface with ask_goal_tension move to hold the tension without identity claims or archetypal escalation.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878020256,\"end\":1776878025462}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878025466,\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"part\":{\"id\":\"prt_db62efaf9001zqv2j3kRCh821Y\",\"reason\":\"stop\",\"messageID\":\"msg_db62e2bf1001MWIemIS8EUmvrl\",\"sessionID\":\"ses_249d1d5b4ffe4aRaxG64FxS0bM\",\"type\":\"step-finish\",\"tokens\":{\"total\":27976,\"input\":15924,\"output\":38,\"reasoning\":2030,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008405936}}\n"
+}

@@ -164,14 +164,18 @@ class HermesModelAdapterTests(unittest.TestCase):
                     }
                 )
                 self.assertEqual(workflow["interpretation"]["symbolMentions"], [])
-                self.assertTrue(workflow["interpretation"]["observations"])
+                self.assertEqual(workflow["interpretation"]["observations"], [])
                 self.assertEqual(workflow["pendingProposals"], [])
-                self.assertIn(
-                    "did not return usable structured output",
+                self.assertEqual(
                     workflow["interpretation"]["userFacingResponse"],
+                    "LLM interpretation available.",
                 )
                 self.assertEqual(
-                    workflow["interpretation"]["llmInterpretationHealth"]["status"], "fallback"
+                    workflow["interpretation"]["clarifyingQuestion"],
+                    "What stayed with you?",
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["llmInterpretationHealth"]["status"], "structured"
                 )
 
         asyncio.run(run())
@@ -217,6 +221,70 @@ class HermesModelAdapterTests(unittest.TestCase):
                 workflow = await runtime.service.create_and_interpret_material(
                     {
                         "userId": "user_clarifying_first_pass",
+                        "materialType": "dream",
+                        "text": "A bear chased me through the forest.",
+                    }
+                )
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(
+                    workflow["interpretation"]["userFacingResponse"],
+                    "What felt strongest in the chase?",
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["clarifyingQuestion"],
+                    "What felt strongest in the chase?",
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["clarificationIntent"]["refKey"],
+                    "clarify_chase_body",
+                )
+                self.assertEqual(
+                    workflow["interpretation"]["llmInterpretationHealth"]["status"], "structured"
+                )
+
+        asyncio.run(run())
+
+    def test_clarifying_question_with_user_response_is_accepted_as_first_pass_structure(self) -> None:
+        async def run() -> None:
+            calls = []
+            response_payload = {
+                "symbolMentions": [],
+                "figureMentions": [],
+                "motifMentions": [],
+                "lifeContextLinks": [],
+                "observations": [],
+                "hypotheses": [],
+                "practiceRecommendation": {},
+                "proposalCandidates": [],
+                "userFacingResponse": "What felt strongest in the chase?",
+                "clarifyingQuestion": "What felt strongest in the chase?",
+                "clarificationIntent": {
+                    "refKey": "clarify_chase_body",
+                    "questionText": "What felt strongest in the chase?",
+                    "expectedTargets": ["body_state", "personal_amplification"],
+                    "anchorRefs": {},
+                    "consentScopes": ["somatic_correlation"],
+                    "storagePolicy": "direct_if_explicit",
+                    "expiresAt": "2026-12-31T00:00:00Z",
+                },
+            }
+
+            async def async_call_llm(**kwargs):
+                calls.append(kwargs)
+                return {"text": json.dumps(response_payload)}
+
+            def extract_content_or_reasoning(response):
+                return response["text"]
+
+            with auxiliary_client_modules(
+                async_call_llm=async_call_llm,
+                extract_content_or_reasoning=extract_content_or_reasoning,
+            ):
+                adapter = HermesModelAdapter()
+                runtime = build_in_memory_circulatio_runtime(llm=adapter)
+                workflow = await runtime.service.create_and_interpret_material(
+                    {
+                        "userId": "user_clarifying_first_pass_with_response",
                         "materialType": "dream",
                         "text": "A bear chased me through the forest.",
                     }

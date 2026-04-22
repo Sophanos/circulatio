@@ -1,0 +1,33 @@
+{
+  "adapter": "opencode",
+  "case_id": "practice_reentry_002",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 9,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 9,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "opencode",
+    "normalizationWarnings": [
+      "Unrecognized tool alias 'adaptation_profile'.",
+      "Unrecognized tool alias 'recent_practice_sessions'."
+    ],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_generate_practice_recommendation"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "4a34bdb9-f888-4b64-8d70-bed684cc24c2"
+  ]
+}

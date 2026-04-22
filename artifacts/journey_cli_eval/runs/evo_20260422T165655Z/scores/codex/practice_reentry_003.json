@@ -1,0 +1,30 @@
+{
+  "adapter": "codex",
+  "case_id": "practice_reentry_003",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 12,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 12,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_method_state_respond"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "f77ba956-55b5-455e-b7aa-ce15cf33fc94"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "adapter": "opencode",
+  "case_id": "goal_tension_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "goal_tension_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "goal_tension"
+        ],
+        "confidence": 1.0,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I hear the pull between needing rest and the drive to keep going. What's it like to hold both of those right now?",
+        "performedHostInterpretation": false,
+        "rationale": "Ambient reflective note about productivity-rest tension matches the store-first contract for reflections. With active goal-tension history and preferred hold-tension framing, the appropriate surface is alive_today with ask_goal_tension move at gentle depth. No interpretation requested; no clarification needed.",
+        "readActions": [],
+        "selectedMoveKind": "ask_goal_tension",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_store_reflection"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": false,
+            "kind": "reflection",
+            "requiresApproval": false,
+            "tool": "circulatio_store_reflection"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878333519,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db633ae47001F6gw0uyPOAUMb4\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878364941,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db6341593001GMTyfXPQfWOpwy\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"goal_tension_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_store_reflection\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_goal_tension\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"goal_tension\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"reflection\\\",\\n          \\\"tool\\\": \\\"circulatio_store_reflection\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I hear the pull between needing rest and the drive to keep going. What's it like to hold both of those right now?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"Ambient reflective note about productivity-rest tension matches the store-first contract for reflections. With active goal-tension history and preferred hold-tension framing, the appropriate surface is alive_today with ask_goal_tension move at gentle depth. No interpretation requested; no clarification needed.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878359955,\"end\":1776878364939}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878364945,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db634290f001kKHgZmnshnjyA6\",\"reason\":\"stop\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-finish\",\"tokens\":{\"total\":27810,\"input\":18731,\"output\":26,\"reasoning\":1885,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008941732}}\n",
+  "warnings": []
+}

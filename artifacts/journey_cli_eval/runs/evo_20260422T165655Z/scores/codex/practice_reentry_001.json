@@ -1,0 +1,33 @@
+{
+  "adapter": "codex",
+  "case_id": "practice_reentry_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 12,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 12,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [
+      "Unrecognized tool alias 'alive_today read of recent re-entry signals'.",
+      "Unrecognized tool alias 'alive_today read of active journey context'."
+    ],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_alive_today"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "5bc489e2-51d5-4f19-b20a-57de462ff158"
+  ]
+}

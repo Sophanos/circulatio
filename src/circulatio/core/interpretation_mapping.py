@@ -130,11 +130,13 @@ async def try_llm_interpretation(
 
 
 def llm_output_has_content(output: LlmInterpretationOutput) -> bool:
+    clarifying_question = str(output.get("clarifyingQuestion", "")).strip()
     return any(
         [
             bool(output.get("symbolMentions")),
             bool(output.get("figureMentions")),
             bool(output.get("motifMentions")),
+            bool(output.get("lifeContextLinks")),
             bool(output.get("observations")),
             bool(output.get("hypotheses")),
             bool(output.get("proposalCandidates")),
@@ -143,8 +145,10 @@ def llm_output_has_content(output: LlmInterpretationOutput) -> bool:
             bool(output.get("amplificationPrompts")),
             bool(output.get("dreamSeriesSuggestions")),
             bool(output.get("individuation")),
-            bool(str(output.get("clarifyingQuestion", "")).strip())
-            and not bool(str(output.get("userFacingResponse", "")).strip()),
+            bool(output.get("practiceRecommendation")),
+            bool(output.get("clarificationPlan")),
+            bool(output.get("clarificationIntent")),
+            bool(clarifying_question),
         ]
     )
 

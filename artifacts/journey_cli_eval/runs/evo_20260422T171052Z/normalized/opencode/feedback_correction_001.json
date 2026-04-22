@@ -1,0 +1,43 @@
+{
+  "adapter": "opencode",
+  "case_id": "feedback_correction_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "feedback_correction_001",
+    "globalNotes": [
+      "Deterministic feedback route. No host interpretation, no new reflection storage, no ambiguity."
+    ],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 1,
+        "depthLevel": null,
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "Recorded. Your note is kept verbatim.",
+        "performedHostInterpretation": false,
+        "rationale": "Explicit feedback on a prior interpretation. Per routing rules, this routes directly to circulatio_record_interpretation_feedback without detouring through store-first reflection or host interpretation.",
+        "readActions": [],
+        "selectedMoveKind": null,
+        "selectedSurface": "method_state_response",
+        "selectedToolSequence": [
+          "circulatio_record_interpretation_feedback"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": false,
+            "kind": "feedback",
+            "requiresApproval": false,
+            "tool": "circulatio_record_interpretation_feedback"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878370887,\"sessionID\":\"ses_249cbd2beffe65hlQzSbkZ4f5X\",\"part\":{\"id\":\"prt_db6344044001b9G3NsvDUSiOF5\",\"messageID\":\"msg_db6342f0b001hqsTgKnnF3C0Sw\",\"sessionID\":\"ses_249cbd2beffe65hlQzSbkZ4f5X\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878388260,\"sessionID\":\"ses_249cbd2beffe65hlQzSbkZ4f5X\",\"part\":{\"id\":\"prt_db6346e17001s7EbLBxkKYMi6L\",\"messageID\":\"msg_db6342f0b001hqsTgKnnF3C0Sw\",\"sessionID\":\"ses_249cbd2beffe65hlQzSbkZ4f5X\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"feedback_correction_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_record_interpretation_feedback\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"method_state_response\\\",\\n      \\\"selectedMoveKind\\\": null,\\n      \\\"depthLevel\\\": null,\\n      \\\"captureTargets\\\": [],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"feedback\\\",\\n          \\\"tool\\\": \\\"circulatio_record_interpretation_feedback\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"Recorded. Your note is kept verbatim.\\\",\\n      \\\"confidence\\\": 1,\\n      \\\"rationale\\\": \\\"Explicit feedback on a prior interpretation. Per routing rules, this routes directly to circulatio_record_interpretation_feedback without detouring through store-first reflection or host interpretation.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": [\\n    \\\"Deterministic feedback route. No host interpretation, no new reflection storage, no ambiguity.\\\"\\n  ]\\n}\",\"time\":{\"start\":1776878382615,\"end\":1776878388257}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878388264,\"sessionID\":\"ses_249cbd2beffe65hlQzSbkZ4f5X\",\"part\":{\"id\":\"prt_db6348425001FKqb7owG1CYdrE\",\"reason\":\"stop\",\"messageID\":\"msg_db6342f0b001hqsTgKnnF3C0Sw\",\"sessionID\":\"ses_249cbd2beffe65hlQzSbkZ4f5X\",\"type\":\"step-finish\",\"tokens\":{\"total\":26675,\"input\":15870,\"output\":185,\"reasoning\":636,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.006717676}}\n",
+  "warnings": []
+}

@@ -1,0 +1,30 @@
+{
+  "adapter": "opencode",
+  "case_id": "embodied_recurrence_003",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 13,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 13,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "opencode",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_store_body_state"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "b76a80f9-5fde-46b7-8aa6-938ed6bb6d17"
+  ]
+}

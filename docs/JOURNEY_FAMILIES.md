@@ -97,6 +97,107 @@ The first JTBD wave should use the existing curated catalog:
 Additional short-form resources can be added later, but the first eval pass should prove the
 selection behavior before expanding content breadth.
 
+## Executable Case Taxonomy
+
+Journey CLI cases should use the same dimensions across docs, JSONL datasets, runner output, and
+triage reports.
+
+### Case Dimensions
+
+`caseKind`:
+
+- `single_turn_route`
+- `multi_turn_story`
+- `read_mostly_surface`
+- `anchored_followup`
+- `feedback_route`
+- `practice_adaptation`
+- `consent_boundary`
+- `host_smoke_reference`
+
+`turnKind`:
+
+- `ambient_intake`
+- `explicit_interpretation_request`
+- `explicit_surface_request`
+- `anchored_method_state_response`
+- `explicit_feedback`
+- `practice_response`
+- `return_after_absence`
+
+`assertionKind`:
+
+- `route`
+- `no_host_interpretation`
+- `write_budget`
+- `read_mostly`
+- `consent_gate`
+- `grounding_gate`
+- `capture_target`
+- `surface_shape`
+- `reply_style`
+- `backend_invariant`
+- `bridge_invariant`
+
+### Assertion Split
+
+A journey CLI case can test whether an external coding CLI understands the Hermes routing contract,
+but it cannot establish backend truth. Backend truth remains in
+`tests/test_circulatio_service.py`; Hermes plugin truth remains in
+`tests/test_hermes_bridge_plugin.py`; true Hermes host compatibility remains in
+`scripts/hermes_host_smoke.py`.
+
+The machine-readable case contract therefore splits expectations into separate blocks:
+
+- host route assertions such as tool sequence, clarifying-question boundary, and reply style
+- surface assertions such as selected surface, move kind, and depth level
+- write-budget assertions such as allowed writes and read-mostly prohibitions
+- backend or bridge follow-up hints that tell triage where a finding belongs, rather than
+  pretending the CLI proved runtime truth
+
+## Machine-Readable Case Schema
+
+Journey CLI datasets live under `tests/evals/journey_cli/` and are validated against:
+
+- `tests/evals/journey_cli/schema/journey_case.schema.json`
+- `tests/evals/journey_cli/baseline.jsonl`
+- `tests/evals/journey_cli/compound.jsonl`
+- `tests/evals/journey_cli/redteam.jsonl`
+- `tests/evals/journey_cli/README.md`
+
+The schema is intentionally additive and local. It does not create new persisted backend fields.
+Top-level fields are closed so case authors have to use the shared vocabulary instead of inventing
+silent one-off keys.
+
+## Journey CLI Comparative Harness
+
+The Journey CLI harness is a repo-local, opt-in comparison layer. It treats `kimi`, `codex`, and
+`opencode` as external non-interactive host-behavior probes, and it may also run an explicit
+`hermes` adapter as a lightweight host probe. None of these are runtime infrastructure.
+
+Use this harness to:
+
+- compare how local coding CLIs read the Hermes routing contract
+- catch drift in store-first, feedback routing, read-mostly boundaries, and anchored follow-up use
+- emit local artifacts that point findings back to method evals, service tests, bridge tests, or
+  real host smoke
+
+Do not use this harness to:
+
+- prove Circulatio backend truth
+- replace Hermes routing or runtime integration
+- mutate prompts or runtime state automatically
+- bypass existing service, bridge, or host-smoke tests
+
+The runner and schema intentionally separate:
+
+- the tool the simulated host should call now
+- the surface Circulatio is expected to return after that backend call
+- writes that are allowed because the user is logging material
+- writes that are forbidden because the surface is read-mostly
+- host-reply constraints after a successful tool call
+- backend invariants that must still be asserted elsewhere
+
 ## Canonical Journey Families
 
 Each family is defined by:
@@ -346,33 +447,66 @@ clearer containment or integration need is already active.
 
 ## Case Contract
 
-Every journey case should be representable with a single contract like this:
+Every journey case should now be representable in machine-readable form with separate host,
+surface, write-budget, and downstream-triage assertions. The old narrative contract is still
+useful as a human sketch, but the JSONL datasets should use the split shape from
+`tests/evals/journey_cli/schema/journey_case.schema.json`.
+
+Illustrative shape:
 
 ```json
 {
+  "schemaVersion": 1,
   "caseId": "embodied_recurrence_001",
   "journeyFamily": "EmbodiedRecurrence",
-  "historySeed": [],
-  "currentTurn": "I had that chest tightness again after talking to Alex.",
-  "expectedHermesTool": "circulatio_store_body_state",
-  "expectedSurface": "alive_today",
-  "expectedSelectedMove": {
-    "kind": "ask_body_checkin",
-    "loopKeyPrefix": "coach:soma:"
-  },
-  "expectedDepthLevel": "grounding_only",
-  "forbiddenEscalation": [
-    "projection_language",
-    "archetypal_patterning",
-    "diagnostic_claim"
+  "caseKind": "single_turn_route",
+  "assertionKinds": [
+    "route",
+    "no_host_interpretation",
+    "write_budget",
+    "capture_target",
+    "reply_style"
   ],
-  "expectedCaptureTarget": "body_state",
-  "testLayers": ["backend", "hermes_bridge", "method_eval"]
+  "turns": [
+    {
+      "turnId": "t1",
+      "turnKind": "ambient_intake",
+      "userTurn": "I had that chest tightness again after talking to Alex.",
+      "expected": {
+        "toolSequence": {"equals": ["circulatio_store_body_state"]},
+        "selectedSurface": {"oneOf": ["alive_today", "none"]},
+        "selectedMoveKind": {"oneOf": ["ask_body_checkin", "offer_resource", null]},
+        "depthLevel": {"oneOf": ["grounding_only", "gentle", null]},
+        "captureTargets": {"contains": ["body_state"]},
+        "allowedWrites": [
+          {"kind": "body_state", "source": "ambient_intake"}
+        ],
+        "forbiddenTools": ["circulatio_interpret_material"],
+        "forbiddenEscalations": [
+          "projection_language",
+          "archetypal_patterning",
+          "diagnostic_claim"
+        ],
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "replyStyle": {
+          "maxSentences": 2,
+          "forbiddenSubstrings": ["what Alex represents", "this means"]
+        }
+      }
+    }
+  ],
+  "backendAssertions": {
+    "readMostly": false,
+    "maxNewInterpretationRuns": 0
+  }
 }
 ```
 
 For compound stories, the single-turn contract becomes a multi-step sequence with separate
-assertions per step.
+assertions per step. Multi-turn CLI cases should stay stateless and reproducible: package the full
+sequence into one prompt and score one JSON result per turn instead of depending on session resume
+behavior.
 
 ## Canonical E2E Cases
 
@@ -781,6 +915,27 @@ should outrank typology language.
 - `expectedCaptureTarget`: `body_state`
 - `testLayers`: `backend`, `hermes_bridge`, `method_eval`
 
+## Triage: Where A Failure Belongs
+
+Journey CLI findings must be routed to the right owner. The harness is intentionally explicit about
+what it can and cannot prove.
+
+- store-first or lookup-before-repeat failures usually belong to the Hermes skill surface and
+  should suggest `tests/evals/circulatio_method/execution_skill_routing.jsonl` or the matching
+  skill-routing dataset
+- wrong explicit tool choice despite clear skill context usually belongs to tool descriptions and
+  should suggest `tests/evals/circulatio_method/execution_tool_choice.jsonl` or
+  `tool_description_routing.jsonl`
+- pacing, consent, or symbolic-intensity failures after the route usually belong to prompt
+  fragments and should suggest `grounding_pacing.jsonl`, `consent_boundary.jsonl`,
+  `typology_restraint.jsonl`, or `execution_prompt_behavior.jsonl`
+- read-mostly write leaks, practice-loop persistence mistakes, or journey-page persistence mistakes
+  belong to service tests, not method evals
+- malformed Hermes-facing response shapes or incorrect fake-host tool envelopes belong to bridge
+  tests, not method evals
+- plugin load or real host route failures belong to `scripts/hermes_host_smoke.py` and
+  `tests/test_hermes_host_smoke.py`
+
 ## Test-Layer Mapping
 
 ### Layer 1: Backend Longitudinal Tests
@@ -871,6 +1026,67 @@ What to assert:
 - the true host can load the plugin and route to the expected Circulatio tools
 - store-first behavior survives outside the fake runtime
 - the host does not improvise interpretation around the Circulatio boundary
+
+## Local Regression Workflow
+
+1. Validate the harness and fake adapter.
+
+```bash
+.venv/bin/python -m unittest tests.test_journey_cli_eval
+.venv/bin/python scripts/evaluate_journey_cli.py --adapter fake --strict
+```
+
+2. Run one local external adapter on one case.
+
+```bash
+.venv/bin/python scripts/evaluate_journey_cli.py \
+  --adapter codex \
+  --case embodied_recurrence_001 \
+  --require-adapters \
+  --report-md artifacts/journey_cli_eval/latest.md
+
+.venv/bin/python scripts/evaluate_journey_cli.py \
+  --adapter hermes \
+  --case embodied_recurrence_001 \
+  --require-adapters
+```
+
+3. Run all available external adapters on the dev split.
+
+```bash
+.venv/bin/python scripts/evaluate_journey_cli.py \
+  --adapter all \
+  --split dev \
+  --strict \
+  --write-baseline artifacts/journey_cli_eval/baselines/dev.summary.json
+```
+
+4. If the findings point at method artifacts, update the method-eval datasets first and rerun:
+
+```bash
+.venv/bin/python scripts/evaluate_circulatio_method.py --strict
+```
+
+5. If the findings point at backend or bridge truth, add service or bridge tests and rerun the
+relevant unittest targets.
+
+6. Before accepting an artifact candidate, run:
+
+```bash
+.venv/bin/python scripts/evaluate_circulatio_method.py --strict
+.venv/bin/python -m unittest tests.test_circulatio_service tests.test_hermes_bridge_plugin
+.venv/bin/python scripts/evaluate_journey_cli.py \
+  --adapter all \
+  --split dev \
+  --compare-baseline artifacts/journey_cli_eval/baselines/dev.summary.json \
+  --strict
+```
+
+7. Real Hermes host smoke stays explicit:
+
+```bash
+CIRCULATIO_REAL_HERMES_HOST=1 .venv/bin/python -m unittest tests.test_hermes_host_smoke
+```
 
 ## Recommended Build Order
 

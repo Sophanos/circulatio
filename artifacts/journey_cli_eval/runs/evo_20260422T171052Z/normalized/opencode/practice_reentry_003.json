@@ -1,0 +1,46 @@
+{
+  "adapter": "opencode",
+  "case_id": "practice_reentry_003",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "practice_reentry_003",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "practice_outcome"
+        ],
+        "confidence": 1.0,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "Got it. What did that resistance feel like in the body?",
+        "performedHostInterpretation": false,
+        "rationale": "This is an anchored follow-up to a completed body_scan_5 practice session. The user's response describes a mixed outcome and belongs routed through circulatio_method_state_respond to capture practice_outcome. No interpretation is warranted; the appropriate next move is a gentle practice follow-up asking about the felt sense of resistance.",
+        "readActions": [],
+        "selectedMoveKind": "ask_practice_followup",
+        "selectedSurface": "practice_followup",
+        "selectedToolSequence": [
+          "circulatio_method_state_respond"
+        ],
+        "toolArgsSummary": {
+          "contextType": "practice_followup",
+          "responseText": "It softened a bit, but part of me resisted staying there."
+        },
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": false,
+            "kind": "practice_response",
+            "requiresApproval": false,
+            "tool": "circulatio_method_state_respond"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878211216,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db631d08d001uIznpm6dglx9K3\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878256709,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db6326aa2001GJRG7QXxoSA2ZB\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_003\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_method_state_respond\\\"],\\\"toolArgsSummary\\\":{\\\"responseText\\\":\\\"It softened a bit, but part of me resisted staying there.\\\",\\\"contextType\\\":\\\"practice_followup\\\"},\\\"selectedSurface\\\":\\\"practice_followup\\\",\\\"selectedMoveKind\\\":\\\"ask_practice_followup\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"practice_outcome\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"practice_response\\\",\\\"tool\\\":\\\"circulatio_method_state_respond\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Got it. What did that resistance feel like in the body?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"This is an anchored follow-up to a completed body_scan_5 practice session. The user's response describes a mixed outcome and belongs routed through circulatio_method_state_respond to capture practice_outcome. No interpretation is warranted; the appropriate next move is a gentle practice follow-up asking about the felt sense of resistance.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878250658,\"end\":1776878256703}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878256713,\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"part\":{\"id\":\"prt_db63282460011PwZQp7j0QrB0I\",\"reason\":\"stop\",\"messageID\":\"msg_db631b7460014aMYZB4KxNMxzj\",\"sessionID\":\"ses_249ce4a57ffez8F6jz7fEmmhRh\",\"type\":\"step-finish\",\"tokens\":{\"total\":28128,\"input\":16059,\"output\":-77,\"reasoning\":2162,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008471916}}\n",
+  "warnings": []
+}

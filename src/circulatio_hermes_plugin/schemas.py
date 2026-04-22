@@ -261,20 +261,13 @@ GET_MATERIAL_TOOL_SCHEMA = _schema(
 
 INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
-    "Deliberately open or continue collaborative interpretation for stored or raw "
-    "Circulatio material. This is the correct tool when the user asks what a dream, "
-    "reflection, charged event, or symbolic note might mean. Prefer storing first, then "
-    "call this by materialId. If the user means an existing note, call "
-    "circulatio_list_materials first and interpret by materialId. A valid first response "
-    "may be a single question, amplification prompt, or method gate rather than a finished "
-    "reading. Keep the host reply short during active interpretation: usually 1-3 "
-    "sentences with exactly one question, starting open before narrowing. Dreams may return "
-    "a method gate for missing narrative, attitude, or "
-    "amplification; present that question, wait for new input, and do not call this tool "
-    "again in the same turn with unchanged material. If "
-    "llmInterpretationHealth.status='fallback', do not frame it as a backend failure or "
-    "replace it with your own symbolic reading; present Circulatio's returned question or "
-    "response as the next step in the work.",
+    "Open or continue collaborative interpretation for stored or raw Circulatio "
+    "material when the user asks what it means. Prefer storing first. A valid first "
+    "response may be a single question, amplification prompt, or method gate. Host "
+    "replies are usually 1-3 sentences with exactly one question. If gated, wait for "
+    "new input and do not call this tool again in the same turn with unchanged "
+    "material. This tool opens a collaborative inquiry; it is not a request for a "
+    "finished symbolic reading. If fallback, do not frame it as a backend failure.",
     {
         "materialId": {"type": "string"},
         "materialType": {

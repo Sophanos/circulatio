@@ -1,0 +1,124 @@
+{
+  "cacheKey": "81dd5a99901d70119e72622ef96eaac5ec132afe12bfe7f9af6e6a4db662d87b",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "practice_reentry_002",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "practice_reentry_002",
+      "globalNotes": [
+        "Hermes correctly routed to circulatio_generate_practice_recommendation.",
+        "Respected avoided modality by selecting offer_resource over reissuing active_imagination.",
+        "No host interpretation performed.",
+        "No forbidden escalations present."
+      ],
+      "normalizationWarnings": [
+        "Unrecognized tool alias 'adaptation_profile'.",
+        "Unrecognized tool alias 'recent_practice_sessions'."
+      ],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "practice_outcome",
+            "practice_preference"
+          ],
+          "confidence": 0.95,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I generated a gentler recommendation, steering away from active imagination after the recent skips. You can accept it, skip it, or tell me what kind of practice would feel right today.",
+          "performedHostInterpretation": false,
+          "rationale": "Explicit user request for practice recommendation with history of 3 skipped active_imagination sessions. Correctly routed to circulatio_generate_practice_recommendation. Selected offer_resource to avoid reissuing the avoided modality, per practice reentry protocol.",
+          "readActions": [
+            "adaptation_profile",
+            "recent_practice_sessions"
+          ],
+          "selectedMoveKind": "offer_resource",
+          "selectedSurface": "practice_followup",
+          "selectedToolSequence": [
+            "circulatio_generate_practice_recommendation"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "practice_recommendation",
+              "requiresApproval": false,
+              "tool": "circulatio_generate_practice_recommendation"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878138267,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db630b397001fr8uBNKoWxiiGO\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878203293,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db63191ff001F3egii7eF1z7ji\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"practice_reentry_002\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_generate_practice_recommendation\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"practice_followup\\\",\\n      \\\"selectedMoveKind\\\": \\\"offer_resource\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"practice_outcome\\\",\\n        \\\"practice_preference\\\"\\n      ],\\n      \\\"readActions\\\": [\\n        \\\"adaptation_profile\\\",\\n        \\\"recent_practice_sessions\\\"\\n      ],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"practice_recommendation\\\",\\n          \\\"tool\\\": \\\"circulatio_generate_practice_recommendation\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I generated a gentler recommendation, steering away from active imagination after the recent skips. You can accept it, skip it, or tell me what kind of practice would feel right today.\\\",\\n      \\\"confidence\\\": 0.95,\\n      \\\"rationale\\\": \\\"Explicit user request for practice recommendation with history of 3 skipped active_imagination sessions. Correctly routed to circulatio_generate_practice_recommendation. Selected offer_resource to avoid reissuing the avoided modality, per practice reentry protocol.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": [\\n    \\\"Hermes correctly routed to circulatio_generate_practice_recommendation.\\\",\\n    \\\"Respected avoided modality by selecting offer_resource over reissuing active_imagination.\\\",\\n    \\\"No host interpretation performed.\\\",\\n    \\\"No forbidden escalations present.\\\"\\n  ]\\n}\",\"time\":{\"start\":1776878195199,\"end\":1776878203292}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878203296,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db631b19e001NEtVaWv8zxp6PN\",\"reason\":\"stop\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"step-finish\",\"tokens\":{\"total\":29054,\"input\":15899,\"output\":-213,\"reasoning\":3384,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009875956}}\n",
+    "warnings": [
+      "Unrecognized tool alias 'adaptation_profile'.",
+      "Unrecognized tool alias 'recent_practice_sessions'."
+    ]
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "practice_reentry_002",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "7a87c8e06a53a0870330220615ecd9692f791714f856e70874a68eebca016d1e",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/practice_reentry_002",
+    "duration_ms": 72721,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:15:30.603090+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/practice_reentry_002.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/practice_reentry_002.stdout",
+    "stdout_sha256": "26b489877c0c051fbadf039ee7c1486df2cfb9e29cfa97d4da7895e3339fe0c1",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878138267,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db630b397001fr8uBNKoWxiiGO\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878203293,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db63191ff001F3egii7eF1z7ji\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"practice_reentry_002\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_generate_practice_recommendation\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"practice_followup\\\",\\n      \\\"selectedMoveKind\\\": \\\"offer_resource\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"practice_outcome\\\",\\n        \\\"practice_preference\\\"\\n      ],\\n      \\\"readActions\\\": [\\n        \\\"adaptation_profile\\\",\\n        \\\"recent_practice_sessions\\\"\\n      ],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"practice_recommendation\\\",\\n          \\\"tool\\\": \\\"circulatio_generate_practice_recommendation\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I generated a gentler recommendation, steering away from active imagination after the recent skips. You can accept it, skip it, or tell me what kind of practice would feel right today.\\\",\\n      \\\"confidence\\\": 0.95,\\n      \\\"rationale\\\": \\\"Explicit user request for practice recommendation with history of 3 skipped active_imagination sessions. Correctly routed to circulatio_generate_practice_recommendation. Selected offer_resource to avoid reissuing the avoided modality, per practice reentry protocol.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": [\\n    \\\"Hermes correctly routed to circulatio_generate_practice_recommendation.\\\",\\n    \\\"Respected avoided modality by selecting offer_resource over reissuing active_imagination.\\\",\\n    \\\"No host interpretation performed.\\\",\\n    \\\"No forbidden escalations present.\\\"\\n  ]\\n}\",\"time\":{\"start\":1776878195199,\"end\":1776878203292}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878203296,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db631b19e001NEtVaWv8zxp6PN\",\"reason\":\"stop\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"step-finish\",\"tokens\":{\"total\":29054,\"input\":15899,\"output\":-213,\"reasoning\":3384,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009875956}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "practice_reentry_002",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 9,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 9,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [
+        "Unrecognized tool alias 'adaptation_profile'.",
+        "Unrecognized tool alias 'recent_practice_sessions'."
+      ],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_generate_practice_recommendation"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "4a34bdb9-f888-4b64-8d70-bed684cc24c2"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878138267,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db630b397001fr8uBNKoWxiiGO\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878203293,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db63191ff001F3egii7eF1z7ji\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"practice_reentry_002\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_generate_practice_recommendation\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"practice_followup\\\",\\n      \\\"selectedMoveKind\\\": \\\"offer_resource\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"practice_outcome\\\",\\n        \\\"practice_preference\\\"\\n      ],\\n      \\\"readActions\\\": [\\n        \\\"adaptation_profile\\\",\\n        \\\"recent_practice_sessions\\\"\\n      ],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"practice_recommendation\\\",\\n          \\\"tool\\\": \\\"circulatio_generate_practice_recommendation\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I generated a gentler recommendation, steering away from active imagination after the recent skips. You can accept it, skip it, or tell me what kind of practice would feel right today.\\\",\\n      \\\"confidence\\\": 0.95,\\n      \\\"rationale\\\": \\\"Explicit user request for practice recommendation with history of 3 skipped active_imagination sessions. Correctly routed to circulatio_generate_practice_recommendation. Selected offer_resource to avoid reissuing the avoided modality, per practice reentry protocol.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": [\\n    \\\"Hermes correctly routed to circulatio_generate_practice_recommendation.\\\",\\n    \\\"Respected avoided modality by selecting offer_resource over reissuing active_imagination.\\\",\\n    \\\"No host interpretation performed.\\\",\\n    \\\"No forbidden escalations present.\\\"\\n  ]\\n}\",\"time\":{\"start\":1776878195199,\"end\":1776878203292}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878203296,\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"part\":{\"id\":\"prt_db631b19e001NEtVaWv8zxp6PN\",\"reason\":\"stop\",\"messageID\":\"msg_db6309aeb001t7lVd4VIPdVnMr\",\"sessionID\":\"ses_249cf66d5ffeiSmHbLNMnYmAxf\",\"type\":\"step-finish\",\"tokens\":{\"total\":29054,\"input\":15899,\"output\":-213,\"reasoning\":3384,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009875956}}\n"
+}

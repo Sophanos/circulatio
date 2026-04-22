@@ -1,0 +1,29 @@
+{
+  "adapter": "codex",
+  "case_id": "embodied_recurrence_001",
+  "dataset": "baseline.jsonl",
+  "findings": [
+    "embodied_recurrence_001: output was not valid JSON (failed).",
+    "embodied_recurrence_001:t1 missing turn result."
+  ],
+  "gate_type": "deterministic",
+  "max_score": 2,
+  "passed": false,
+  "result_kind": "journey_cli",
+  "score": 0,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [],
+    "parseStatus": "failed",
+    "turnSignals": [
+      {
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "d5963fc2-5d98-4b27-b459-c49007d7b668"
+  ]
+}

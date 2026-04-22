@@ -1,0 +1,38 @@
+{
+  "adapter": "opencode",
+  "case_id": "practice_reentry_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "practice_reentry_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "body_state"
+        ],
+        "confidence": 0.95,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "Welcome back. Your returning thread is still open \u2014 want to see what's alive today?",
+        "performedHostInterpretation": false,
+        "rationale": "Re-entry after 7 days with an active journey and a recent skipped practice. Using circulatio_alive_today keeps the turn read-mostly, avoids backlog pressure, and offers a gentle return-to-journey or body-check-in move without interpreting or writing new material.",
+        "readActions": [
+          "circulatio_alive_today"
+        ],
+        "selectedMoveKind": "return_to_journey",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_alive_today"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": []
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878091325,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db62ffc39001tnjK9bDQVl4kru\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878130560,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6308595001K6f7nSVi3iSnXm\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_alive_today\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"return_to_journey\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[\\\"circulatio_alive_today\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Welcome back. Your returning thread is still open \u2014 want to see what's alive today?\\\",\\\"confidence\\\":0.95,\\\"rationale\\\":\\\"Re-entry after 7 days with an active journey and a recent skipped practice. Using circulatio_alive_today keeps the turn read-mostly, avoids backlog pressure, and offers a gentle return-to-journey or body-check-in move without interpreting or writing new material.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878126485,\"end\":1776878130558}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878130562,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6309581001nIjaf3hipNYz6d\",\"reason\":\"stop\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-finish\",\"tokens\":{\"total\":27799,\"input\":16067,\"output\":9,\"reasoning\":1739,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008022896}}\n",
+  "warnings": []
+}

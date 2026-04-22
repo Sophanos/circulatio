@@ -60,6 +60,40 @@ class NarrativeOnlyLlm:
         return {"title": "", "summary": "", "userFacingResponse": ""}
 
 
+class ClarifyingResponseLlm:
+    async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+        del input_data
+        return {
+            "symbolMentions": [],
+            "figureMentions": [],
+            "motifMentions": [],
+            "lifeContextLinks": [],
+            "observations": [],
+            "hypotheses": [],
+            "practiceRecommendation": {},
+            "proposalCandidates": [],
+            "userFacingResponse": "What part of the dream feels most alive right now?",
+            "clarifyingQuestion": "What part of the dream feels most alive right now?",
+            "clarificationIntent": {
+                "refKey": "clarify_primary_image",
+                "questionText": "What part of the dream feels most alive right now?",
+                "expectedTargets": ["body_state", "personal_amplification"],
+                "anchorRefs": {},
+                "consentScopes": ["somatic_correlation"],
+                "storagePolicy": "direct_if_explicit",
+                "expiresAt": "2026-12-31T00:00:00Z",
+            },
+        }
+
+    async def generate_practice(self, input_data: dict[str, object]) -> dict[str, object]:
+        del input_data
+        return {"practiceRecommendation": {}, "userFacingResponse": ""}
+
+    async def generate_rhythmic_brief(self, input_data: dict[str, object]) -> dict[str, object]:
+        del input_data
+        return {"title": "", "summary": "", "userFacingResponse": ""}
+
+
 class CirculatioCoreTests(unittest.TestCase):
     def test_llm_interpretation_is_side_effect_free_until_record_integration(self) -> None:
         async def run() -> None:
@@ -139,6 +173,29 @@ class CirculatioCoreTests(unittest.TestCase):
             self.assertEqual(result["memoryWritePlan"]["proposals"], [])
             self.assertEqual(result["llmInterpretationHealth"]["status"], "fallback")
             self.assertIn("did not return usable structured output", result["userFacingResponse"])
+
+        asyncio.run(run())
+
+    def test_clarifying_question_with_matching_user_response_stays_structured(self) -> None:
+        async def run() -> None:
+            repo = InMemoryGraphMemoryRepository()
+            core = CirculatioCore(repo, llm=ClarifyingResponseLlm())
+            result = await core.interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "materialText": "A bear chased me through the forest.",
+                }
+            )
+            self.assertEqual(
+                result["userFacingResponse"],
+                "What part of the dream feels most alive right now?",
+            )
+            self.assertEqual(
+                result["clarifyingQuestion"],
+                "What part of the dream feels most alive right now?",
+            )
+            self.assertEqual(result["llmInterpretationHealth"]["status"], "structured")
 
         asyncio.run(run())
 

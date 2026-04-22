@@ -1,0 +1,30 @@
+{
+  "adapter": "codex",
+  "case_id": "thought_loop_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 12,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 12,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_store_reflection"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "244a8f06-f890-4ca2-b684-234cc9c373d7"
+  ]
+}

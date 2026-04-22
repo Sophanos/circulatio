@@ -1,0 +1,106 @@
+{
+  "cacheKey": "6eb04a02b9fc9a762e4cf964cfc4efa2bd46aea40fd802b2c9754cfd316833bd",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "goal_tension_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "goal_tension_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "goal_tension"
+          ],
+          "confidence": 1.0,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I hear the pull between needing rest and the drive to keep going. What's it like to hold both of those right now?",
+          "performedHostInterpretation": false,
+          "rationale": "Ambient reflective note about productivity-rest tension matches the store-first contract for reflections. With active goal-tension history and preferred hold-tension framing, the appropriate surface is alive_today with ask_goal_tension move at gentle depth. No interpretation requested; no clarification needed.",
+          "readActions": [],
+          "selectedMoveKind": "ask_goal_tension",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_store_reflection"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "reflection",
+              "requiresApproval": false,
+              "tool": "circulatio_store_reflection"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878333519,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db633ae47001F6gw0uyPOAUMb4\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878364941,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db6341593001GMTyfXPQfWOpwy\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"goal_tension_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_store_reflection\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_goal_tension\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"goal_tension\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"reflection\\\",\\n          \\\"tool\\\": \\\"circulatio_store_reflection\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I hear the pull between needing rest and the drive to keep going. What's it like to hold both of those right now?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"Ambient reflective note about productivity-rest tension matches the store-first contract for reflections. With active goal-tension history and preferred hold-tension framing, the appropriate surface is alive_today with ask_goal_tension move at gentle depth. No interpretation requested; no clarification needed.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878359955,\"end\":1776878364939}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878364945,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db634290f001kKHgZmnshnjyA6\",\"reason\":\"stop\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-finish\",\"tokens\":{\"total\":27810,\"input\":18731,\"output\":26,\"reasoning\":1885,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008941732}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "goal_tension_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "d6878c7f901daee22ab1072316348dd2c0d5f0b453f8a81977a409521b374a8f",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/goal_tension_001",
+    "duration_ms": 39912,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:18:45.076141+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/goal_tension_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/goal_tension_001.stdout",
+    "stdout_sha256": "8c7b62575b2674a61d96eeaf37235bb894a62a014aa9735774412d22336f06f4",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878333519,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db633ae47001F6gw0uyPOAUMb4\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878364941,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db6341593001GMTyfXPQfWOpwy\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"goal_tension_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_store_reflection\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_goal_tension\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"goal_tension\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"reflection\\\",\\n          \\\"tool\\\": \\\"circulatio_store_reflection\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I hear the pull between needing rest and the drive to keep going. What's it like to hold both of those right now?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"Ambient reflective note about productivity-rest tension matches the store-first contract for reflections. With active goal-tension history and preferred hold-tension framing, the appropriate surface is alive_today with ask_goal_tension move at gentle depth. No interpretation requested; no clarification needed.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878359955,\"end\":1776878364939}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878364945,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db634290f001kKHgZmnshnjyA6\",\"reason\":\"stop\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-finish\",\"tokens\":{\"total\":27810,\"input\":18731,\"output\":26,\"reasoning\":1885,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008941732}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "goal_tension_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "ed60ffee-37c4-4938-bae5-689772cc7862"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878333519,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db633ae47001F6gw0uyPOAUMb4\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878364941,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db6341593001GMTyfXPQfWOpwy\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"goal_tension_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_store_reflection\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_goal_tension\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"goal_tension\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"reflection\\\",\\n          \\\"tool\\\": \\\"circulatio_store_reflection\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I hear the pull between needing rest and the drive to keep going. What's it like to hold both of those right now?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"Ambient reflective note about productivity-rest tension matches the store-first contract for reflections. With active goal-tension history and preferred hold-tension framing, the appropriate surface is alive_today with ask_goal_tension move at gentle depth. No interpretation requested; no clarification needed.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878359955,\"end\":1776878364939}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878364945,\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"part\":{\"id\":\"prt_db634290f001kKHgZmnshnjyA6\",\"reason\":\"stop\",\"messageID\":\"msg_db63392f2001uBXzMfaADmUovg\",\"sessionID\":\"ses_249cc6ee5ffeiw59NhXf5gWMxj\",\"type\":\"step-finish\",\"tokens\":{\"total\":27810,\"input\":18731,\"output\":26,\"reasoning\":1885,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008941732}}\n"
+}

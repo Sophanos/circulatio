@@ -1,0 +1,30 @@
+{
+  "adapter": "codex",
+  "case_id": "relational_scene_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 12,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 12,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_record_relational_scene"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "7bf39740-b5a6-4b43-a543-71193617bdaf"
+  ]
+}

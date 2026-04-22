@@ -1,0 +1,30 @@
+{
+  "adapter": "opencode",
+  "case_id": "thought_loop_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 12,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 12,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "opencode",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_store_reflection"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "63893604-4d8f-4963-86da-7f5dffd270dc"
+  ]
+}

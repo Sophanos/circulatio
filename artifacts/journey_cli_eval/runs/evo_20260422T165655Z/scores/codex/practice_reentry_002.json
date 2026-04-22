@@ -1,0 +1,33 @@
+{
+  "adapter": "codex",
+  "case_id": "practice_reentry_002",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 9,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 9,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [
+      "Unrecognized tool alias 'practice_session_history'.",
+      "Unrecognized tool alias 'adaptation_profile'."
+    ],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_generate_practice_recommendation"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "acd9e752-4f01-4180-ac71-9d272a54d16b"
+  ]
+}

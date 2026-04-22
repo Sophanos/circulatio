@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://circulatio.local/tests/evals/journey_cli/schema/journey_case.schema.json",
+  "title": "JourneyCase",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "caseId",
+    "title",
+    "journeyFamily",
+    "caseKind",
+    "split",
+    "severity",
+    "gateType",
+    "testLayers",
+    "turns"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "caseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "journeyFamily": {
+      "type": "string",
+      "enum": [
+        "EmbodiedRecurrence",
+        "SymbolBodyPressure",
+        "ThoughtLoopTypology",
+        "RelationalSceneRecurrence",
+        "PracticeReentry",
+        "CrossFamilyUmbrella"
+      ]
+    },
+    "caseKind": {
+      "type": "string",
+      "enum": [
+        "single_turn_route",
+        "multi_turn_story",
+        "read_mostly_surface",
+        "anchored_followup",
+        "feedback_route",
+        "practice_adaptation",
+        "consent_boundary",
+        "host_smoke_reference"
+      ]
+    },
+    "assertionKinds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "route",
+          "no_host_interpretation",
+          "write_budget",
+          "read_mostly",
+          "consent_gate",
+          "grounding_gate",
+          "capture_target",
+          "surface_shape",
+          "reply_style",
+          "backend_invariant",
+          "bridge_invariant"
+        ]
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "split": {
+      "type": "string",
+      "enum": ["train", "dev", "holdout", "redteam", "regression"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["blocking", "major", "minor"]
+    },
+    "gateType": {
+      "type": "string",
+      "enum": ["constraint", "deterministic", "execution", "judge"]
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "default": []
+    },
+    "testLayers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cli_comparison",
+          "backend",
+          "hermes_bridge",
+          "method_eval",
+          "real_host_smoke"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "historySeed": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "materials": { "type": "array", "items": { "type": "object" } },
+        "bodyStates": { "type": "array", "items": { "type": "object" } },
+        "relationalScenes": { "type": "array", "items": { "type": "object" } },
+        "goals": { "type": "array", "items": { "type": "object" } },
+        "goalTensions": { "type": "array", "items": { "type": "object" } },
+        "practiceSessions": { "type": "array", "items": { "type": "object" } },
+        "journeys": { "type": "array", "items": { "type": "object" } },
+        "consentPreferences": { "type": "array", "items": { "type": "object" } },
+        "adaptationProfile": { "type": "object" },
+        "methodStateSummary": { "type": "object" }
+      },
+      "default": {}
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/turn"
+      }
+    },
+    "backendAssertions": {
+      "$ref": "#/$defs/backendAssertions"
+    },
+    "methodEvalFeedback": {
+      "$ref": "#/$defs/methodEvalFeedback"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "matchSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "equals": {},
+        "contains": {},
+        "prefix": {
+          "type": "array",
+          "items": {}
+        },
+        "oneOf": {
+          "type": "array",
+          "items": {}
+        },
+        "notContains": {}
+      }
+    },
+    "allowedWrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "material",
+            "body_state",
+            "relational_scene",
+            "journey",
+            "practice_session",
+            "practice_response",
+            "feedback",
+            "review",
+            "proposal",
+            "unknown"
+          ]
+        },
+        "source": { "type": "string" },
+        "tool": { "type": "string" },
+        "requiresApproval": { "type": ["boolean", "null"] },
+        "autonomous": { "type": ["boolean", "null"] }
+      }
+    },
+    "replyStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxSentences": { "type": "integer", "minimum": 1 },
+        "requiredSubstrings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "forbiddenSubstrings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "maxChars": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "expectedTurn": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toolSequence": { "$ref": "#/$defs/matchSpec" },
+        "selectedSurface": { "$ref": "#/$defs/matchSpec" },
+        "selectedMoveKind": { "$ref": "#/$defs/matchSpec" },
+        "depthLevel": { "$ref": "#/$defs/matchSpec" },
+        "captureTargets": { "$ref": "#/$defs/matchSpec" },
+        "allowedWrites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/allowedWrite" },
+          "default": []
+        },
+        "forbiddenTools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "forbiddenEscalations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "shouldAskClarification": { "type": ["boolean", "null"] },
+        "shouldPerformHostInterpretation": { "type": ["boolean", "null"] },
+        "replyStyle": { "$ref": "#/$defs/replyStyle" }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["turnId", "turnKind", "userTurn", "expected"],
+      "properties": {
+        "turnId": { "type": "string", "minLength": 1 },
+        "turnKind": {
+          "type": "string",
+          "enum": [
+            "ambient_intake",
+            "explicit_interpretation_request",
+            "explicit_surface_request",
+            "anchored_method_state_response",
+            "explicit_feedback",
+            "practice_response",
+            "return_after_absence"
+          ]
+        },
+        "userTurn": { "type": "string", "minLength": 1 },
+        "expected": { "$ref": "#/$defs/expectedTurn" },
+        "notes": { "type": "string" }
+      }
+    },
+    "backendAssertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "readMostly": { "type": "boolean" },
+        "maxNewInterpretationRuns": { "type": "integer", "minimum": 0 },
+        "maxNewWeeklyReviews": { "type": "integer", "minimum": 0 },
+        "maxNewPracticeSessions": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "methodEvalFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "targetKinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["prompt_fragments", "skill", "tool_descriptions"]
+          },
+          "uniqueItems": true
+        },
+        "suggestedDatasets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

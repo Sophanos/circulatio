@@ -1,0 +1,61 @@
+{
+  "adapters": {
+    "fake": {
+      "binary": "",
+      "enabledByDefault": false,
+      "promptTransport": "stdin",
+      "command": [],
+      "outputMode": "text",
+      "timeoutSeconds": 5,
+      "versionCommand": [],
+      "maxArgBytes": 16384,
+      "mode": "success"
+    },
+    "kimi": {
+      "binary": "kimi",
+      "enabledByDefault": true,
+      "promptTransport": "stdin",
+      "command": [
+        "kimi",
+        "--print",
+        "--output-format=stream-json",
+        "--final-message-only"
+      ],
+      "outputMode": "jsonl",
+      "timeoutSeconds": 240,
+      "versionCommand": ["kimi", "--version"],
+      "maxArgBytes": 16384
+    },
+    "codex": {
+      "binary": "codex",
+      "enabledByDefault": true,
+      "promptTransport": "stdin",
+      "command": ["codex", "exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only"],
+      "outputMode": "jsonl",
+      "timeoutSeconds": 240,
+      "versionCommand": ["codex", "--version"],
+      "maxArgBytes": 16384,
+      "useOutputSchema": true
+    },
+    "opencode": {
+      "binary": "opencode",
+      "enabledByDefault": true,
+      "promptTransport": "stdin",
+      "command": ["opencode", "run", "--format", "json"],
+      "outputMode": "jsonl",
+      "timeoutSeconds": 240,
+      "versionCommand": ["opencode", "--version"],
+      "maxArgBytes": 16384
+    },
+    "hermes": {
+      "binary": "hermes",
+      "enabledByDefault": false,
+      "promptTransport": "argv",
+      "command": ["hermes", "chat", "-Q", "--source", "tool", "--max-turns", "1", "-q"],
+      "outputMode": "text",
+      "timeoutSeconds": 240,
+      "versionCommand": ["hermes", "--version"],
+      "maxArgBytes": 65536
+    }
+  }
+}

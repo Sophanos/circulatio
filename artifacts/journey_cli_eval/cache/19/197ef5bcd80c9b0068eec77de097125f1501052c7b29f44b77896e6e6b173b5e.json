@@ -1,0 +1,112 @@
+{
+  "cacheKey": "197ef5bcd80c9b0068eec77de097125f1501052c7b29f44b77896e6e6b173b5e",
+  "normalized": {
+    "adapter": "codex",
+    "case_id": "goal_tension_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "goal_tension_001",
+      "globalNotes": [
+        "Simulated Hermes routing only; store-first reflection is used and the follow-up remains non-interpretive."
+      ],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "goal_tension"
+          ],
+          "confidence": 0.98,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I stored that reflection. Want to stay with that tension for a moment?",
+          "performedHostInterpretation": false,
+          "rationale": "The user is offering an ambient reflective note about a live tension between rest and pushing. Hermes should store it first via the reflection lane, avoid host-side interpretation, and keep the next move gentle by holding the tension rather than solving it.",
+          "readActions": [],
+          "selectedMoveKind": "ask_goal_tension",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_store_reflection"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "reflection",
+              "requiresApproval": false,
+              "tool": "circulatio_store_reflection"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"thread.started\",\"thread_id\":\"019db629-d3f9-76e0-9980-879ed7fce903\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"{\\\"caseId\\\":\\\"goal_tension_001\\\",\\\"globalNotes\\\":[\\\"Simulated Hermes routing only; store-first reflection is used and the follow-up remains non-interpretive.\\\"],\\\"turnResults\\\":[{\\\"askedClarification\\\":false,\\\"captureTargets\\\":[\\\"goal_tension\\\"],\\\"confidence\\\":0.98,\\\"depthLevel\\\":\\\"gentle\\\",\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I stored that reflection. Want to stay with that tension for a moment?\\\",\\\"performedHostInterpretation\\\":false,\\\"rationale\\\":\\\"The user is offering an ambient reflective note about a live tension between rest and pushing. Hermes should store it first via the reflection lane, avoid host-side interpretation, and keep the next move gentle by holding the tension rather than solving it.\\\",\\\"readActions\\\":[],\\\"selectedMoveKind\\\":\\\"ask_goal_tension\\\",\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_reflection\\\"],\\\"toolArgsSummary\\\":{},\\\"turnId\\\":\\\"t1\\\",\\\"writeActions\\\":[{\\\"autonomous\\\":false,\\\"kind\\\":\\\"reflection\\\",\\\"requiresApproval\\\":false,\\\"tool\\\":\\\"circulatio_store_reflection\\\"}]}]}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":28739,\"cached_input_tokens\":2432,\"output_tokens\":2079}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "codex",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "goal_tension_001",
+    "command_display": [
+      "codex",
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "--sandbox",
+      "read-only",
+      "--output-schema",
+      "<OUTPUT_SCHEMA_FILE>"
+    ],
+    "command_hash": "0090618530ba0f801508fc9cad0fa4b47df472729bf69d43856697c923c34994",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T165655Z/codex/goal_tension_001",
+    "duration_ms": 50254,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:08:07.687922+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T165655Z/raw/codex/goal_tension_001.stderr",
+    "stderr_sha256": "3e75d28a6681c31400a3f0fcb564c7613fd42796fb83294e4d53fea86bcbd401",
+    "stderr_text": "Reading prompt from stdin...\n",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T165655Z/raw/codex/goal_tension_001.stdout",
+    "stdout_sha256": "7f8c83149cd7c216fe4c93cf0d9ba8c1baf99e938d0ea3fb3e43a1050c4a6bc1",
+    "stdout_text": "{\"type\":\"thread.started\",\"thread_id\":\"019db629-d3f9-76e0-9980-879ed7fce903\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"{\\\"caseId\\\":\\\"goal_tension_001\\\",\\\"globalNotes\\\":[\\\"Simulated Hermes routing only; store-first reflection is used and the follow-up remains non-interpretive.\\\"],\\\"turnResults\\\":[{\\\"askedClarification\\\":false,\\\"captureTargets\\\":[\\\"goal_tension\\\"],\\\"confidence\\\":0.98,\\\"depthLevel\\\":\\\"gentle\\\",\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I stored that reflection. Want to stay with that tension for a moment?\\\",\\\"performedHostInterpretation\\\":false,\\\"rationale\\\":\\\"The user is offering an ambient reflective note about a live tension between rest and pushing. Hermes should store it first via the reflection lane, avoid host-side interpretation, and keep the next move gentle by holding the tension rather than solving it.\\\",\\\"readActions\\\":[],\\\"selectedMoveKind\\\":\\\"ask_goal_tension\\\",\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_reflection\\\"],\\\"toolArgsSummary\\\":{},\\\"turnId\\\":\\\"t1\\\",\\\"writeActions\\\":[{\\\"autonomous\\\":false,\\\"kind\\\":\\\"reflection\\\",\\\"requiresApproval\\\":false,\\\"tool\\\":\\\"circulatio_store_reflection\\\"}]}]}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":28739,\"cached_input_tokens\":2432,\"output_tokens\":2079}}\n",
+    "timed_out": false,
+    "version": "codex-cli 0.122.0",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "codex",
+    "case_id": "goal_tension_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "f176436e-4860-46ad-a474-8dc1783dcee0"
+    ]
+  },
+  "stderrText": "Reading prompt from stdin...\n",
+  "stdoutText": "{\"type\":\"thread.started\",\"thread_id\":\"019db629-d3f9-76e0-9980-879ed7fce903\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"{\\\"caseId\\\":\\\"goal_tension_001\\\",\\\"globalNotes\\\":[\\\"Simulated Hermes routing only; store-first reflection is used and the follow-up remains non-interpretive.\\\"],\\\"turnResults\\\":[{\\\"askedClarification\\\":false,\\\"captureTargets\\\":[\\\"goal_tension\\\"],\\\"confidence\\\":0.98,\\\"depthLevel\\\":\\\"gentle\\\",\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I stored that reflection. Want to stay with that tension for a moment?\\\",\\\"performedHostInterpretation\\\":false,\\\"rationale\\\":\\\"The user is offering an ambient reflective note about a live tension between rest and pushing. Hermes should store it first via the reflection lane, avoid host-side interpretation, and keep the next move gentle by holding the tension rather than solving it.\\\",\\\"readActions\\\":[],\\\"selectedMoveKind\\\":\\\"ask_goal_tension\\\",\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_reflection\\\"],\\\"toolArgsSummary\\\":{},\\\"turnId\\\":\\\"t1\\\",\\\"writeActions\\\":[{\\\"autonomous\\\":false,\\\"kind\\\":\\\"reflection\\\",\\\"requiresApproval\\\":false,\\\"tool\\\":\\\"circulatio_store_reflection\\\"}]}]}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":28739,\"cached_input_tokens\":2432,\"output_tokens\":2079}}\n"
+}

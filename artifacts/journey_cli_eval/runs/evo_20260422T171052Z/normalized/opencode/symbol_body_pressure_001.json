@@ -1,0 +1,51 @@
+{
+  "adapter": "opencode",
+  "case_id": "symbol_body_pressure_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "symbol_body_pressure_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "body_state",
+          "material"
+        ],
+        "confidence": 0.95,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held the returning locked door dream and the pressure behind your eyes. Want to check in with what the body needs right now?",
+        "performedHostInterpretation": false,
+        "rationale": "Store-first contract for ambient dream and body-state intake. Both the recurring dream image and the somatic pressure are captured without interpretation because the user did not ask for meaning. The host selects a gentle body check-in via the alive_today surface.",
+        "readActions": [],
+        "selectedMoveKind": "ask_body_checkin",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_store_dream",
+          "circulatio_store_body_state"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": false,
+            "kind": "material",
+            "requiresApproval": false,
+            "tool": "circulatio_store_dream"
+          },
+          {
+            "autonomous": false,
+            "kind": "body_state",
+            "requiresApproval": false,
+            "tool": "circulatio_store_body_state"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776877899154,\"sessionID\":\"ses_249d30666ffeaQYWl3Jsw6QeyI\",\"part\":{\"id\":\"prt_db62d0d8f001bspaHtNau6BmEu\",\"messageID\":\"msg_db62cfb290011KPx38gpoWBe73\",\"sessionID\":\"ses_249d30666ffeaQYWl3Jsw6QeyI\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776877971069,\"sessionID\":\"ses_249d30666ffeaQYWl3Jsw6QeyI\",\"part\":{\"id\":\"prt_db62e09a200153AqVxKRTHsY3Z\",\"messageID\":\"msg_db62cfb290011KPx38gpoWBe73\",\"sessionID\":\"ses_249d30666ffeaQYWl3Jsw6QeyI\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"symbol_body_pressure_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_store_dream\\\",\\n        \\\"circulatio_store_body_state\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": {},\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_body_checkin\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"body_state\\\",\\n        \\\"material\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"material\\\",\\n          \\\"tool\\\": \\\"circulatio_store_dream\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        },\\n        {\\n          \\\"kind\\\": \\\"body_state\\\",\\n          \\\"tool\\\": \\\"circulatio_store_body_state\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I held the returning locked door dream and the pressure behind your eyes. Want to check in with what the body needs right now?\\\",\\n      \\\"confidence\\\": 0.95,\\n      \\\"rationale\\\": \\\"Store-first contract for ambient dream and body-state intake. Both the recurring dream image and the somatic pressure are captured without interpretation because the user did not ask for meaning. The host selects a gentle body check-in via the alive_today surface.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776877963682,\"end\":1776877971068}}}\n{\"type\":\"step_finish\",\"timestamp\":1776877971072,\"sessionID\":\"ses_249d30666ffeaQYWl3Jsw6QeyI\",\"part\":{\"id\":\"prt_db62e267e001BEbjlovn2kI2zl\",\"reason\":\"stop\",\"messageID\":\"msg_db62cfb290011KPx38gpoWBe73\",\"sessionID\":\"ses_249d30666ffeaQYWl3Jsw6QeyI\",\"type\":\"step-finish\",\"tokens\":{\"total\":29282,\"input\":16150,\"output\":36,\"reasoning\":3112,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009925456}}\n",
+  "warnings": []
+}

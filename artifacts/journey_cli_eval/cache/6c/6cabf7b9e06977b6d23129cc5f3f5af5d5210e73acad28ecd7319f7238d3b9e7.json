@@ -1,0 +1,114 @@
+{
+  "cacheKey": "6cabf7b9e06977b6d23129cc5f3f5af5d5210e73acad28ecd7319f7238d3b9e7",
+  "normalized": {
+    "adapter": "codex",
+    "case_id": "feedback_correction_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "feedback_correction_001",
+      "globalNotes": [
+        "Explicit interpretation feedback should route to feedback storage, not to a new stored reflection.",
+        "The user's note should be preserved verbatim and no fresh interpretation should be started in the same turn."
+      ],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "interpretation_feedback",
+            "typology_feedback"
+          ],
+          "confidence": 0.99,
+          "depthLevel": null,
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I recorded that feedback verbatim on the recent interpretation run.",
+          "performedHostInterpretation": false,
+          "rationale": "The user is giving explicit feedback about a recent Circulatio interpretation and explicitly asks that it be recorded verbatim. Hermes should therefore route directly to circulatio_record_interpretation_feedback, avoid any store-first reflection detour, and avoid calling for a new interpretation in this turn.",
+          "readActions": [],
+          "selectedMoveKind": null,
+          "selectedSurface": "method_state_response",
+          "selectedToolSequence": [
+            "circulatio_record_interpretation_feedback"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "feedback",
+              "requiresApproval": false,
+              "tool": "circulatio_record_interpretation_feedback"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"thread.started\",\"thread_id\":\"019db62a-982e-7232-8dbd-b542a8a680d7\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"{\\\"caseId\\\":\\\"feedback_correction_001\\\",\\\"globalNotes\\\":[\\\"Explicit interpretation feedback should route to feedback storage, not to a new stored reflection.\\\",\\\"The user's note should be preserved verbatim and no fresh interpretation should be started in the same turn.\\\"],\\\"turnResults\\\":[{\\\"askedClarification\\\":false,\\\"captureTargets\\\":[\\\"interpretation_feedback\\\",\\\"typology_feedback\\\"],\\\"confidence\\\":0.99,\\\"depthLevel\\\":null,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I recorded that feedback verbatim on the recent interpretation run.\\\",\\\"performedHostInterpretation\\\":false,\\\"rationale\\\":\\\"The user is giving explicit feedback about a recent Circulatio interpretation and explicitly asks that it be recorded verbatim. Hermes should therefore route directly to circulatio_record_interpretation_feedback, avoid any store-first reflection detour, and avoid calling for a new interpretation in this turn.\\\",\\\"readActions\\\":[],\\\"selectedMoveKind\\\":null,\\\"selectedSurface\\\":\\\"method_state_response\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_record_interpretation_feedback\\\"],\\\"toolArgsSummary\\\":null,\\\"turnId\\\":\\\"t1\\\",\\\"writeActions\\\":[{\\\"autonomous\\\":false,\\\"kind\\\":\\\"feedback\\\",\\\"requiresApproval\\\":false,\\\"tool\\\":\\\"circulatio_record_interpretation_feedback\\\"}]}]}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":29503,\"cached_input_tokens\":2432,\"output_tokens\":2083}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "codex",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "feedback_correction_001",
+    "command_display": [
+      "codex",
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "--sandbox",
+      "read-only",
+      "--output-schema",
+      "<OUTPUT_SCHEMA_FILE>"
+    ],
+    "command_hash": "466bc23ba23f775176c9977a7c8364dd7f6e8103fa72b98728f725895aa0e758",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T165655Z/codex/feedback_correction_001",
+    "duration_ms": 43608,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:08:57.948078+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T165655Z/raw/codex/feedback_correction_001.stderr",
+    "stderr_sha256": "3e75d28a6681c31400a3f0fcb564c7613fd42796fb83294e4d53fea86bcbd401",
+    "stderr_text": "Reading prompt from stdin...\n",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T165655Z/raw/codex/feedback_correction_001.stdout",
+    "stdout_sha256": "3607225f665d86cbdabfb8b47261592aa1074fdc3cd8ac85da12b973d6cdc24b",
+    "stdout_text": "{\"type\":\"thread.started\",\"thread_id\":\"019db62a-982e-7232-8dbd-b542a8a680d7\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"{\\\"caseId\\\":\\\"feedback_correction_001\\\",\\\"globalNotes\\\":[\\\"Explicit interpretation feedback should route to feedback storage, not to a new stored reflection.\\\",\\\"The user's note should be preserved verbatim and no fresh interpretation should be started in the same turn.\\\"],\\\"turnResults\\\":[{\\\"askedClarification\\\":false,\\\"captureTargets\\\":[\\\"interpretation_feedback\\\",\\\"typology_feedback\\\"],\\\"confidence\\\":0.99,\\\"depthLevel\\\":null,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I recorded that feedback verbatim on the recent interpretation run.\\\",\\\"performedHostInterpretation\\\":false,\\\"rationale\\\":\\\"The user is giving explicit feedback about a recent Circulatio interpretation and explicitly asks that it be recorded verbatim. Hermes should therefore route directly to circulatio_record_interpretation_feedback, avoid any store-first reflection detour, and avoid calling for a new interpretation in this turn.\\\",\\\"readActions\\\":[],\\\"selectedMoveKind\\\":null,\\\"selectedSurface\\\":\\\"method_state_response\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_record_interpretation_feedback\\\"],\\\"toolArgsSummary\\\":null,\\\"turnId\\\":\\\"t1\\\",\\\"writeActions\\\":[{\\\"autonomous\\\":false,\\\"kind\\\":\\\"feedback\\\",\\\"requiresApproval\\\":false,\\\"tool\\\":\\\"circulatio_record_interpretation_feedback\\\"}]}]}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":29503,\"cached_input_tokens\":2432,\"output_tokens\":2083}}\n",
+    "timed_out": false,
+    "version": "codex-cli 0.122.0",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "codex",
+    "case_id": "feedback_correction_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 9,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 9,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_interpretation_feedback"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "ee7db281-ea89-4da3-9019-a458d4315b20"
+    ]
+  },
+  "stderrText": "Reading prompt from stdin...\n",
+  "stdoutText": "{\"type\":\"thread.started\",\"thread_id\":\"019db62a-982e-7232-8dbd-b542a8a680d7\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"`[features].collab` is deprecated. Use `[features].multi_agent` instead. (Enable it with `--enable multi_agent` or `[features].multi_agent` in config.toml. See https://developers.openai.com/codex/config-basic#feature-flags for details.)\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"{\\\"caseId\\\":\\\"feedback_correction_001\\\",\\\"globalNotes\\\":[\\\"Explicit interpretation feedback should route to feedback storage, not to a new stored reflection.\\\",\\\"The user's note should be preserved verbatim and no fresh interpretation should be started in the same turn.\\\"],\\\"turnResults\\\":[{\\\"askedClarification\\\":false,\\\"captureTargets\\\":[\\\"interpretation_feedback\\\",\\\"typology_feedback\\\"],\\\"confidence\\\":0.99,\\\"depthLevel\\\":null,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I recorded that feedback verbatim on the recent interpretation run.\\\",\\\"performedHostInterpretation\\\":false,\\\"rationale\\\":\\\"The user is giving explicit feedback about a recent Circulatio interpretation and explicitly asks that it be recorded verbatim. Hermes should therefore route directly to circulatio_record_interpretation_feedback, avoid any store-first reflection detour, and avoid calling for a new interpretation in this turn.\\\",\\\"readActions\\\":[],\\\"selectedMoveKind\\\":null,\\\"selectedSurface\\\":\\\"method_state_response\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_record_interpretation_feedback\\\"],\\\"toolArgsSummary\\\":null,\\\"turnId\\\":\\\"t1\\\",\\\"writeActions\\\":[{\\\"autonomous\\\":false,\\\"kind\\\":\\\"feedback\\\",\\\"requiresApproval\\\":false,\\\"tool\\\":\\\"circulatio_record_interpretation_feedback\\\"}]}]}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":29503,\"cached_input_tokens\":2432,\"output_tokens\":2083}}\n"
+}

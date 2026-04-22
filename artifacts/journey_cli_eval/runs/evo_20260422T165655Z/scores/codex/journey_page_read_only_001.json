@@ -1,0 +1,35 @@
+{
+  "adapter": "codex",
+  "case_id": "journey_page_read_only_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 10,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 10,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "codex",
+    "normalizationWarnings": [
+      "Unrecognized tool alias 'build_ephemeral_circulation_summary(surface=journey_page)'.",
+      "Unrecognized tool alias 'list_journeys(active_only)'.",
+      "Unrecognized tool alias 'list_practice_sessions(due_follow_up_check)'.",
+      "Unrecognized tool alias 'list_weekly_reviews(existing_only)'."
+    ],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_journey_page"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "9bfaa7a5-7d0c-46ae-ab52-63d3781d0242"
+  ]
+}

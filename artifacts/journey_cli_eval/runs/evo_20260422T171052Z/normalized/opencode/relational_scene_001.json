@@ -1,0 +1,43 @@
+{
+  "adapter": "opencode",
+  "case_id": "relational_scene_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "relational_scene_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "relational_scene"
+        ],
+        "confidence": 1.0,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I recorded that scene. Want to notice what shifts in your body when the volume rises?",
+        "performedHostInterpretation": false,
+        "rationale": "User reported a recurring interpersonal dynamic (going quiet when someone gets loud, with a different person). This is a relational scene recurrence. Store-first routing directs to circulatio_record_relational_scene. Because consent for projection_language is 'ask', the host stays scene-first and avoids projection or diagnostic claims. The reply acknowledges the share and offers a gentle somatic invitation without interpreting.",
+        "readActions": [],
+        "selectedMoveKind": "ask_relational_scene",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_record_relational_scene"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": false,
+            "kind": "relational_scene",
+            "requiresApproval": false,
+            "tool": "circulatio_record_relational_scene"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878033497,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62f1a55001n2caOgQrKYZKuP\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878084948,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fcf3f001OZ22dQ0a6Ghjmj\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"relational_scene_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_record_relational_scene\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": null,\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_relational_scene\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"relational_scene\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"relational_scene\\\",\\n          \\\"tool\\\": \\\"circulatio_record_relational_scene\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I recorded that scene. Want to notice what shifts in your body when the volume rises?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"User reported a recurring interpersonal dynamic (going quiet when someone gets loud, with a different person). This is a relational scene recurrence. Store-first routing directs to circulatio_record_relational_scene. Because consent for projection_language is 'ask', the host stays scene-first and avoids projection or diagnostic claims. The reply acknowledges the share and offers a gentle somatic invitation without interpreting.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878079807,\"end\":1776878084944}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878084953,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fe356001if6fxUW0Q7I4Ww\",\"reason\":\"stop\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-finish\",\"tokens\":{\"total\":28452,\"input\":15927,\"output\":71,\"reasoning\":2470,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009040716}}\n",
+  "warnings": []
+}

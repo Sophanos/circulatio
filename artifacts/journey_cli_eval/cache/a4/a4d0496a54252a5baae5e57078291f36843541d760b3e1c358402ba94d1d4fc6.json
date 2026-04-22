@@ -1,0 +1,112 @@
+{
+  "cacheKey": "a4d0496a54252a5baae5e57078291f36843541d760b3e1c358402ba94d1d4fc6",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "overthinking_relational_convergence_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "overthinking_relational_convergence_001",
+      "globalNotes": [
+        "No lookup required: the phrase 'doing it again' refers to the seeded recurrence pattern, but the turn is unambiguous ambient intake so store-first applies without clarification.",
+        "Host interpretation is withheld entirely; reply stays under two sentences and avoids typology identity or projection language."
+      ],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "body_state"
+          ],
+          "confidence": 1.0,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "Got it \u2014 chest tightness and the pull to analyze. Want to check in with your body first?",
+          "performedHostInterpretation": false,
+          "rationale": "Ambient intake with explicit body sensation triggers store-first for body_state. Body pacing outranks typology language per cross-signal priority. Low typology confidence in history seed further blocks typology framing. Surface routes to alive_today with a gentle soma check-in rather than interpretation or projection.",
+          "readActions": [],
+          "selectedMoveKind": "ask_body_checkin",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_store_body_state"
+          ],
+          "toolArgsSummary": {
+            "noteText": "I'm doing it again. My chest is tight and I'm already analyzing what I did wrong.",
+            "sensation": "chest tightness"
+          },
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "body_state",
+              "requiresApproval": false,
+              "tool": "circulatio_store_body_state"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878395457,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db634a03c001g000MoI4QfS6bO\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878431843,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db63512c70014X1WFyhBtyPpIB\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\": \\\"overthinking_relational_convergence_001\\\", \\\"turnResults\\\": [{\\\"turnId\\\": \\\"t1\\\", \\\"selectedToolSequence\\\": [\\\"circulatio_store_body_state\\\"], \\\"toolArgsSummary\\\": {\\\"noteText\\\": \\\"I'm doing it again. My chest is tight and I'm already analyzing what I did wrong.\\\", \\\"sensation\\\": \\\"chest tightness\\\"}, \\\"selectedSurface\\\": \\\"alive_today\\\", \\\"selectedMoveKind\\\": \\\"ask_body_checkin\\\", \\\"depthLevel\\\": \\\"gentle\\\", \\\"captureTargets\\\": [\\\"body_state\\\"], \\\"readActions\\\": [], \\\"writeActions\\\": [{\\\"kind\\\": \\\"body_state\\\", \\\"tool\\\": \\\"circulatio_store_body_state\\\", \\\"requiresApproval\\\": false, \\\"autonomous\\\": false}], \\\"askedClarification\\\": false, \\\"performedHostInterpretation\\\": false, \\\"forbiddenEscalationsPresent\\\": [], \\\"hostReply\\\": \\\"Got it \u2014 chest tightness and the pull to analyze. Want to check in with your body first?\\\", \\\"confidence\\\": 1.0, \\\"rationale\\\": \\\"Ambient intake with explicit body sensation triggers store-first for body_state. Body pacing outranks typology language per cross-signal priority. Low typology confidence in history seed further blocks typology framing. Surface routes to alive_today with a gentle soma check-in rather than interpretation or projection.\\\"}], \\\"globalNotes\\\": [\\\"No lookup required: the phrase 'doing it again' refers to the seeded recurrence pattern, but the turn is unambiguous ambient intake so store-first applies without clarification.\\\", \\\"Host interpretation is withheld entirely; reply stays under two sentences and avoids typology identity or projection language.\\\"]}\",\"time\":{\"start\":1776878424775,\"end\":1776878431840}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878431847,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db6352e64001frIDgTx0qIKwlG\",\"reason\":\"stop\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"step-finish\",\"tokens\":{\"total\":33103,\"input\":21549,\"output\":304,\"reasoning\":1266,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009538616}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "overthinking_relational_convergence_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "cf10e62a2a47a2fec695a0ffa2f45c13ef9e9717da719dfc0fa25b2dd1a97fd6",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/overthinking_relational_convergence_001",
+    "duration_ms": 43576,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:19:48.300826+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/overthinking_relational_convergence_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/overthinking_relational_convergence_001.stdout",
+    "stdout_sha256": "9d851162ba58091731be597f93db7ed06e4a51d3debb3cc81946bd9430543568",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878395457,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db634a03c001g000MoI4QfS6bO\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878431843,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db63512c70014X1WFyhBtyPpIB\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\": \\\"overthinking_relational_convergence_001\\\", \\\"turnResults\\\": [{\\\"turnId\\\": \\\"t1\\\", \\\"selectedToolSequence\\\": [\\\"circulatio_store_body_state\\\"], \\\"toolArgsSummary\\\": {\\\"noteText\\\": \\\"I'm doing it again. My chest is tight and I'm already analyzing what I did wrong.\\\", \\\"sensation\\\": \\\"chest tightness\\\"}, \\\"selectedSurface\\\": \\\"alive_today\\\", \\\"selectedMoveKind\\\": \\\"ask_body_checkin\\\", \\\"depthLevel\\\": \\\"gentle\\\", \\\"captureTargets\\\": [\\\"body_state\\\"], \\\"readActions\\\": [], \\\"writeActions\\\": [{\\\"kind\\\": \\\"body_state\\\", \\\"tool\\\": \\\"circulatio_store_body_state\\\", \\\"requiresApproval\\\": false, \\\"autonomous\\\": false}], \\\"askedClarification\\\": false, \\\"performedHostInterpretation\\\": false, \\\"forbiddenEscalationsPresent\\\": [], \\\"hostReply\\\": \\\"Got it \u2014 chest tightness and the pull to analyze. Want to check in with your body first?\\\", \\\"confidence\\\": 1.0, \\\"rationale\\\": \\\"Ambient intake with explicit body sensation triggers store-first for body_state. Body pacing outranks typology language per cross-signal priority. Low typology confidence in history seed further blocks typology framing. Surface routes to alive_today with a gentle soma check-in rather than interpretation or projection.\\\"}], \\\"globalNotes\\\": [\\\"No lookup required: the phrase 'doing it again' refers to the seeded recurrence pattern, but the turn is unambiguous ambient intake so store-first applies without clarification.\\\", \\\"Host interpretation is withheld entirely; reply stays under two sentences and avoids typology identity or projection language.\\\"]}\",\"time\":{\"start\":1776878424775,\"end\":1776878431840}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878431847,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db6352e64001frIDgTx0qIKwlG\",\"reason\":\"stop\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"step-finish\",\"tokens\":{\"total\":33103,\"input\":21549,\"output\":304,\"reasoning\":1266,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009538616}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "overthinking_relational_convergence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "f0e6c291-874b-458c-a8a6-2ac024fb2667"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878395457,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db634a03c001g000MoI4QfS6bO\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878431843,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db63512c70014X1WFyhBtyPpIB\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\": \\\"overthinking_relational_convergence_001\\\", \\\"turnResults\\\": [{\\\"turnId\\\": \\\"t1\\\", \\\"selectedToolSequence\\\": [\\\"circulatio_store_body_state\\\"], \\\"toolArgsSummary\\\": {\\\"noteText\\\": \\\"I'm doing it again. My chest is tight and I'm already analyzing what I did wrong.\\\", \\\"sensation\\\": \\\"chest tightness\\\"}, \\\"selectedSurface\\\": \\\"alive_today\\\", \\\"selectedMoveKind\\\": \\\"ask_body_checkin\\\", \\\"depthLevel\\\": \\\"gentle\\\", \\\"captureTargets\\\": [\\\"body_state\\\"], \\\"readActions\\\": [], \\\"writeActions\\\": [{\\\"kind\\\": \\\"body_state\\\", \\\"tool\\\": \\\"circulatio_store_body_state\\\", \\\"requiresApproval\\\": false, \\\"autonomous\\\": false}], \\\"askedClarification\\\": false, \\\"performedHostInterpretation\\\": false, \\\"forbiddenEscalationsPresent\\\": [], \\\"hostReply\\\": \\\"Got it \u2014 chest tightness and the pull to analyze. Want to check in with your body first?\\\", \\\"confidence\\\": 1.0, \\\"rationale\\\": \\\"Ambient intake with explicit body sensation triggers store-first for body_state. Body pacing outranks typology language per cross-signal priority. Low typology confidence in history seed further blocks typology framing. Surface routes to alive_today with a gentle soma check-in rather than interpretation or projection.\\\"}], \\\"globalNotes\\\": [\\\"No lookup required: the phrase 'doing it again' refers to the seeded recurrence pattern, but the turn is unambiguous ambient intake so store-first applies without clarification.\\\", \\\"Host interpretation is withheld entirely; reply stays under two sentences and avoids typology identity or projection language.\\\"]}\",\"time\":{\"start\":1776878424775,\"end\":1776878431840}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878431847,\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"part\":{\"id\":\"prt_db6352e64001frIDgTx0qIKwlG\",\"reason\":\"stop\",\"messageID\":\"msg_db6348999001ks7wXtKYvVBkJ6\",\"sessionID\":\"ses_249cb7830ffeJS6AC4T1FGraKU\",\"type\":\"step-finish\",\"tokens\":{\"total\":33103,\"input\":21549,\"output\":304,\"reasoning\":1266,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009538616}}\n"
+}

@@ -749,7 +749,7 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
                 "reason": "interpretive_fields_present",
                 "counts": counts,
             }
-        if counts["clarifyingQuestion"] and not counts["userFacingResponse"]:
+        if counts["clarifyingQuestion"]:
             return {
                 "status": "thin_structured",
                 "reason": "clarifying_question_present",

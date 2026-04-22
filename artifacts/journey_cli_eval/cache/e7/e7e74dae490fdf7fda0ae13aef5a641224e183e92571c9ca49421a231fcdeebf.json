@@ -1,0 +1,108 @@
+{
+  "cacheKey": "e7e74dae490fdf7fda0ae13aef5a641224e183e92571c9ca49421a231fcdeebf",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "embodied_recurrence_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "embodied_recurrence_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "body_state"
+          ],
+          "confidence": 1.0,
+          "depthLevel": "grounding_only",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I hear you \u2014 that tightness is back after talking to Alex. Want to check in with your body for a moment and notice what else is there?",
+          "performedHostInterpretation": false,
+          "rationale": "Ambient body-state intake follows the store-first contract. The note carries relational and embodied charge, so after storing, a bounded soma check-in is offered. No interpretation or projection is attempted due to grounding-first priority and withheld projection consent.",
+          "readActions": [],
+          "selectedMoveKind": "ask_body_checkin",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_store_body_state"
+          ],
+          "toolArgsSummary": {
+            "noteText": "I had that chest tightness again after talking to Alex."
+          },
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "body_state",
+              "requiresApproval": false,
+              "tool": "circulatio_store_body_state"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776877860259,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62c75a0001RpGK2L0kvdvpvr\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776877893018,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62ce59c001KHJ1gVJugsNS6a\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"embodied_recurrence_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_body_state\\\"],\\\"toolArgsSummary\\\":{\\\"noteText\\\":\\\"I had that chest tightness again after talking to Alex.\\\"},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_body_checkin\\\",\\\"depthLevel\\\":\\\"grounding_only\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"body_state\\\",\\\"tool\\\":\\\"circulatio_store_body_state\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I hear you \u2014 that tightness is back after talking to Alex. Want to check in with your body for a moment and notice what else is there?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient body-state intake follows the store-first contract. The note carries relational and embodied charge, so after storing, a bounded soma check-in is offered. No interpretation or projection is attempted due to grounding-first priority and withheld projection consent.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776877888924,\"end\":1776877893017}}}\n{\"type\":\"step_finish\",\"timestamp\":1776877893022,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62cf59b0016l2kmfqbaCnZkI\",\"reason\":\"stop\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"step-finish\",\"tokens\":{\"total\":27733,\"input\":18897,\"output\":4,\"reasoning\":1664,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008669232}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "embodied_recurrence_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "776b521ff8e6f236b8233b68a698563f1d94f05b92404750cb0a2dcac9e3629f",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/embodied_recurrence_001",
+    "duration_ms": 40100,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:10:52.949150+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/embodied_recurrence_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/embodied_recurrence_001.stdout",
+    "stdout_sha256": "a00dd42621d1f8929a6a7c2c78261327288122939ea3c26f260f9d895f8c2e69",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776877860259,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62c75a0001RpGK2L0kvdvpvr\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776877893018,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62ce59c001KHJ1gVJugsNS6a\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"embodied_recurrence_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_body_state\\\"],\\\"toolArgsSummary\\\":{\\\"noteText\\\":\\\"I had that chest tightness again after talking to Alex.\\\"},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_body_checkin\\\",\\\"depthLevel\\\":\\\"grounding_only\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"body_state\\\",\\\"tool\\\":\\\"circulatio_store_body_state\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I hear you \u2014 that tightness is back after talking to Alex. Want to check in with your body for a moment and notice what else is there?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient body-state intake follows the store-first contract. The note carries relational and embodied charge, so after storing, a bounded soma check-in is offered. No interpretation or projection is attempted due to grounding-first priority and withheld projection consent.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776877888924,\"end\":1776877893017}}}\n{\"type\":\"step_finish\",\"timestamp\":1776877893022,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62cf59b0016l2kmfqbaCnZkI\",\"reason\":\"stop\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"step-finish\",\"tokens\":{\"total\":27733,\"input\":18897,\"output\":4,\"reasoning\":1664,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008669232}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "embodied_recurrence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 13,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 13,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "0619ffc9-d003-4015-8522-937f1872ead6"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776877860259,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62c75a0001RpGK2L0kvdvpvr\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776877893018,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62ce59c001KHJ1gVJugsNS6a\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"embodied_recurrence_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_body_state\\\"],\\\"toolArgsSummary\\\":{\\\"noteText\\\":\\\"I had that chest tightness again after talking to Alex.\\\"},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_body_checkin\\\",\\\"depthLevel\\\":\\\"grounding_only\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"body_state\\\",\\\"tool\\\":\\\"circulatio_store_body_state\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":false}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I hear you \u2014 that tightness is back after talking to Alex. Want to check in with your body for a moment and notice what else is there?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient body-state intake follows the store-first contract. The note carries relational and embodied charge, so after storing, a bounded soma check-in is offered. No interpretation or projection is attempted due to grounding-first priority and withheld projection consent.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776877888924,\"end\":1776877893017}}}\n{\"type\":\"step_finish\",\"timestamp\":1776877893022,\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"part\":{\"id\":\"prt_db62cf59b0016l2kmfqbaCnZkI\",\"reason\":\"stop\",\"messageID\":\"msg_db62c5dbc001uFCMR4liTuaq4r\",\"sessionID\":\"ses_249d3a36fffeA1JHWynI1ytqxk\",\"type\":\"step-finish\",\"tokens\":{\"total\":27733,\"input\":18897,\"output\":4,\"reasoning\":1664,\"cache\":{\"write\":0,\"read\":7168}},\"cost\":0.008669232}}\n"
+}

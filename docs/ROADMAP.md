@@ -25,6 +25,12 @@ The current layer can evaluate baselines and candidate bundles, stage manual rev
 
 This tooling is still offline-only. It is not a runtime loop, does not mutate weights, and does not bypass human review or Circulatio's approval, safety, or consent boundaries. Reflection/pareto strategies and provider-backed execution or judge evals remain later work.
 
+The repo also includes a separate repo-local Journey CLI comparison harness under
+`tools/journey_cli_eval/` and `scripts/evaluate_journey_cli.py`. That layer uses the shared
+longitudinal cases in `docs/JOURNEY_FAMILIES.md` to probe host-routing behavior, read-mostly
+surface boundaries, and anchored follow-up expectations without claiming backend truth. Service,
+bridge, and Hermes host-smoke tests remain authoritative for runtime behavior.
+
 ---
 
 ## Who This Is For

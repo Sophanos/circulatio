@@ -1,0 +1,43 @@
+{
+  "adapter": "opencode",
+  "case_id": "embodied_recurrence_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "embodied_recurrence_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "body_state"
+        ],
+        "confidence": 1.0,
+        "depthLevel": "grounding_only",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that body state for you. Want to sit with the sensation for a moment?",
+        "performedHostInterpretation": false,
+        "rationale": "Ambient body-state intake routes directly to circulatio_store_body_state per store-first contract. Recurrence history and projection_language=withhold keep depth at grounding_only and surface at alive_today with a bounded body check-in.",
+        "readActions": [],
+        "selectedMoveKind": "ask_body_checkin",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_store_body_state"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": true,
+            "kind": "body_state",
+            "requiresApproval": false,
+            "tool": "circulatio_store_body_state"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776876900161,\"sessionID\":\"ses_249e2436dffeGRLYvuHGr9AQ6u\",\"part\":{\"id\":\"prt_db61dcf3f001FreF1UolqahOaf\",\"messageID\":\"msg_db61dbe30001w2j0igr8r5DAdo\",\"sessionID\":\"ses_249e2436dffeGRLYvuHGr9AQ6u\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776876948943,\"sessionID\":\"ses_249e2436dffeGRLYvuHGr9AQ6u\",\"part\":{\"id\":\"prt_db61e78bb001Ynm0VmtLlYypY3\",\"messageID\":\"msg_db61dbe30001w2j0igr8r5DAdo\",\"sessionID\":\"ses_249e2436dffeGRLYvuHGr9AQ6u\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"embodied_recurrence_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_store_body_state\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"ask_body_checkin\\\",\\\"depthLevel\\\":\\\"grounding_only\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[],\\\"writeActions\\\":[{\\\"kind\\\":\\\"body_state\\\",\\\"tool\\\":\\\"circulatio_store_body_state\\\",\\\"requiresApproval\\\":false,\\\"autonomous\\\":true}],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"I held that body state for you. Want to sit with the sensation for a moment?\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Ambient body-state intake routes directly to circulatio_store_body_state per store-first contract. Recurrence history and projection_language=withhold keep depth at grounding_only and surface at alive_today with a bounded body check-in.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776876943547,\"end\":1776876948942}}}\n{\"type\":\"step_finish\",\"timestamp\":1776876948946,\"sessionID\":\"ses_249e2436dffeGRLYvuHGr9AQ6u\",\"part\":{\"id\":\"prt_db61e8dd0001Jwp0x77m9WRrvf\",\"reason\":\"stop\",\"messageID\":\"msg_db61dbe30001w2j0igr8r5DAdo\",\"sessionID\":\"ses_249e2436dffeGRLYvuHGr9AQ6u\",\"type\":\"step-finish\",\"tokens\":{\"total\":28130,\"input\":16081,\"output\":71,\"reasoning\":1994,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008452156}}\n",
+  "warnings": []
+}

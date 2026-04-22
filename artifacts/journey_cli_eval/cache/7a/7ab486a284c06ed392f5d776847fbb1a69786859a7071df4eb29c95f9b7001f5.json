@@ -1,0 +1,106 @@
+{
+  "cacheKey": "7ab486a284c06ed392f5d776847fbb1a69786859a7071df4eb29c95f9b7001f5",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "relational_scene_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "relational_scene_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "relational_scene"
+          ],
+          "confidence": 1.0,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I recorded that scene. Want to notice what shifts in your body when the volume rises?",
+          "performedHostInterpretation": false,
+          "rationale": "User reported a recurring interpersonal dynamic (going quiet when someone gets loud, with a different person). This is a relational scene recurrence. Store-first routing directs to circulatio_record_relational_scene. Because consent for projection_language is 'ask', the host stays scene-first and avoids projection or diagnostic claims. The reply acknowledges the share and offers a gentle somatic invitation without interpreting.",
+          "readActions": [],
+          "selectedMoveKind": "ask_relational_scene",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_record_relational_scene"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": false,
+              "kind": "relational_scene",
+              "requiresApproval": false,
+              "tool": "circulatio_record_relational_scene"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878033497,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62f1a55001n2caOgQrKYZKuP\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878084948,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fcf3f001OZ22dQ0a6Ghjmj\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"relational_scene_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_record_relational_scene\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": null,\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_relational_scene\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"relational_scene\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"relational_scene\\\",\\n          \\\"tool\\\": \\\"circulatio_record_relational_scene\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I recorded that scene. Want to notice what shifts in your body when the volume rises?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"User reported a recurring interpersonal dynamic (going quiet when someone gets loud, with a different person). This is a relational scene recurrence. Store-first routing directs to circulatio_record_relational_scene. Because consent for projection_language is 'ask', the host stays scene-first and avoids projection or diagnostic claims. The reply acknowledges the share and offers a gentle somatic invitation without interpreting.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878079807,\"end\":1776878084944}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878084953,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fe356001if6fxUW0Q7I4Ww\",\"reason\":\"stop\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-finish\",\"tokens\":{\"total\":28452,\"input\":15927,\"output\":71,\"reasoning\":2470,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009040716}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "relational_scene_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "d1ad905c7e40fc9e26e601b0de0fa4751c4bbec1c827f393832970e2dff3e2a0",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/relational_scene_001",
+    "duration_ms": 59485,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:13:45.500122+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/relational_scene_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/relational_scene_001.stdout",
+    "stdout_sha256": "11047dbd468e28c9cf8d74e777bee47cbd86c03cd8f2e9aa466f563263b454ee",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878033497,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62f1a55001n2caOgQrKYZKuP\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878084948,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fcf3f001OZ22dQ0a6Ghjmj\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"relational_scene_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_record_relational_scene\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": null,\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_relational_scene\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"relational_scene\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"relational_scene\\\",\\n          \\\"tool\\\": \\\"circulatio_record_relational_scene\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I recorded that scene. Want to notice what shifts in your body when the volume rises?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"User reported a recurring interpersonal dynamic (going quiet when someone gets loud, with a different person). This is a relational scene recurrence. Store-first routing directs to circulatio_record_relational_scene. Because consent for projection_language is 'ask', the host stays scene-first and avoids projection or diagnostic claims. The reply acknowledges the share and offers a gentle somatic invitation without interpreting.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878079807,\"end\":1776878084944}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878084953,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fe356001if6fxUW0Q7I4Ww\",\"reason\":\"stop\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-finish\",\"tokens\":{\"total\":28452,\"input\":15927,\"output\":71,\"reasoning\":2470,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009040716}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "relational_scene_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_relational_scene"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "64f4c34c-8a63-45c2-9c94-a5cf86cb9c0d"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878033497,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62f1a55001n2caOgQrKYZKuP\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878084948,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fcf3f001OZ22dQ0a6Ghjmj\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"text\",\"text\":\"{\\n  \\\"caseId\\\": \\\"relational_scene_001\\\",\\n  \\\"turnResults\\\": [\\n    {\\n      \\\"turnId\\\": \\\"t1\\\",\\n      \\\"selectedToolSequence\\\": [\\n        \\\"circulatio_record_relational_scene\\\"\\n      ],\\n      \\\"toolArgsSummary\\\": null,\\n      \\\"selectedSurface\\\": \\\"alive_today\\\",\\n      \\\"selectedMoveKind\\\": \\\"ask_relational_scene\\\",\\n      \\\"depthLevel\\\": \\\"gentle\\\",\\n      \\\"captureTargets\\\": [\\n        \\\"relational_scene\\\"\\n      ],\\n      \\\"readActions\\\": [],\\n      \\\"writeActions\\\": [\\n        {\\n          \\\"kind\\\": \\\"relational_scene\\\",\\n          \\\"tool\\\": \\\"circulatio_record_relational_scene\\\",\\n          \\\"requiresApproval\\\": false,\\n          \\\"autonomous\\\": false\\n        }\\n      ],\\n      \\\"askedClarification\\\": false,\\n      \\\"performedHostInterpretation\\\": false,\\n      \\\"forbiddenEscalationsPresent\\\": [],\\n      \\\"hostReply\\\": \\\"I recorded that scene. Want to notice what shifts in your body when the volume rises?\\\",\\n      \\\"confidence\\\": 1.0,\\n      \\\"rationale\\\": \\\"User reported a recurring interpersonal dynamic (going quiet when someone gets loud, with a different person). This is a relational scene recurrence. Store-first routing directs to circulatio_record_relational_scene. Because consent for projection_language is 'ask', the host stays scene-first and avoids projection or diagnostic claims. The reply acknowledges the share and offers a gentle somatic invitation without interpreting.\\\"\\n    }\\n  ],\\n  \\\"globalNotes\\\": []\\n}\",\"time\":{\"start\":1776878079807,\"end\":1776878084944}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878084953,\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"part\":{\"id\":\"prt_db62fe356001if6fxUW0Q7I4Ww\",\"reason\":\"stop\",\"messageID\":\"msg_db62f00d7001cwPj8khwlPqAyO\",\"sessionID\":\"ses_249d100f7ffeA2dfFG1s1K66FI\",\"type\":\"step-finish\",\"tokens\":{\"total\":28452,\"input\":15927,\"output\":71,\"reasoning\":2470,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.009040716}}\n"
+}

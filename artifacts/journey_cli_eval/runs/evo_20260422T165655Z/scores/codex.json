@@ -1,0 +1,374 @@
+[
+  {
+    "adapter": "codex",
+    "case_id": "embodied_recurrence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 13,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 13,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "046aa733-ce24-4b13-a6c5-ed42c7c5b7f4"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "symbol_body_pressure_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 11,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 11,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_dream",
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "1ab5004c-21b6-4c4e-a5f1-a2835123ca77"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "thought_loop_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "244a8f06-f890-4ca2-b684-234cc9c373d7"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "relational_scene_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_relational_scene"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "7bf39740-b5a6-4b43-a543-71193617bdaf"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "practice_reentry_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [
+        "Unrecognized tool alias 'alive_today read of recent re-entry signals'.",
+        "Unrecognized tool alias 'alive_today read of active journey context'."
+      ],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_alive_today"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "5bc489e2-51d5-4f19-b20a-57de462ff158"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "practice_reentry_002",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 9,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 9,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [
+        "Unrecognized tool alias 'practice_session_history'.",
+        "Unrecognized tool alias 'adaptation_profile'."
+      ],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_generate_practice_recommendation"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "acd9e752-4f01-4180-ac71-9d272a54d16b"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "practice_reentry_003",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_method_state_respond"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "f77ba956-55b5-455e-b7aa-ce15cf33fc94"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "embodied_recurrence_003",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 13,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 13,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "783a4dd0-30da-44f6-907c-307f10382d93"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "journey_page_read_only_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 10,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 10,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [
+        "Unrecognized tool alias 'build_ephemeral_circulation_summary(surface=journey_page)'.",
+        "Unrecognized tool alias 'list_journeys(active_only)'.",
+        "Unrecognized tool alias 'list_practice_sessions(due_follow_up_check)'.",
+        "Unrecognized tool alias 'list_weekly_reviews(existing_only)'."
+      ],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_journey_page"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "9bfaa7a5-7d0c-46ae-ab52-63d3781d0242"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "goal_tension_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "f176436e-4860-46ad-a474-8dc1783dcee0"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "feedback_correction_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 9,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 9,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_interpretation_feedback"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "ee7db281-ea89-4da3-9019-a458d4315b20"
+    ]
+  },
+  {
+    "adapter": "codex",
+    "case_id": "overthinking_relational_convergence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "codex",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "273feb00-beca-4c82-bf9f-532f6ef09cce"
+    ]
+  }
+]

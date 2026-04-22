@@ -1,0 +1,99 @@
+{
+  "cacheKey": "9cc581fdb2f79394283591b2fc89c429d3bf49001f9688cb44314eabbcca10b8",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "journey_page_read_only_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "journey_page_read_only_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [],
+          "confidence": 1.0,
+          "depthLevel": null,
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "Here is your journey page.",
+          "performedHostInterpretation": false,
+          "rationale": "Explicit read-mostly surface request. Hermes correctly routes to circulatio_journey_page without writes, interpretation, or forbidden tool calls.",
+          "readActions": [
+            "circulatio_journey_page"
+          ],
+          "selectedMoveKind": null,
+          "selectedSurface": "journey_page",
+          "selectedToolSequence": [
+            "circulatio_journey_page"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": []
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878295454,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db633199a001GAAe8oLLaSSegS\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878325033,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db6338527001DoMa74Od1PyBeK\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"journey_page_read_only_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_journey_page\\\"],\\\"toolArgsSummary\\\":null,\\\"selectedSurface\\\":\\\"journey_page\\\",\\\"selectedMoveKind\\\":null,\\\"depthLevel\\\":null,\\\"captureTargets\\\":[],\\\"readActions\\\":[\\\"journey_page\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Here is your journey page.\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Explicit read-mostly surface request. Hermes correctly routes to circulatio_journey_page without writes, interpretation, or forbidden tool calls.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878322983,\"end\":1776878325032}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878325036,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db6338d2a001QbWXggsbZf9i8p\",\"reason\":\"stop\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"step-finish\",\"tokens\":{\"total\":27506,\"input\":15972,\"output\":-17,\"reasoning\":1567,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.007727176}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "journey_page_read_only_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "2e66dc30c1c5bb89394f9463edb13ac1439936d185fd5cc9274a3d2f21373eed",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/journey_page_read_only_001",
+    "duration_ms": 37437,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:18:07.631036+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/journey_page_read_only_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/journey_page_read_only_001.stdout",
+    "stdout_sha256": "4e3086423f5d2f22a8a328337995a36fb8491d56211289037b89735e9314f9c5",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878295454,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db633199a001GAAe8oLLaSSegS\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878325033,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db6338527001DoMa74Od1PyBeK\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"journey_page_read_only_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_journey_page\\\"],\\\"toolArgsSummary\\\":null,\\\"selectedSurface\\\":\\\"journey_page\\\",\\\"selectedMoveKind\\\":null,\\\"depthLevel\\\":null,\\\"captureTargets\\\":[],\\\"readActions\\\":[\\\"journey_page\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Here is your journey page.\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Explicit read-mostly surface request. Hermes correctly routes to circulatio_journey_page without writes, interpretation, or forbidden tool calls.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878322983,\"end\":1776878325032}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878325036,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db6338d2a001QbWXggsbZf9i8p\",\"reason\":\"stop\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"step-finish\",\"tokens\":{\"total\":27506,\"input\":15972,\"output\":-17,\"reasoning\":1567,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.007727176}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "journey_page_read_only_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 10,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 10,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_journey_page"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "6c87a33b-a06f-40f3-ac85-2407978cf56b"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878295454,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db633199a001GAAe8oLLaSSegS\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878325033,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db6338527001DoMa74Od1PyBeK\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"journey_page_read_only_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_journey_page\\\"],\\\"toolArgsSummary\\\":null,\\\"selectedSurface\\\":\\\"journey_page\\\",\\\"selectedMoveKind\\\":null,\\\"depthLevel\\\":null,\\\"captureTargets\\\":[],\\\"readActions\\\":[\\\"journey_page\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Here is your journey page.\\\",\\\"confidence\\\":1.0,\\\"rationale\\\":\\\"Explicit read-mostly surface request. Hermes correctly routes to circulatio_journey_page without writes, interpretation, or forbidden tool calls.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878322983,\"end\":1776878325032}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878325036,\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"part\":{\"id\":\"prt_db6338d2a001QbWXggsbZf9i8p\",\"reason\":\"stop\",\"messageID\":\"msg_db6330096001iJC04cdO2FjDHP\",\"sessionID\":\"ses_249cd0135ffebOBp5tqPIRAXTE\",\"type\":\"step-finish\",\"tokens\":{\"total\":27506,\"input\":15972,\"output\":-17,\"reasoning\":1567,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.007727176}}\n"
+}

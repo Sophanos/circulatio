@@ -1,0 +1,101 @@
+{
+  "cacheKey": "cf144ae17a36dbbc989fe0e5ee9d3b5b83a4ea9e2bcd360c7b8a7c833a34153c",
+  "normalized": {
+    "adapter": "opencode",
+    "case_id": "practice_reentry_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "practice_reentry_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "body_state"
+          ],
+          "confidence": 0.95,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "Welcome back. Your returning thread is still open \u2014 want to see what's alive today?",
+          "performedHostInterpretation": false,
+          "rationale": "Re-entry after 7 days with an active journey and a recent skipped practice. Using circulatio_alive_today keeps the turn read-mostly, avoids backlog pressure, and offers a gentle return-to-journey or body-check-in move without interpreting or writing new material.",
+          "readActions": [
+            "circulatio_alive_today"
+          ],
+          "selectedMoveKind": "return_to_journey",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_alive_today"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": []
+        }
+      ]
+    },
+    "raw_text": "{\"type\":\"step_start\",\"timestamp\":1776878091325,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db62ffc39001tnjK9bDQVl4kru\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878130560,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6308595001K6f7nSVi3iSnXm\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_alive_today\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"return_to_journey\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[\\\"circulatio_alive_today\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Welcome back. Your returning thread is still open \u2014 want to see what's alive today?\\\",\\\"confidence\\\":0.95,\\\"rationale\\\":\\\"Re-entry after 7 days with an active journey and a recent skipped practice. Using circulatio_alive_today keeps the turn read-mostly, avoids backlog pressure, and offers a gentle return-to-journey or body-check-in move without interpreting or writing new material.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878126485,\"end\":1776878130558}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878130562,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6309581001nIjaf3hipNYz6d\",\"reason\":\"stop\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-finish\",\"tokens\":{\"total\":27799,\"input\":16067,\"output\":9,\"reasoning\":1739,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008022896}}\n",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "opencode",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "practice_reentry_001",
+    "command_display": [
+      "opencode",
+      "run",
+      "--format",
+      "json"
+    ],
+    "command_hash": "6038f4d22d1f842eaf7d5d7c15127b2a786fea61b5cca3fdcd6b0ab2bc91c0ff",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260422T171052Z/opencode/practice_reentry_001",
+    "duration_ms": 45600,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-22T17:14:44.993877+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/practice_reentry_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260422T171052Z/raw/opencode/practice_reentry_001.stdout",
+    "stdout_sha256": "ef7c8f05a775251a6a37d729d1c2d47bacc8141e7b8fe5d9c6f6943ef5adb35f",
+    "stdout_text": "{\"type\":\"step_start\",\"timestamp\":1776878091325,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db62ffc39001tnjK9bDQVl4kru\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878130560,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6308595001K6f7nSVi3iSnXm\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_alive_today\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"return_to_journey\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[\\\"circulatio_alive_today\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Welcome back. Your returning thread is still open \u2014 want to see what's alive today?\\\",\\\"confidence\\\":0.95,\\\"rationale\\\":\\\"Re-entry after 7 days with an active journey and a recent skipped practice. Using circulatio_alive_today keeps the turn read-mostly, avoids backlog pressure, and offers a gentle return-to-journey or body-check-in move without interpreting or writing new material.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878126485,\"end\":1776878130558}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878130562,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6309581001nIjaf3hipNYz6d\",\"reason\":\"stop\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-finish\",\"tokens\":{\"total\":27799,\"input\":16067,\"output\":9,\"reasoning\":1739,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008022896}}\n",
+    "timed_out": false,
+    "version": "1.4.10",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "opencode",
+    "case_id": "practice_reentry_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "opencode",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_alive_today"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "4aff8ae5-c98a-49a1-9631-5a0cf4bfb4a6"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"type\":\"step_start\",\"timestamp\":1776878091325,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db62ffc39001tnjK9bDQVl4kru\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-start\"}}\n{\"type\":\"text\",\"timestamp\":1776878130560,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6308595001K6f7nSVi3iSnXm\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"text\",\"text\":\"{\\\"caseId\\\":\\\"practice_reentry_001\\\",\\\"turnResults\\\":[{\\\"turnId\\\":\\\"t1\\\",\\\"selectedToolSequence\\\":[\\\"circulatio_alive_today\\\"],\\\"toolArgsSummary\\\":{},\\\"selectedSurface\\\":\\\"alive_today\\\",\\\"selectedMoveKind\\\":\\\"return_to_journey\\\",\\\"depthLevel\\\":\\\"gentle\\\",\\\"captureTargets\\\":[\\\"body_state\\\"],\\\"readActions\\\":[\\\"circulatio_alive_today\\\"],\\\"writeActions\\\":[],\\\"askedClarification\\\":false,\\\"performedHostInterpretation\\\":false,\\\"forbiddenEscalationsPresent\\\":[],\\\"hostReply\\\":\\\"Welcome back. Your returning thread is still open \u2014 want to see what's alive today?\\\",\\\"confidence\\\":0.95,\\\"rationale\\\":\\\"Re-entry after 7 days with an active journey and a recent skipped practice. Using circulatio_alive_today keeps the turn read-mostly, avoids backlog pressure, and offers a gentle return-to-journey or body-check-in move without interpreting or writing new material.\\\"}],\\\"globalNotes\\\":[]}\",\"time\":{\"start\":1776878126485,\"end\":1776878130558}}}\n{\"type\":\"step_finish\",\"timestamp\":1776878130562,\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"part\":{\"id\":\"prt_db6309581001nIjaf3hipNYz6d\",\"reason\":\"stop\",\"messageID\":\"msg_db62fe90f001kcd1ow2CTM7pBt\",\"sessionID\":\"ses_249d018b3ffeOag06LnKC9XKB1\",\"type\":\"step-finish\",\"tokens\":{\"total\":27799,\"input\":16067,\"output\":9,\"reasoning\":1739,\"cache\":{\"write\":0,\"read\":9984}},\"cost\":0.008022896}}\n"
+}

@@ -1,0 +1,13 @@
+{
+  "adapter": "codex",
+  "case_id": "embodied_recurrence_001",
+  "parse_status": "failed",
+  "payload": {
+    "caseId": "embodied_recurrence_001",
+    "globalNotes": [],
+    "parseStatus": "failed",
+    "turnResults": []
+  },
+  "raw_text": "",
+  "warnings": []
+}

@@ -1,0 +1,106 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "write_budget",
+    "surface_shape",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "maxNewPracticeSessions": 0,
+    "readMostly": true
+  },
+  "caseId": "practice_reentry_001",
+  "caseKind": "single_turn_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "adaptationProfile": {
+      "lastInteractionAt": "2026-04-15T00:00:00Z"
+    },
+    "journeys": [
+      {
+        "label": "Returning thread"
+      }
+    ],
+    "practiceSessions": [
+      {
+        "note": "too much",
+        "status": "skipped"
+      }
+    ]
+  },
+  "journeyFamily": "PracticeReentry",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "execution_skill_routing.jsonl"
+    ],
+    "targetKinds": [
+      "skill"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "dev",
+  "tags": [
+    "re_entry",
+    "no_backlog"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge",
+    "method_eval"
+  ],
+  "title": "Return after absence is body-first or journey-light",
+  "turns": [
+    {
+      "expected": {
+        "depthLevel": {
+          "oneOf": [
+            "gentle",
+            null
+          ]
+        },
+        "forbiddenEscalations": [
+          "diagnostic_claim"
+        ],
+        "forbiddenTools": [
+          "circulatio_interpret_material"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "here's everything you missed",
+            "let's catch up on all of it"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "return_to_journey",
+            "ask_body_checkin",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "oneOf": [
+            "alive_today",
+            null
+          ]
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_alive_today"
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "return_after_absence",
+      "userTurn": "Hey, I'm back."
+    }
+  ]
+}
