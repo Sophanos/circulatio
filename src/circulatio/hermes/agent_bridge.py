@@ -171,6 +171,7 @@ class CirculatioAgentBridge:
                     suffix=" Replay safety information could not be saved.",
                 )
             return response
+        response = self._sanitize_response_for_host(request=request, response=response)
         try:
             await self._idempotency_store.complete(request["idempotencyKey"], response)
         except Exception:
@@ -219,7 +220,7 @@ class CirculatioAgentBridge:
         replayed["requestId"] = request["requestId"]
         replayed["idempotencyKey"] = request["idempotencyKey"]
         replayed["replayed"] = True
-        return replayed
+        return self._sanitize_response_for_host(request=request, response=replayed)
 
     async def _dispatch_started_request(
         self, request: BridgeRequestEnvelope
@@ -638,7 +639,11 @@ class CirculatioAgentBridge:
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
-            message=command_result["message"],
+            message=self._review_message(
+                kind="threshold_review",
+                message=command_result["message"],
+                review_result=review.get("result") if isinstance(review, dict) else None,
+            ),
             result=result,
             pending_proposals=pending,
             affected_entity_ids=command_result.get("affectedEntityIds", []),
@@ -683,7 +688,11 @@ class CirculatioAgentBridge:
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
-            message=command_result["message"],
+            message=self._review_message(
+                kind="living_myth_review",
+                message=command_result["message"],
+                review_result=review.get("result") if isinstance(review, dict) else None,
+            ),
             result=result,
             pending_proposals=pending,
             affected_entity_ids=command_result.get("affectedEntityIds", []),
@@ -699,15 +708,12 @@ class CirculatioAgentBridge:
         result: dict[str, object] = {"command": command_result["command"]}
         packet = command_result.get("analysisPacket")
         if isinstance(packet, dict):
-            result["packetId"] = packet["id"]
             result["packetTitle"] = packet["packetTitle"]
-            result["source"] = packet["source"]
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
-            message=command_result["message"],
+            message=self._analysis_packet_message(command_result["message"], packet),
             result=result,
-            affected_entity_ids=command_result.get("affectedEntityIds", []),
         )
 
     async def respond_practice(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
@@ -1026,8 +1032,10 @@ class CirculatioAgentBridge:
             return self._response(
                 request=request,
                 status="ok",
-                message=f"Loaded {len(pending)} pending method-state proposal(s).",
-                result={"captureRunId": capture_run_id},
+                message=self._pending_proposals_message(
+                    count=len(pending), capture_run=True, review=False
+                ),
+                result={},
                 pending_proposals=pending,
             )
         run_id = await self._resolve_run_id(
@@ -1042,8 +1050,10 @@ class CirculatioAgentBridge:
         return self._response(
             request=request,
             status="ok",
-            message=f"Loaded {len(pending)} pending proposal(s).",
-            result={"runId": run_id},
+            message=self._pending_proposals_message(
+                count=len(pending), capture_run=False, review=False
+            ),
+            result={},
             pending_proposals=pending,
         )
 
@@ -1051,7 +1061,10 @@ class CirculatioAgentBridge:
         self, request: BridgeRequestEnvelope
     ) -> BridgeResponseEnvelope:
         payload = request["payload"]
-        review_id = str(payload["reviewId"])
+        review_id = await self._resolve_review_id(
+            request=request,
+            review_ref=self._optional_string(payload.get("reviewId")),
+        )
         review = await self._service.repository.get_living_myth_review(request["userId"], review_id)
         pending_ids = self._pending_review_proposal_ids(review)
         plan = review.get("memoryWritePlan") or {"proposals": []}
@@ -1093,7 +1106,10 @@ class CirculatioAgentBridge:
         self, request: BridgeRequestEnvelope
     ) -> BridgeResponseEnvelope:
         payload = request["payload"]
-        review_id = str(payload["reviewId"])
+        review_id = await self._resolve_review_id(
+            request=request,
+            review_ref=self._optional_string(payload.get("reviewId")),
+        )
         review = await self._service.repository.get_living_myth_review(request["userId"], review_id)
         pending_ids = self._pending_review_proposal_ids(review)
         plan = review.get("memoryWritePlan") or {"proposals": []}
@@ -1135,7 +1151,10 @@ class CirculatioAgentBridge:
     async def list_pending_review_proposals(
         self, request: BridgeRequestEnvelope
     ) -> BridgeResponseEnvelope:
-        review_id = str(request["payload"]["reviewId"])
+        review_id = await self._resolve_review_id(
+            request=request,
+            review_ref=self._optional_string(request["payload"].get("reviewId")),
+        )
         review = await self._service.repository.get_living_myth_review(request["userId"], review_id)
         pending = await self._pending_review_proposals(
             user_id=request["userId"],
@@ -1145,7 +1164,9 @@ class CirculatioAgentBridge:
         return self._response(
             request=request,
             status="ok",
-            message=f"Loaded {len(pending)} pending review proposal(s).",
+            message=self._pending_proposals_message(
+                count=len(pending), capture_run=False, review=True
+            ),
             result={"reviewId": review_id},
             pending_proposals=pending,
         )
@@ -1267,17 +1288,20 @@ class CirculatioAgentBridge:
             window_start=str(payload["windowStart"]),
             window_end=str(payload["windowEnd"]),
         )
+        review = command_result.get("review")
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
-            message=command_result["message"],
+            message=self._review_message(
+                kind="weekly_review",
+                message=command_result["message"],
+                review_result=review.get("result") if isinstance(review, dict) else None,
+            ),
             result={
                 "command": command_result["command"],
-                "reviewId": command_result.get("review", {}).get("id"),
                 "windowStart": payload["windowStart"],
                 "windowEnd": payload["windowEnd"],
             },
-            affected_entity_ids=command_result.get("affectedEntityIds", []),
         )
 
     async def discovery(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
@@ -1327,11 +1351,11 @@ class CirculatioAgentBridge:
         return self._response(
             request=request,
             status="ok",
-            message="Loaded current witness state.",
+            message="Loaded a compact witness-state overview for this window.",
             result={
                 "windowStart": snapshot["windowStart"],
                 "windowEnd": snapshot["windowEnd"],
-                "witnessState": deepcopy(snapshot),
+                "witnessStateSummary": self._witness_state_summary(snapshot),
             },
         )
 
@@ -1606,12 +1630,11 @@ class CirculatioAgentBridge:
         return self._response(
             request=request,
             status="ok",
-            message=page["fallbackText"],
+            message="Loaded a compact journey overview for the requested window.",
             result={
-                "journeyPageId": page["pageId"],
                 "windowStart": page["windowStart"],
                 "windowEnd": page["windowEnd"],
-                "journeyPage": deepcopy(page),
+                "journeyPageSummary": self._journey_page_summary(page),
             },
         )
 
@@ -1667,7 +1690,7 @@ class CirculatioAgentBridge:
             status="ok",
             message=message,
             result={
-                "journeys": deepcopy(journeys),
+                "journeys": [self._journey_summary(item) for item in journeys],
                 "journeyCount": len(journeys),
             },
             affected_entity_ids=[item["id"] for item in journeys],
@@ -1691,10 +1714,8 @@ class CirculatioAgentBridge:
             status="ok",
             message=f'Loaded journey "{journey["label"]}".',
             result={
-                "journeyId": journey["id"],
-                "journey": deepcopy(journey),
+                "journey": self._journey_summary(journey),
             },
-            affected_entity_ids=[journey["id"]],
         )
 
     async def update_journey(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
@@ -2080,6 +2101,22 @@ class CirculatioAgentBridge:
         }
         return {key: deepcopy(value) for key, value in payload.items() if key in allowed_keys}
 
+    async def _resolve_review_id(
+        self,
+        *,
+        request: BridgeRequestEnvelope,
+        review_ref: str | None,
+    ) -> Id:
+        if review_ref is not None:
+            return review_ref
+        reviews = await self._service.repository.list_living_myth_reviews(
+            request["userId"],
+            limit=1,
+        )
+        if not reviews:
+            raise EntityNotFoundError("No recent living-myth or threshold review was found.")
+        return reviews[0]["id"]
+
     def _bridge_status_for_command(self, result: HermesCommandResult) -> BridgeStatus:
         mapping: dict[str, BridgeStatus] = {
             "ok": "ok",
@@ -2178,6 +2215,258 @@ class CirculatioAgentBridge:
             "doNotRetryInterpretMaterialWithUnchangedMaterial": True,
             "nextAction": "await_user_input",
         }
+
+    def _journey_page_summary(self, page: dict[str, object]) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "title": self._optional_string(page.get("title")) or "Journey overview",
+            "windowStart": page.get("windowStart"),
+            "windowEnd": page.get("windowEnd"),
+        }
+        alive_today = page.get("aliveToday")
+        if isinstance(alive_today, dict):
+            response = self._optional_string(alive_today.get("response"))
+            if response:
+                summary["aliveToday"] = response
+        weekly_surface = page.get("weeklySurface")
+        if isinstance(weekly_surface, dict):
+            weekly_summary = self._optional_string(weekly_surface.get("summary"))
+            if weekly_summary:
+                summary["weeklyReflection"] = weekly_summary
+        invitations = page.get("rhythmicInvitations")
+        if isinstance(invitations, list) and invitations:
+            summary["rhythmicInvitationCount"] = len(invitations)
+        practice_container = page.get("practiceContainer")
+        if isinstance(practice_container, dict):
+            practice_summary = self._optional_string(practice_container.get("summary"))
+            if practice_summary:
+                summary["practiceFollowUp"] = self._plain_practice_follow_up(practice_summary)
+        analysis_packet = page.get("analysisPacket")
+        if isinstance(analysis_packet, dict):
+            sections = analysis_packet.get("sections")
+            if isinstance(sections, list) and sections:
+                summary["analysisPreviewSections"] = [
+                    self._journey_section_label(str(item.get("title") or "Section"))
+                    for item in sections[:4]
+                    if isinstance(item, dict) and str(item.get("title") or "").strip()
+                ]
+        return summary
+
+    def _journey_summary(self, journey: dict[str, object]) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "label": self._optional_string(journey.get("label")) or "Journey",
+        }
+        current_question = self._optional_string(journey.get("currentQuestion"))
+        if current_question:
+            summary["currentQuestion"] = current_question
+        return summary
+
+    def _journey_section_label(self, title: str) -> str:
+        mapping = {
+            "Life context": "Alltag und Umfeld",
+            "Method context": "Innere Haltung",
+            "Live threads": "Lebendige Fäden",
+            "Practice context": "Praxis",
+        }
+        return mapping.get(title, title)
+
+    def _plain_practice_follow_up(self, summary: str) -> str:
+        if "interpretation model is unavailable" in summary.lower():
+            return "Bleib vorerst nah am Material und in deinen eigenen Worten."
+        return summary
+
+    def _witness_state_summary(self, snapshot: dict[str, object]) -> dict[str, object]:
+        summary: dict[str, object] = {}
+        stance = self._optional_string(snapshot.get("stance"))
+        if stance:
+            summary["stance"] = stance.replace("_", " ")
+        tone = self._optional_string(snapshot.get("tone"))
+        if tone:
+            summary["tone"] = tone
+        reasons = snapshot.get("reasons")
+        if isinstance(reasons, list):
+            visible_reasons = [str(item).strip() for item in reasons if str(item).strip()]
+            if visible_reasons:
+                summary["focus"] = visible_reasons[:2]
+        return summary
+
+    def _review_message(
+        self,
+        *,
+        kind: str,
+        message: str,
+        review_result: object,
+    ) -> str:
+        fallback_messages = {
+            "weekly_review": (
+                "A quieter weekly reflection is available for this window. "
+                "Stay close to the material that is already here."
+            ),
+            "threshold_review": (
+                "A threshold reflection is not available for this window right now. "
+                "Offer a plain weekly reflection or a concise evidence summary instead, without speculating about why."
+            ),
+            "living_myth_review": (
+                "A living-myth reflection is not available right now. "
+                "We can stay with the material that is already here instead."
+            ),
+        }
+        if isinstance(review_result, dict):
+            llm_health = review_result.get("llmHealth")
+            source = (
+                self._optional_string(llm_health.get("source"))
+                if isinstance(llm_health, dict)
+                else None
+            )
+            if source == "fallback":
+                return fallback_messages.get(kind, message)
+            return message
+        lowered = message.lower()
+        if "model path" not in lowered and "speicherkonflikt" not in lowered and "storage conflict" not in lowered:
+            return message
+        return fallback_messages.get(kind, message)
+
+    def _analysis_packet_message(self, message: str, packet: object) -> str:
+        if isinstance(packet, dict) and self._optional_string(packet.get("source")) == "bounded_fallback":
+            return "A concise evidence summary is available from material that is already here."
+        if "bounded packet" in message.lower():
+            return "A concise evidence summary is available from material that is already here."
+        return message
+
+    def _pending_proposals_message(self, *, count: int, capture_run: bool, review: bool) -> str:
+        if count == 0:
+            if review:
+                return "There are no approval-gated review suggestions waiting right now."
+            if capture_run:
+                return "There are no approval-gated follow-up suggestions waiting right now."
+            return "There are no approval-gated suggestions waiting right now."
+        if review:
+            return (
+                f"There {'is' if count == 1 else 'are'} {count} approval-gated "
+                f"review suggestion{'s' if count != 1 else ''} waiting."
+            )
+        if capture_run:
+            return (
+                f"There {'is' if count == 1 else 'are'} {count} approval-gated "
+                f"follow-up suggestion{'s' if count != 1 else ''} waiting."
+            )
+        return (
+            f"There {'is' if count == 1 else 'are'} {count} approval-gated "
+            f"suggestion{'s' if count != 1 else ''} waiting."
+        )
+
+    def _sanitize_response_for_host(
+        self,
+        *,
+        request: BridgeRequestEnvelope,
+        response: BridgeResponseEnvelope,
+    ) -> BridgeResponseEnvelope:
+        sanitized = deepcopy(response)
+        operation = request["operation"]
+        result = sanitized.get("result", {})
+        if not isinstance(result, dict):
+            result = {}
+            sanitized["result"] = result
+        if operation == "circulatio.journey.page":
+            page = result.get("journeyPage")
+            if isinstance(page, dict):
+                sanitized["message"] = "Loaded a compact journey overview for the requested window."
+                sanitized["result"] = {
+                    "windowStart": page.get("windowStart"),
+                    "windowEnd": page.get("windowEnd"),
+                    "journeyPageSummary": self._journey_page_summary(page),
+                }
+                sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.journeys.get":
+            journey = result.get("journey")
+            if isinstance(journey, dict):
+                sanitized["result"] = {"journey": self._journey_summary(journey)}
+                sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.journeys.list":
+            journeys = result.get("journeys")
+            if isinstance(journeys, list):
+                sanitized["result"] = {
+                    "journeys": [
+                        self._journey_summary(item)
+                        for item in journeys
+                        if isinstance(item, dict)
+                    ],
+                    "journeyCount": result.get("journeyCount", len(journeys)),
+                }
+                sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.witness.state":
+            snapshot = result.get("witnessState")
+            if isinstance(snapshot, dict):
+                sanitized["message"] = "Loaded a compact witness-state overview for this window."
+                sanitized["result"] = {
+                    "windowStart": snapshot.get("windowStart"),
+                    "windowEnd": snapshot.get("windowEnd"),
+                    "witnessStateSummary": self._witness_state_summary(snapshot),
+                }
+            return sanitized
+        if operation == "circulatio.review.weekly":
+            sanitized["message"] = self._review_message(
+                kind="weekly_review",
+                message=sanitized.get("message", ""),
+                review_result=None,
+            )
+            result.pop("reviewId", None)
+            sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.review.threshold":
+            sanitized["message"] = self._review_message(
+                kind="threshold_review",
+                message=sanitized.get("message", ""),
+                review_result=None,
+            )
+            sanitized["result"] = {}
+            sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.review.living_myth":
+            sanitized["message"] = self._review_message(
+                kind="living_myth_review",
+                message=sanitized.get("message", ""),
+                review_result=None,
+            )
+            sanitized["result"] = {}
+            sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.packet.analysis":
+            sanitized["message"] = self._analysis_packet_message(
+                sanitized.get("message", ""),
+                {
+                    "source": result.get("source"),
+                },
+            )
+            packet_title = result.get("packetTitle")
+            sanitized["result"] = (
+                {"packetTitle": packet_title}
+                if isinstance(packet_title, str) and packet_title.strip()
+                else {}
+            )
+            sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.proposals.list_pending":
+            pending = sanitized.get("pendingProposals", [])
+            sanitized["message"] = self._pending_proposals_message(
+                count=len(pending) if isinstance(pending, list) else 0,
+                capture_run=bool(result.get("captureRunId")),
+                review=False,
+            )
+            sanitized["result"] = {}
+            return sanitized
+        if operation == "circulatio.review.proposals.list_pending":
+            pending = sanitized.get("pendingProposals", [])
+            sanitized["message"] = self._pending_proposals_message(
+                count=len(pending) if isinstance(pending, list) else 0,
+                capture_run=False,
+                review=True,
+            )
+            sanitized["result"] = {}
+            return sanitized
+        return sanitized
 
     def _validate_request(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope | None:
         if not request.get("idempotencyKey"):
@@ -2279,15 +2568,27 @@ class CirculatioAgentBridge:
             return self._response(
                 request=request,
                 status="conflict",
-                message=str(exc),
-                errors=[self._error("profile_storage_conflict", str(exc), retryable=False)],
+                message="This reflection is not available right now. Please try again shortly.",
+                errors=[
+                    self._error(
+                        "profile_storage_conflict",
+                        "This reflection is not available right now.",
+                        retryable=False,
+                    )
+                ],
             )
         if isinstance(exc, ProfileStorageCorruptionError):
             return self._response(
                 request=request,
                 status="error",
-                message=str(exc),
-                errors=[self._error("profile_storage_corruption", str(exc), retryable=False)],
+                message="This reflection could not be completed right now.",
+                errors=[
+                    self._error(
+                        "profile_storage_corruption",
+                        "This reflection could not be completed right now.",
+                        retryable=False,
+                    )
+                ],
             )
         if isinstance(exc, PersistenceError):
             code = "profile_storage_unavailable" if exc.retryable else "profile_storage_error"
@@ -2295,22 +2596,40 @@ class CirculatioAgentBridge:
             return self._response(
                 request=request,
                 status=status,
-                message=str(exc),
-                errors=[self._error(code, str(exc), retryable=exc.retryable)],
+                message="Circulatio could not complete this request right now.",
+                errors=[
+                    self._error(
+                        code,
+                        "Circulatio could not complete this request right now.",
+                        retryable=exc.retryable,
+                    )
+                ],
             )
         if isinstance(exc, ConflictError):
             return self._response(
                 request=request,
                 status="conflict",
-                message=str(exc),
-                errors=[self._error("conflict", str(exc), retryable=False)],
+                message="Circulatio could not complete this request right now.",
+                errors=[
+                    self._error(
+                        "conflict",
+                        "Circulatio could not complete this request right now.",
+                        retryable=False,
+                    )
+                ],
             )
         if isinstance(exc, CirculatioError):
             return self._response(
                 request=request,
                 status="error",
-                message=str(exc),
-                errors=[self._error("circulatio_error", str(exc), retryable=False)],
+                message="Circulatio could not complete this request right now.",
+                errors=[
+                    self._error(
+                        "circulatio_error",
+                        "Circulatio could not complete this request right now.",
+                        retryable=False,
+                    )
+                ],
             )
         return self._response(
             request=request,
