@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://circulatio.local/tests/evals/hermes_real_host/schema/host_case.schema.json",
+  "title": "HermesRealHostCase",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "caseId",
+    "title",
+    "split",
+    "severity",
+    "testLayers",
+    "turns"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "caseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "split": {
+      "type": "string",
+      "enum": ["train", "dev", "holdout", "redteam", "regression"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["blocking", "major", "minor"]
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "default": []
+    },
+    "testLayers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["real_host_smoke", "hermes_bridge", "method_eval", "backend"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/turn"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toolSequencePrefix": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "requiredTools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "forbiddenTools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "requiredReplySubstrings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "forbiddenReplySubstrings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "noInternalLeak": {
+          "type": "boolean",
+          "default": false
+        },
+        "maxQuestions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxSentences": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxReplyChars": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "allowTimeout": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["turnId", "userTurn", "expected"],
+      "properties": {
+        "turnId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "userTurn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected": {
+          "$ref": "#/$defs/expected"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

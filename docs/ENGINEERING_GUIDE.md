@@ -134,6 +134,7 @@ As of April 2026, the Phase 8/9 backend slice is also present in the main runtim
 * personalization now includes durable `InteractionFeedbackRecord` events, typed explicit-preference scopes, learned communication/practice policy slots under `learnedSignals`, derived runtime hints for prompts, and Hermes-side Atropos communication/practice env builders for bounded policy-learning
 * Hermes may now autonomously create and update `JourneyRecord` containers as low-risk organizational writes, resolve them by exact/normalized human label when the host supplies that label, and expose explicit journey lifecycle slash commands for QA/debug/demo, while interpretation-derived durable symbolic memory remains approval-gated
 * the repo now includes an external Hermes-host smoke harness that installs Circulatio into a temporary Hermes home/site-packages path and exercises host-level plugin load, store, journey lifecycle, and page rendering without adding a second command-only architecture
+* the repo now also includes a conversational real-host QA protocol at `tests/evals/HERMES_CIRCULATIO_REAL_HOST_HARNESS.md` for strict operator-driven routing, leak, fallback, and retry-loop checks through `hermes chat`
 
 The remaining work in this area should be refinement, wider validation, and documentation upkeep rather than a new architectural phase transition.
 
