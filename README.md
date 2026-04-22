@@ -1,12 +1,77 @@
 # Circulatio
 
+Circulatio is a symbolic-memory backend for Hermes.
+
+**Hold first, interpret later, approve before writing symbolic memory.**
+
+## Quickstart
+
+### Install
+
+```bash
+git clone https://github.com/Sophanos/circulatio.git
+cd circulatio
+
+# Install into Hermes's own interpreter
+~/.hermes/hermes-agent/venv/bin/python3 -m pip install -e "$PWD"
+
+# Canonical plugin path
+mkdir -p ~/.hermes/plugins
+ln -sfn "$PWD/src/circulatio_hermes_plugin" ~/.hermes/plugins/circulatio
+
+hermes plugins enable circulatio
+hermes plugins list
+```
+
+### Verify
+
+```text
+/plugins
+/circulation journey list
+```
+
+Expected:
+- `/plugins` shows `circulatio`
+- `/circulation journey list` does not say `Unknown command`
+
+### 60-second demo
+
+In Hermes, first store a dream:
+
+```text
+Ich habe geträumt, ein schwarzer Hund stand reglos vor meiner Haustür.
+```
+
+Expected shape:
+- Hermes stores the dream first
+- the reply briefly acknowledges it
+- no full interpretation is forced yet
+
+Then ask for interpretation:
+
+```text
+Lass uns den Traum interpretieren.
+```
+
+Expected shape:
+- Circulatio starts a collaborative interpretation
+- the first reply is usually one bounded question, not a full reading
+
+Example reply shape:
+
+```text
+Der Traum ist gespeichert, und ich möchte mit dir gemeinsam hineingehen.
+
+Welcher Moment oder welches Bild fühlt sich darin gerade am lebendigsten an?
+```
+
+---
+
 Every app captures. Almost none help you become.
 
 Circulatio is a companion system for inner work. It holds your dreams, body states, reflections, and charged events — not as data to warehouse, but as living material for meaning.
 
 Symbols are personal, yet they belong to something older than you. The snake in your cellar is yours, but it is also centuries of myth, literature, and human experience speaking through you. Circulatio traces these threads: your own recurring images, their echoes in culture and history, and the direction your soul is trying to take.
-
-**Hold first, interpret later, approve before writing symbolic memory.**
 
 Journals store. Chatbots react. Circulatio creates meaning and continuity:
 
@@ -24,7 +89,7 @@ It holds, remembers, and helps patterns become visible.
 
 ---
 
-## Setup And Installation
+## Detailed Setup And Installation
 
 ### Prerequisites
 
@@ -64,10 +129,10 @@ Hermes discovers plugins by looking for a directory containing a `plugin.yaml` f
 
 ```bash
 mkdir -p ~/.hermes/plugins
-ln -sfn "$CIRCULATIO_PATH/hermes_plugin/circulatio" ~/.hermes/plugins/circulatio
+ln -sfn "$CIRCULATIO_PATH/src/circulatio_hermes_plugin" ~/.hermes/plugins/circulatio
 ```
 
-**What this does:** creates a symlink pointing Hermes to the plugin manifest (`hermes_plugin/circulatio/plugin.yaml`) that declares which tools and commands Circulatio provides.
+**What this does:** creates a symlink pointing Hermes to the packaged plugin manifest (`src/circulatio_hermes_plugin/plugin.yaml`) that declares which tools and commands Circulatio provides.
 
 > **Why two steps?** `pip install -e` makes the Python code importable; the symlink tells Hermes "there is a plugin here and here is its manifest." Both are required.
 
@@ -123,7 +188,7 @@ pip install -e ".[dev]" --upgrade
 |---------|-------|-----|
 | `which hermes` returns nothing | Hermes is not installed or not on your `PATH` | Install Hermes first |
 | `Plugin 'circulatio' is not installed or bundled.` | You installed Circulatio into the wrong Python environment | Use the interpreter shown by `head -n 1 "$(which hermes)"` |
-| `plugin.yaml not found` or plugin fails to load | The symlink points to the wrong directory | Make sure the symlink target is `$CIRCULATIO_PATH/hermes_plugin/circulatio` (the directory that contains `plugin.yaml`) |
+| `plugin.yaml not found` or plugin fails to load | The symlink points to the wrong directory | Make sure the symlink target is `$CIRCULATIO_PATH/src/circulatio_hermes_plugin` (the directory that contains `plugin.yaml`) |
 | Permission denied on `~/.hermes/plugins` | The directory does not exist or has wrong permissions | Run `mkdir -p ~/.hermes/plugins` and check ownership |
 
 ---
