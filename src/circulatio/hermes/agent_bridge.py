@@ -441,15 +441,15 @@ class CirculatioAgentBridge:
 
     async def interpret_material(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
-        kwargs = self._material_kwargs(payload)
         material_id = self._optional_string(payload.get("materialId"))
         if material_id is not None:
             workflow = await self._service.interpret_existing_material(
                 user_id=request["userId"],
                 material_id=material_id,
-                **kwargs,
+                **self._interpret_existing_material_kwargs(payload),
             )
         else:
+            kwargs = self._material_kwargs(payload)
             material_type = self._optional_string(payload.get("materialType"))
             text = self._optional_string(payload.get("text"))
             if not material_type or not text:
@@ -480,19 +480,27 @@ class CirculatioAgentBridge:
                 run=stored_run,
             )
         interpretation = workflow["interpretation"]
+        continuation_state = self._interpretation_continuation_state(
+            material_id=workflow["material"]["id"],
+            run_id=run["id"],
+            interpretation=interpretation,
+        )
+        result = {
+            "materialId": workflow["material"]["id"],
+            "runId": run["id"],
+            "safetyStatus": interpretation["safetyDisposition"]["status"],
+            "llmInterpretationHealth": interpretation.get("llmInterpretationHealth"),
+            "clarifyingQuestion": interpretation.get("clarifyingQuestion"),
+            "depthEngineHealth": deepcopy(interpretation.get("depthEngineHealth")),
+            "methodGate": deepcopy(interpretation.get("methodGate")),
+        }
+        if continuation_state is not None:
+            result["continuationState"] = continuation_state
         return self._response(
             request=request,
             status="blocked" if interpretation["safetyDisposition"]["status"] != "clear" else "ok",
             message=interpretation["userFacingResponse"],
-            result={
-                "materialId": workflow["material"]["id"],
-                "runId": run["id"],
-                "safetyStatus": interpretation["safetyDisposition"]["status"],
-                "llmInterpretationHealth": interpretation.get("llmInterpretationHealth"),
-                "clarifyingQuestion": interpretation.get("clarifyingQuestion"),
-                "depthEngineHealth": deepcopy(interpretation.get("depthEngineHealth")),
-                "methodGate": deepcopy(interpretation.get("methodGate")),
-            },
+            result=result,
             pending_proposals=pending,
             affected_entity_ids=[workflow["material"]["id"], run["id"]],
         )
@@ -524,8 +532,14 @@ class CirculatioAgentBridge:
                 session_id=request["source"].get("sessionId"),
                 capture_run=capture_run,
             )
+        continuation_state = self._method_state_continuation_state(
+            source=str(payload.get("source") or ""),
+            workflow=workflow,
+        )
         message = "Method-state response was processed without durable capture."
-        if workflow["pendingProposals"]:
+        if continuation_state["kind"] in {"context_answer_recorded", "provider_unavailable"}:
+            message = "I've kept that with the material."
+        elif workflow["pendingProposals"]:
             message = (
                 "Method-state response was processed; approval-gated proposals remain pending."
             )
@@ -551,6 +565,7 @@ class CirculatioAgentBridge:
                 "followUpPrompts": deepcopy(workflow["followUpPrompts"]),
                 "withheldCandidates": deepcopy(workflow["withheldCandidates"]),
                 "warnings": deepcopy(workflow["warnings"]),
+                "continuationState": continuation_state,
             },
             pending_proposals=pending,
             affected_entity_ids=list(dict.fromkeys(affected_entity_ids)),
@@ -1975,6 +1990,24 @@ class CirculatioAgentBridge:
         }
         return {key: deepcopy(value) for key, value in payload.items() if key in allowed_keys}
 
+    def _interpret_existing_material_kwargs(self, payload: dict[str, object]) -> dict[str, object]:
+        key_map = {
+            "sessionContext": "session_context",
+            "lifeContextSnapshot": "life_context_snapshot",
+            "lifeOsWindow": "life_os_window",
+            "userAssociations": "user_associations",
+            "explicitQuestion": "explicit_question",
+            "culturalOrigins": "cultural_origins",
+            "safetyContext": "safety_context",
+            "options": "options",
+            "dreamStructure": "dream_structure",
+        }
+        return {
+            target_key: deepcopy(payload[source_key])
+            for source_key, target_key in key_map.items()
+            if source_key in payload
+        }
+
     def _store_material_kwargs(self, payload: dict[str, object]) -> dict[str, object]:
         allowed_keys = {
             "materialDate",
@@ -2051,6 +2084,101 @@ class CirculatioAgentBridge:
             "error": "error",
         }
         return mapping[result["status"]]
+
+    def _interpretation_continuation_state(
+        self,
+        *,
+        material_id: Id,
+        run_id: Id,
+        interpretation: dict[str, object],
+    ) -> dict[str, object] | None:
+        clarifying_question = self._optional_string(interpretation.get("clarifyingQuestion"))
+        method_gate = interpretation.get("methodGate")
+        method_gate_waiting = isinstance(method_gate, dict) and (
+            any(str(item).strip() for item in method_gate.get("missingPrerequisites", []))
+            or any(str(item).strip() for item in method_gate.get("requiredPrompts", []))
+            or self._optional_string(method_gate.get("depthLevel"))
+            in {
+                "grounding_only",
+                "observations_only",
+                "personal_amplification_needed",
+                "cautious_pattern_note",
+            }
+        )
+        if not clarifying_question and not method_gate_waiting:
+            return None
+        reason = "clarifying_question" if clarifying_question else "method_gate"
+        llm_health = interpretation.get("llmInterpretationHealth")
+        depth_engine_health = interpretation.get("depthEngineHealth")
+        if (
+            isinstance(llm_health, dict)
+            and self._optional_string(llm_health.get("source")) == "fallback"
+        ) or (
+            isinstance(depth_engine_health, dict)
+            and self._optional_string(depth_engine_health.get("source")) == "fallback"
+        ):
+            reason = "fallback_collaborative_opening"
+        anchor_refs: dict[str, object] = {"materialId": material_id, "runId": run_id}
+        expected_targets: list[str] = []
+        storage_policy = "await_new_input"
+        clarification_intent = interpretation.get("clarificationIntent")
+        if isinstance(clarification_intent, dict):
+            ref_key = self._optional_string(clarification_intent.get("refKey"))
+            if ref_key:
+                anchor_refs["clarificationRefKey"] = ref_key
+            expected_targets = [
+                str(item)
+                for item in clarification_intent.get("expectedTargets", [])
+                if str(item).strip()
+            ]
+            storage_policy = (
+                self._optional_string(clarification_intent.get("storagePolicy"))
+                or storage_policy
+            )
+        return {
+            "kind": "waiting_for_follow_up",
+            "reason": reason,
+            "anchorRefs": anchor_refs,
+            "expectedTargets": expected_targets,
+            "storagePolicy": storage_policy,
+            "doNotRetryInterpretMaterialWithUnchangedMaterial": True,
+            "nextTool": "circulatio_method_state_respond",
+        }
+
+    def _method_state_continuation_state(
+        self,
+        *,
+        source: str,
+        workflow: dict[str, object],
+    ) -> dict[str, object]:
+        warnings = {
+            str(item)
+            for item in workflow.get("warnings", [])
+            if str(item).strip()
+        }
+        provider_unavailable = bool(
+            warnings
+            & {
+                "method_state_routing_timeout",
+                "method_state_routing_provider_failed",
+                "method_state_routing_contract_failed",
+            }
+        )
+        if provider_unavailable:
+            kind = "provider_unavailable"
+        elif workflow.get("pendingProposals"):
+            kind = "proposal_pending"
+        elif workflow.get("appliedEntityRefs"):
+            kind = "capture_completed"
+        elif source == "clarifying_answer":
+            kind = "context_answer_recorded"
+        else:
+            kind = "no_capture"
+        return {
+            "kind": kind,
+            "doNotRetryInterpretMaterialWithUnchangedMaterial": True,
+            "nextAction": "await_user_input",
+        }
 
     def _validate_request(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope | None:
         if not request.get("idempotencyKey"):
