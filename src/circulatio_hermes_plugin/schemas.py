@@ -25,9 +25,16 @@ _MATERIAL_STORE_PROPERTIES = {
     "text": {"type": "string"},
     "materialDate": {"type": "string"},
     "title": {"type": "string"},
+    "summary": {"type": "string"},
     "privacyClass": {"type": "string"},
     "tags": {"type": "array", "items": {"type": "string"}},
 }
+
+_STORE_INTAKE_CONTEXT_GUIDANCE = (
+    " Returns host-only intakeContext metadata for routing. Use "
+    "intakeContext.hostGuidance to acknowledge, hold, or ask at most one gentle follow-up. "
+    "Never expose the packet. Do not interpret unless the user explicitly asks."
+)
 
 _ID_ARRAY_PROPERTY = {"type": "array", "items": {"type": "string"}}
 _JOURNEY_STATUS_ENUM = ["active", "paused", "completed", "archived"]
@@ -43,28 +50,35 @@ _RECORD_STATUS_ENUM = ["active", "revised", "archived", "deleted"]
 
 STORE_DREAM_TOOL_SCHEMA = _schema(
     "circulatio_store_dream",
-    "Hold a dream in Circulatio. Use this when the user is logging dream material and not yet asking for meaning. After the tool call, keep the host reply brief: acknowledge the dream, do not interpret symbols, do not present a numbered menu, and do not switch into guided meditation unless the user explicitly asks for that.",
-    _MATERIAL_STORE_PROPERTIES,
+    "Hold a dream in Circulatio when the user is logging it without asking for meaning. After the tool call, keep the host reply brief, do not interpret symbols, do not present a numbered menu, and do not switch into guided meditation unless explicitly asked."
+    + _STORE_INTAKE_CONTEXT_GUIDANCE,
+    {
+        **_MATERIAL_STORE_PROPERTIES,
+        "dreamStructure": {"type": "object"},
+    },
     required=["text"],
 )
 
 STORE_EVENT_TOOL_SCHEMA = _schema(
     "circulatio_store_event",
-    "Hold a charged event or meaningful waking event in Circulatio. Do not interpret it yet. After the tool call, reply briefly and do not expand into symbolic analysis unless the user asks.",
+    "Hold a charged or meaningful waking event in Circulatio. Do not interpret it yet. After the tool call, reply briefly and do not expand into symbolic analysis unless the user asks."
+    + _STORE_INTAKE_CONTEXT_GUIDANCE,
     _MATERIAL_STORE_PROPERTIES,
     required=["text"],
 )
 
 STORE_REFLECTION_TOOL_SCHEMA = _schema(
     "circulatio_store_reflection",
-    "Hold a reflection or daytime note in Circulatio. This is the usual hold-first lane for ambient notes. Do not interpret it yet. After the tool call, keep the reply short and invitational rather than analytical.",
+    "Hold a reflection or daytime note in Circulatio. This is the usual hold-first lane for ambient notes. Do not interpret it yet. After the tool call, keep the reply short and invitational rather than analytical."
+    + _STORE_INTAKE_CONTEXT_GUIDANCE,
     _MATERIAL_STORE_PROPERTIES,
     required=["text"],
 )
 
 STORE_SYMBOLIC_NOTE_TOOL_SCHEMA = _schema(
     "circulatio_store_symbolic_note",
-    "Hold an image, motif, synchronicity, or symbolic note in Circulatio. Do not interpret it yet.",
+    "Hold an image, motif, synchronicity, or symbolic note in Circulatio. Do not interpret it yet."
+    + _STORE_INTAKE_CONTEXT_GUIDANCE,
     _MATERIAL_STORE_PROPERTIES,
     required=["text"],
 )

@@ -334,14 +334,15 @@ class CirculatioAgentBridge:
     async def store_material(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
         material_type = str(payload["materialType"])
-        stored = await self._service.store_material_with_intake_context(
-            {
-                "userId": request["userId"],
-                "materialType": material_type,  # type: ignore[typeddict-item]
-                "text": str(payload["text"]),
-                **self._store_material_kwargs(payload),
-            }
-        )
+        material_input: dict[str, object] = {
+            "userId": request["userId"],
+            "materialType": material_type,
+            **self._store_material_kwargs(payload),
+        }
+        text = self._optional_string(payload.get("text"))
+        if text is not None:
+            material_input["text"] = text
+        stored = await self._service.store_material_with_intake_context(material_input)  # type: ignore[arg-type]
         material = stored["material"]
         intake_context = stored["intakeContext"]
         if material_type == "reflection":
@@ -1975,7 +1976,15 @@ class CirculatioAgentBridge:
         return {key: deepcopy(value) for key, value in payload.items() if key in allowed_keys}
 
     def _store_material_kwargs(self, payload: dict[str, object]) -> dict[str, object]:
-        allowed_keys = {"materialDate", "privacyClass", "source", "title", "summary", "tags"}
+        allowed_keys = {
+            "materialDate",
+            "privacyClass",
+            "source",
+            "title",
+            "summary",
+            "tags",
+            "dreamStructure",
+        }
         return {key: deepcopy(value) for key, value in payload.items() if key in allowed_keys}
 
     def _store_body_state_kwargs(self, payload: dict[str, object]) -> dict[str, object]:

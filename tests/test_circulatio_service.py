@@ -120,7 +120,7 @@ class CirculatioServiceTests(unittest.TestCase):
 
     def test_store_material_with_intake_context_returns_host_only_factual_packet(self) -> None:
         async def run() -> None:
-            repository, service, _ = self._service()
+            repository, service, llm = self._service()
             prior_material = await service.store_material(
                 {
                     "userId": "user_1",
@@ -192,14 +192,22 @@ class CirculatioServiceTests(unittest.TestCase):
                 criterion for item in packet["items"] for criterion in item.get("criteria", [])
             }
             self.assertGreaterEqual(packet["sourceCounts"]["threadDigestCount"], 1)
+            self.assertEqual(packet["sourceCounts"]["intakeItemCount"], len(packet["items"]))
             self.assertIn("thread_digest", criteria)
             self.assertIn("method_context_recent_body_state", criteria)
             self.assertIn("method_context_active_journey", criteria)
             self.assertIn("method_context_reality_anchor", criteria)
             self.assertIn("dashboard_recent_material", criteria)
+            self.assertFalse(any(item.get("kind") == "coach_loop" for item in packet["items"]))
             runs = await repository.list_interpretation_runs("user_1")
+            reviews = await repository.list_weekly_reviews("user_1")
+            practices = await repository.list_practice_sessions("user_1")
             self.assertEqual(runs, [])
+            self.assertEqual(reviews, [])
+            self.assertEqual(practices, [])
+            self.assertEqual(llm.interpret_calls, [])
             self.assertEqual(workflow["material"]["linkedContextSnapshotIds"], [])
+            self.assertEqual(workflow["material"]["linkedPracticeSessionIds"], [])
 
         asyncio.run(run())
 
@@ -283,6 +291,34 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(workflow["material"]["id"], packet["materialId"])
             materials = await repository.list_materials("user_1")
             self.assertEqual(len(materials), 1)
+
+        asyncio.run(run())
+
+    def test_store_material_with_intake_context_falls_back_after_invalid_material_date(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            workflow = await service.store_material_with_intake_context(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "Hold this even though the original timestamp is malformed.",
+                    "materialDate": "not-a-date",
+                }
+            )
+
+            packet = workflow["intakeContext"]
+            self.assertEqual(packet["status"], "partial")
+            self.assertIn("intake_window_fallback", packet["warnings"])
+            self.assertIn("intake_context_partial", packet["warnings"])
+            self.assertEqual(workflow["material"]["id"], packet["materialId"])
+            self.assertTrue(packet["windowStart"])
+            self.assertTrue(packet["windowEnd"])
+            self.assertEqual(workflow["material"]["linkedContextSnapshotIds"], [])
+            self.assertEqual(workflow["material"]["linkedPracticeSessionIds"], [])
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+            self.assertEqual(await repository.list_weekly_reviews("user_1"), [])
+            self.assertEqual(await repository.list_practice_sessions("user_1"), [])
+            self.assertEqual(llm.interpret_calls, [])
 
         asyncio.run(run())
 

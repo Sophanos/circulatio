@@ -726,13 +726,22 @@ class HermesBridgePluginTests(unittest.TestCase):
             )
             self.assertIn("intakeContext", stored_dream["result"])
             self.assertEqual(stored_dream["result"]["intakeContext"]["visibility"], "host_only")
+            self.assertEqual(stored_dream["result"]["intakeContext"]["source"], "circulatio-post-store")
             self.assertTrue(stored_dream["result"]["intakeContext"]["hostGuidance"]["holdFirst"])
             self.assertFalse(
                 stored_dream["result"]["intakeContext"]["hostGuidance"]["allowAutoInterpretation"]
             )
+            self.assertEqual(
+                stored_dream["result"]["intakeContext"]["sourceCounts"]["intakeItemCount"],
+                len(stored_dream["result"]["intakeContext"]["items"]),
+            )
             self.assertIn("material", stored_dream["result"])
             self.assertEqual(
                 stored_dream["result"]["material"]["id"],
+                stored_dream["result"]["materialId"],
+            )
+            self.assertEqual(
+                stored_dream["result"]["intakeContext"]["materialId"],
                 stored_dream["result"]["materialId"],
             )
             self.assertEqual(stored_dream["pendingProposals"], [])
@@ -740,8 +749,10 @@ class HermesBridgePluginTests(unittest.TestCase):
             materials = await runtime.service.repository.list_materials("hermes:default:local")
             runs = await runtime.service.repository.list_interpretation_runs("hermes:default:local")
             body_states = await runtime.service.repository.list_body_states("hermes:default:local")
+            practices = await runtime.service.repository.list_practice_sessions("hermes:default:local")
             self.assertEqual(len(runs), 0)
             self.assertEqual(len(body_states), 1)
+            self.assertEqual(practices, [])
             self.assertEqual(
                 {item["materialType"] for item in materials},
                 {"dream", "charged_event", "reflection", "symbolic_motif"},
@@ -784,15 +795,91 @@ class HermesBridgePluginTests(unittest.TestCase):
                 stored["result"]["materialId"],
             )
             self.assertEqual(stored["result"]["intakeContext"]["visibility"], "host_only")
+            self.assertEqual(stored["result"]["intakeContext"]["source"], "circulatio-post-store")
             self.assertTrue(stored["result"]["intakeContext"]["hostGuidance"]["holdFirst"])
             self.assertFalse(
                 stored["result"]["intakeContext"]["hostGuidance"]["allowAutoInterpretation"]
+            )
+            self.assertEqual(
+                stored["result"]["intakeContext"]["sourceCounts"]["intakeItemCount"],
+                len(stored["result"]["intakeContext"]["items"]),
             )
             self.assertEqual(stored["pendingProposals"], [])
 
             runtime = get_runtime("default")
             runs = await runtime.service.repository.list_interpretation_runs("hermes:default:local")
+            reviews = await runtime.service.repository.list_weekly_reviews("hermes:default:local")
+            practices = await runtime.service.repository.list_practice_sessions("hermes:default:local")
             self.assertEqual(runs, [])
+            self.assertEqual(reviews, [])
+            self.assertEqual(practices, [])
+
+        asyncio.run(run())
+
+    def test_store_dream_tool_preserves_dream_structure_without_interpretation(self) -> None:
+        async def run() -> None:
+            self._install_fake_runtime()
+            stored = json.loads(
+                await store_dream_tool(
+                    {
+                        "text": "A bear waited at the threshold.",
+                        "dreamStructure": {
+                            "setting": "forest edge",
+                            "keyImages": ["bear", "threshold"],
+                            "methodDynamics": True,
+                        },
+                    },
+                    **self._tool_kwargs(call_id="tool_store_dream_structure"),
+                )
+            )
+
+            self.assertEqual(stored["status"], "ok")
+            self.assertEqual(
+                stored["result"]["material"]["dreamStructure"],
+                {
+                    "setting": "forest edge",
+                    "keyImages": ["bear", "threshold"],
+                    "methodDynamics": True,
+                },
+            )
+            runtime = get_runtime("default")
+            material = await runtime.service.repository.get_material(
+                "hermes:default:local",
+                stored["result"]["materialId"],
+            )
+            self.assertEqual(material["dreamStructure"], stored["result"]["material"]["dreamStructure"])
+            self.assertEqual(
+                await runtime.service.repository.list_interpretation_runs("hermes:default:local"),
+                [],
+            )
+
+        asyncio.run(run())
+
+    def test_bridge_store_material_accepts_summary_only_payload(self) -> None:
+        async def run() -> None:
+            runtime = self._install_in_memory_runtime()
+            response = await runtime.bridge.dispatch(
+                build_tool_request(
+                    operation="circulatio.material.store",
+                    payload={
+                        "materialType": "reflection",
+                        "summary": "Keep this brief note without opening it yet.",
+                    },
+                    tool_name="circulatio_store_reflection",
+                    kwargs=self._tool_kwargs(call_id="tool_store_summary_only"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(
+                response["result"]["material"]["summary"],
+                "Keep this brief note without opening it yet.",
+            )
+            self.assertNotIn("text", response["result"]["material"])
+            self.assertEqual(response["result"]["intakeContext"]["materialId"], response["result"]["materialId"])
+            self.assertEqual(
+                await runtime.service.repository.list_interpretation_runs("hermes:default:local"),
+                [],
+            )
 
         asyncio.run(run())
 
@@ -1307,6 +1394,19 @@ class HermesBridgePluginTests(unittest.TestCase):
         self.assertIn(
             "do not present a numbered menu",
             ctx.tools["circulatio_store_dream"]["description"],
+        )
+        self.assertIn("host-only intakeContext", ctx.tools["circulatio_store_dream"]["description"])
+        self.assertIn(
+            "summary",
+            ctx.tools["circulatio_store_reflection"]["schema"]["parameters"]["properties"],
+        )
+        self.assertIn(
+            "dreamStructure",
+            ctx.tools["circulatio_store_dream"]["schema"]["parameters"]["properties"],
+        )
+        self.assertNotIn(
+            "dreamStructure",
+            ctx.tools["circulatio_store_event"]["schema"]["parameters"]["properties"],
         )
         self.assertIn("read-only", ctx.tools["circulatio_discovery"]["description"])
 

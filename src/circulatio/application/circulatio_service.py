@@ -219,10 +219,20 @@ class CirculatioService:
         payload = deepcopy(input_data)
         payload.setdefault("source", "hermes_ui")
         material = await self.create_material(payload)
-        window_start, window_end = self._resolve_window(
-            anchor=str(material.get("materialDate") or material.get("createdAt") or ""),
-        )
         warnings: list[str] = []
+        try:
+            window_start, window_end = self._resolve_window(
+                anchor=str(material.get("materialDate") or material.get("createdAt") or ""),
+            )
+        except Exception:
+            LOGGER.exception(
+                "Post-store intake window resolution failed for material %s",
+                material["id"],
+            )
+            warnings.append("intake_window_fallback")
+            window_start, window_end = self._resolve_window(
+                anchor=str(material.get("createdAt") or now_iso()),
+            )
         method_context: MethodContextSnapshot | None = None
         dashboard: DashboardSummary | None = None
         thread_digests: list[ThreadDigest] = []
@@ -245,15 +255,13 @@ class CirculatioService:
                 material["id"],
             )
             warnings.append("method_context_unavailable")
+        coach_loop_digests = self._build_coach_loop_thread_digests(method_context)
         try:
-            thread_digests = self._merge_thread_digests(
-                await self._repository.build_thread_digests_from_records(
-                    material["userId"],
-                    window_start=window_start,
-                    window_end=window_end,
-                    material_id=material["id"],
-                ),
-                self._build_coach_loop_thread_digests(method_context),
+            thread_digests = await self._repository.build_thread_digests_from_records(
+                material["userId"],
+                window_start=window_start,
+                window_end=window_end,
+                material_id=material["id"],
             )
         except Exception:
             LOGGER.exception(
@@ -261,6 +269,7 @@ class CirculatioService:
                 material["id"],
             )
             warnings.append("thread_digest_unavailable")
+        thread_digests = self._merge_thread_digests(thread_digests, coach_loop_digests)
         try:
             dashboard = await self._repository.get_dashboard_summary(material["userId"])
         except Exception:
