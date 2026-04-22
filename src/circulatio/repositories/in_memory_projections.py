@@ -27,8 +27,8 @@ from ..domain.types import (
     Id,
     LifeContextSnapshot,
     LivingMythReviewInput,
-    MethodStateSourceRef,
     MethodContextSnapshot,
+    MethodStateSourceRef,
     ThreadDigest,
     ThreadSurfaceReadiness,
     ThresholdReviewInput,
@@ -617,7 +617,6 @@ def build_memory_kernel_snapshot_locked(
             observed_at=tension.get("updatedAt", tension.get("createdAt")),
             importance_score=0.68 if status == "active" else 0.5,
             importance_reasons=["goal_tension"],
-            user_confirmed=status == "user_confirmed",
             last_seen=tension.get("updatedAt", tension.get("createdAt")),
         )
         if _matches_memory_query(item, namespaces=namespaces, query=query):
@@ -1994,7 +1993,9 @@ def build_thread_digests_locked(
         record = bucket.journeys.get(journey_id, {})
         entity_refs = _thread_entity_refs(
             journey_ids=[journey_id],
-            material_ids=list(record.get("relatedMaterialIds", summary.get("relatedMaterialIds", []))),
+            material_ids=list(
+                record.get("relatedMaterialIds", summary.get("relatedMaterialIds", []))
+            ),
             symbol_ids=list(record.get("relatedSymbolIds", summary.get("relatedSymbolIds", []))),
             pattern_ids=list(record.get("relatedPatternIds", summary.get("relatedPatternIds", []))),
             goal_ids=list(record.get("relatedGoalIds", summary.get("relatedGoalIds", []))),
@@ -2019,7 +2020,9 @@ def build_thread_digests_locked(
                 "entityRefs": entity_refs,
                 "evidenceIds": [],
                 "journeyIds": [journey_id],
-                "sourceRecordRefs": [_thread_source_ref("Journey", journey_id, summary=summary_text)],
+                "sourceRecordRefs": [
+                    _thread_source_ref("Journey", journey_id, summary=summary_text)
+                ],
                 "lastTouchedAt": str(
                     record.get("updatedAt")
                     or record.get("nextReviewDueAt")
@@ -2108,7 +2111,9 @@ def build_thread_digests_locked(
             status = str(record.get("status") or "active")
             invitation_readiness = None
             if isinstance(record.get("details"), dict):
-                invitation_readiness = str(record["details"].get("invitationReadiness") or "").strip()
+                invitation_readiness = str(
+                    record["details"].get("invitationReadiness") or ""
+                ).strip()
             append_digest(
                 {
                     "threadKey": f"{kind}:{record_id}",
@@ -2177,7 +2182,9 @@ def build_thread_digests_locked(
         else {}
     )
     practice_loop = (
-        method_state.get("practiceLoop") if isinstance(method_state.get("practiceLoop"), dict) else {}
+        method_state.get("practiceLoop")
+        if isinstance(method_state.get("practiceLoop"), dict)
+        else {}
     )
     if practice_loop:
         source_refs = [
@@ -2204,7 +2211,9 @@ def build_thread_digests_locked(
                 if practice.get("materialId"):
                     material_ids.append(str(practice["materialId"]))
             elif record_type == "GoalTension" and record_id in bucket.goal_tensions:
-                goal_ids.extend(str(item) for item in bucket.goal_tensions[record_id].get("goalIds", []))
+                goal_ids.extend(
+                    str(item) for item in bucket.goal_tensions[record_id].get("goalIds", [])
+                )
             elif record_type == "Journey":
                 journey_ids.append(record_id)
         entity_refs = _thread_entity_refs(
@@ -2228,8 +2237,11 @@ def build_thread_digests_locked(
                 "entityRefs": entity_refs,
                 "evidenceIds": list(practice_loop.get("evidenceIds", [])),
                 "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
-                "sourceRecordRefs": source_refs or [
-                    _thread_source_ref("PracticeLoop", "practice_loop:current", summary=summary_text)
+                "sourceRecordRefs": source_refs
+                or [
+                    _thread_source_ref(
+                        "PracticeLoop", "practice_loop:current", summary=summary_text
+                    )
                 ],
                 "lastTouchedAt": _thread_source_last_touched(
                     bucket,

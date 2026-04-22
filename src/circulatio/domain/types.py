@@ -594,6 +594,46 @@ class LongitudinalSignalSummary(TypedDict, total=False):
     strength: Required[Literal["weak", "moderate", "strong"]]
 
 
+ThreadDigestKind = Literal[
+    "journey",
+    "dream_series",
+    "threshold_process",
+    "relational_scene",
+    "goal_tension",
+    "practice_loop",
+    "longitudinal_signal",
+    "coach_loop",
+]
+ThreadSurfaceReadinessLevel = Literal["quiet", "available", "ready"]
+
+
+class ThreadSurfaceReadiness(TypedDict, total=False):
+    intakeContext: NotRequired[ThreadSurfaceReadinessLevel]
+    discovery: NotRequired[ThreadSurfaceReadinessLevel]
+    aliveToday: NotRequired[ThreadSurfaceReadinessLevel]
+    weeklyReview: NotRequired[ThreadSurfaceReadinessLevel]
+    journeyPage: NotRequired[ThreadSurfaceReadinessLevel]
+    rhythmicBrief: NotRequired[ThreadSurfaceReadinessLevel]
+    thresholdReview: NotRequired[ThreadSurfaceReadinessLevel]
+    livingMythReview: NotRequired[ThreadSurfaceReadinessLevel]
+    analysisPacket: NotRequired[ThreadSurfaceReadinessLevel]
+    methodStateResponse: NotRequired[ThreadSurfaceReadinessLevel]
+    practice: NotRequired[ThreadSurfaceReadinessLevel]
+
+
+class ThreadDigest(TypedDict, total=False):
+    threadKey: Required[str]
+    kind: Required[ThreadDigestKind]
+    status: Required[str]
+    summary: Required[str]
+    entityRefs: Required[dict[str, list[Id]]]
+    evidenceIds: Required[list[Id]]
+    journeyIds: Required[list[Id]]
+    sourceRecordRefs: Required[list[MethodStateSourceRef]]
+    lastTouchedAt: Required[ISODateString]
+    surfaceReadiness: Required[ThreadSurfaceReadiness]
+
+
 AmplificationSourceKind = Literal[
     "symbol_reference",
     "depth_psychology_archive",
@@ -1585,6 +1625,7 @@ class PracticeRecommendationInput(TypedDict, total=False):
     sessionContext: NotRequired[SessionContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: NotRequired[list[ThreadDigest]]
     hermesMemoryContext: Required[HermesMemoryContext]
     safetyContext: NotRequired[SafetyContext]
     explicitQuestion: NotRequired[str]
@@ -2488,6 +2529,7 @@ class CirculationSummaryInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: NotRequired[list[ThreadDigest]]
     explicitQuestion: NotRequired[str]
 
 
@@ -2507,6 +2549,7 @@ class ThresholdReviewInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: NotRequired[list[ThreadDigest]]
     explicitQuestion: NotRequired[str]
     safetyContext: NotRequired[SafetyContext]
     targetThresholdProcess: NotRequired[ThresholdProcessSummary]
@@ -2536,6 +2579,7 @@ class LivingMythReviewInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: NotRequired[list[ThreadDigest]]
     activeGoalTension: NotRequired[ActiveGoalTensionSummary]
     practiceLoop: NotRequired[PracticeLoopSummary]
     latestSymbolicWellbeing: NotRequired[SymbolicWellbeingSnapshotSummary]
@@ -2588,6 +2632,7 @@ class AnalysisPacketInput(TypedDict, total=False):
     hermesMemoryContext: Required[HermesMemoryContext]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: NotRequired[list[ThreadDigest]]
     activeGoalTension: NotRequired[ActiveGoalTensionSummary]
     practiceLoop: NotRequired[PracticeLoopSummary]
     latestSymbolicWellbeing: NotRequired[SymbolicWellbeingSnapshotSummary]
@@ -2636,6 +2681,7 @@ class RhythmicBriefInput(TypedDict, total=False):
     seed: Required[dict[str, object]]
     lifeContextSnapshot: NotRequired[LifeContextSnapshot]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: NotRequired[list[ThreadDigest]]
     hermesMemoryContext: Required[HermesMemoryContext]
     adaptationProfile: NotRequired[UserAdaptationProfileSummary]
     safetyContext: NotRequired[SafetyContext]

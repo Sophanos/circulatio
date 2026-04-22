@@ -115,6 +115,7 @@ This connector is intentionally additive. It is not a hidden capture-any ingress
 The codebase now already contains the Phase 4-7 substrate that later work should build on rather than replace:
 
 * `MethodContextSnapshot` is part of interpretation input and persisted context snapshots.
+* `ThreadDigest` is a derived internal read model beside `MethodContextSnapshot`; it unifies journeys, dream series, threshold/process loops, goal tension, practice-loop, and longitudinal thread refs without creating a new durable record family.
 * Domain records now exist for conscious attitude, personal amplification, body states, goals, dream series, culture, adaptation, journeys, and proactive briefs.
 * `CirculatioCore` accepts LLM-produced `methodGate`, `depthReadiness`, amplification prompts, dream-series suggestions, and richer practice metadata.
 * Hermes/plugin surfaces now support hold-first storage for dreams, events, reflections, symbolic notes, and body states, plus `alive_today`, the bounded read-only `discovery` digest, journey-page assembly, low-risk journey-container management, label-based journey resolution, explicit `/circulation journey ...` QA commands, interpretation, review, and approval flows.
@@ -186,7 +187,8 @@ Circulatio now also includes a separate repo-local Journey CLI comparison layer 
 **Purpose:**
 
 * compare local external coding CLIs such as `kimi`, `codex`, and `opencode` against the Hermes
-  routing contract for journey-family cases
+  routing contract for journey-family cases, with an optional lightweight `hermes` adapter when a
+  local Hermes CLI is available
 * keep the comparison strictly local, opt-in, and artifact-producing
 * map failures back to the right owner: method evals, backend service tests, bridge tests, or real
   host smoke

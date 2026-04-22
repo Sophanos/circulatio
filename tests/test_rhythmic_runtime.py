@@ -206,6 +206,47 @@ class RhythmicRuntimeTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_goal_tension_brief_inherits_related_journey_from_thread_digest(self) -> None:
+        async def run() -> None:
+            _, service = self._service()
+            first_goal = await service.upsert_goal(
+                {"userId": "user_1", "label": "Speak directly", "status": "active"}
+            )
+            second_goal = await service.upsert_goal(
+                {"userId": "user_1", "label": "Stay safe", "status": "active"}
+            )
+            await service.upsert_goal_tension(
+                {
+                    "userId": "user_1",
+                    "goalIds": [first_goal["id"], second_goal["id"]],
+                    "tensionSummary": "Directness and safety are both alive.",
+                    "polarityLabels": ["directness", "safety"],
+                    "status": "active",
+                }
+            )
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Directness thread",
+                    "currentQuestion": "How can directness stay embodied?",
+                    "relatedGoalIds": [first_goal["id"]],
+                    "nextReviewDueAt": "2999-01-01T00:00:00Z",
+                }
+            )
+
+            result = await service.generate_rhythmic_briefs(
+                {"userId": "user_1", "source": "manual", "limit": 5}
+            )
+
+            goal_tension_brief = next(
+                brief
+                for brief in result["briefs"]
+                if str(brief.get("triggerKey") or "").startswith("daily:goal_tension:")
+            )
+            self.assertEqual(goal_tension_brief["relatedJourneyIds"], [journey["id"]])
+
+        asyncio.run(run())
+
     def test_acted_and_dismissed_update_adaptation_counts(self) -> None:
         async def run() -> None:
             repository, service = self._service()

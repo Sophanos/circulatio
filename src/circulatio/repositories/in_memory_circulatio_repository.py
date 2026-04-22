@@ -99,6 +99,7 @@ from ..domain.types import (
     RecordIntegrationInput,
     RecordIntegrationResult,
     SuppressedHypothesisSummary,
+    ThreadDigest,
     ThresholdReviewInput,
 )
 from ..domain.typology import TypologyLensRecord, TypologyLensUpdate
@@ -114,6 +115,7 @@ from .in_memory_projections import (
     build_memory_kernel_snapshot_locked,
     build_method_context_snapshot_locked,
     build_symbolic_memory_snapshot_locked,
+    build_thread_digests_locked,
     build_threshold_review_input_locked,
     query_graph_locked,
 )
@@ -1859,6 +1861,24 @@ class InMemoryCirculatioRepository(CirculatioRepository):
             bucket = self._bucket(user_id)
             return build_circulation_summary_input_locked(
                 bucket, user_id=user_id, window_start=window_start, window_end=window_end
+            )
+
+    async def build_thread_digests_from_records(
+        self,
+        user_id: Id,
+        *,
+        window_start: str,
+        window_end: str,
+        material_id: Id | None = None,
+    ) -> list[ThreadDigest]:
+        async with self._lock:
+            bucket = self._bucket(user_id)
+            return build_thread_digests_locked(
+                bucket,
+                user_id=user_id,
+                window_start=window_start,
+                window_end=window_end,
+                material_id=material_id,
             )
 
     async def build_threshold_review_input(

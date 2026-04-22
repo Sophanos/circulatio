@@ -106,6 +106,7 @@ from ..domain.types import (
     RecordIntegrationInput,
     RecordIntegrationResult,
     SuppressedHypothesisSummary,
+    ThreadDigest,
     ThresholdReviewInput,
 )
 from ..domain.typology import TypologyLensRecord, TypologyLensUpdate
@@ -1410,6 +1411,23 @@ class HermesProfileCirculatioRepository(CirculatioRepository):
                 user_id,
                 window_start=window_start,
                 window_end=window_end,
+            )
+        )
+
+    async def build_thread_digests_from_records(
+        self,
+        user_id: Id,
+        *,
+        window_start: str,
+        window_end: str,
+        material_id: Id | None = None,
+    ) -> list[ThreadDigest]:
+        return await self._read(
+            lambda: self._delegate.build_thread_digests_from_records(
+                user_id,
+                window_start=window_start,
+                window_end=window_end,
+                material_id=material_id,
             )
         )
 

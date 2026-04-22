@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal, NotRequired, Required, TypedDict
 
 from .interpretations import ProposalDecisionRecord
-from .types import Id, ISODateString, MemoryWritePlan
+from .types import Id, ISODateString, MemoryWritePlan, ThreadDigest
 
 MethodStateResponseSource = Literal[
     "clarifying_answer",
@@ -101,6 +101,7 @@ class MethodStateRoutingInput(TypedDict, total=False):
     expectedTargets: Required[list[MethodStateCaptureTargetKind]]
     clarificationIntent: NotRequired[dict[str, object]]
     methodContextSnapshot: NotRequired[dict[str, object]]
+    threadDigests: NotRequired[list[ThreadDigest]]
     lifeContextSnapshot: NotRequired[dict[str, object]]
     hermesMemoryContext: NotRequired[dict[str, object]]
     safetyContext: NotRequired[dict[str, object]]

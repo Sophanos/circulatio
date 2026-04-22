@@ -191,6 +191,8 @@ class CirculatioServiceTests(unittest.TestCase):
             criteria = {
                 criterion for item in packet["items"] for criterion in item.get("criteria", [])
             }
+            self.assertGreaterEqual(packet["sourceCounts"]["threadDigestCount"], 1)
+            self.assertIn("thread_digest", criteria)
             self.assertIn("method_context_recent_body_state", criteria)
             self.assertIn("method_context_active_journey", criteria)
             self.assertIn("method_context_reality_anchor", criteria)
@@ -1400,6 +1402,13 @@ class CirculatioServiceTests(unittest.TestCase):
     def test_direct_capture_methods_create_phase8_records(self) -> None:
         async def run() -> None:
             repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Threshold thread",
+                    "currentQuestion": "What is asking for careful passage?",
+                }
+            )
             anchors = await service.capture_reality_anchors(
                 {
                     "userId": "user_1",
@@ -1411,6 +1420,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "reflectiveCapacity": "steady",
                     "groundingRecommendation": "clear_for_depth",
                     "relatedGoalIds": ["goal_1"],
+                    "relatedJourneyIds": [journey["id"]],
                 }
             )
             numinous = await service.record_numinous_encounter(
@@ -1421,6 +1431,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "affectTone": "awe",
                     "containmentNeed": "pace_gently",
                     "interpretationConstraint": "Hold the charge without forcing a meaning claim.",
+                    "relatedJourneyIds": [journey["id"]],
                 }
             )
             aesthetic = await service.record_aesthetic_resonance(
@@ -1431,6 +1442,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "objectDescription": "A dark river under a narrow bridge.",
                     "resonanceSummary": "The image felt like a threshold rather than decoration.",
                     "bodySensations": ["chest warmth"],
+                    "relatedJourneyIds": [journey["id"]],
                 }
             )
             records = await repository.list_individuation_records("user_1", limit=20)
@@ -1439,6 +1451,9 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(anchors["status"], "user_confirmed")
             self.assertEqual(numinous["recordType"], "numinous_encounter")
             self.assertEqual(aesthetic["recordType"], "aesthetic_resonance")
+            self.assertEqual(anchors["relatedJourneyIds"], [journey["id"]])
+            self.assertEqual(numinous["relatedJourneyIds"], [journey["id"]])
+            self.assertEqual(aesthetic["relatedJourneyIds"], [journey["id"]])
 
         asyncio.run(run())
 
@@ -1457,6 +1472,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "invitationReadiness": "ask",
                     "normalizedThresholdKey": "work-transition",
                     "relatedMaterialIds": ["material_1"],
+                    "relatedJourneyIds": ["journey_1"],
                 }
             )
             second_threshold = await service.upsert_threshold_process(
@@ -1471,6 +1487,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "invitationReadiness": "ready",
                     "normalizedThresholdKey": "work-transition",
                     "relatedMaterialIds": ["material_2"],
+                    "relatedJourneyIds": ["journey_2"],
                 }
             )
             first_scene = await service.record_relational_scene(
@@ -1482,6 +1499,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "recurringAffect": ["pressure"],
                     "recurrenceContexts": ["work"],
                     "normalizedSceneKey": "authority-scene",
+                    "relatedJourneyIds": ["journey_1"],
                 }
             )
             second_scene = await service.record_relational_scene(
@@ -1493,6 +1511,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "recurringAffect": ["shame"],
                     "recurrenceContexts": ["group"],
                     "normalizedSceneKey": "authority-scene",
+                    "relatedJourneyIds": ["journey_2"],
                 }
             )
             first_correspondence = await service.record_inner_outer_correspondence(
@@ -1506,6 +1525,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "userCharge": "explicitly_charged",
                     "caveat": "Hold this lightly without causal certainty.",
                     "normalizedCorrespondenceKey": "snake-crossing",
+                    "relatedJourneyIds": ["journey_1"],
                 }
             )
             second_correspondence = await service.record_inner_outer_correspondence(
@@ -1519,6 +1539,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "userCharge": "explicitly_charged",
                     "caveat": "Hold this lightly without causal certainty.",
                     "normalizedCorrespondenceKey": "snake-crossing",
+                    "relatedJourneyIds": ["journey_2"],
                 }
             )
             thresholds = await repository.list_individuation_records(
@@ -1542,6 +1563,12 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(len(thresholds), 1)
             self.assertEqual(len(scenes), 1)
             self.assertEqual(len(correspondences), 1)
+            self.assertEqual(second_threshold["relatedJourneyIds"], ["journey_1", "journey_2"])
+            self.assertEqual(second_scene["relatedJourneyIds"], ["journey_1", "journey_2"])
+            self.assertEqual(
+                second_correspondence["relatedJourneyIds"],
+                ["journey_1", "journey_2"],
+            )
             self.assertEqual(
                 thresholds[0]["details"]["invitationReadiness"],
                 "ready",
@@ -1944,6 +1971,13 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertTrue(sections_by_key["body_states"]["items"])
             self.assertTrue(sections_by_key["method_state"]["items"])
             self.assertTrue(sections_by_key["journey_threads"]["items"])
+            self.assertGreaterEqual(discovery["sourceCounts"]["threadDigestCount"], 1)
+            self.assertTrue(
+                any(
+                    "thread_digest" in item["criteria"]
+                    for item in sections_by_key["journey_threads"]["items"]
+                )
+            )
 
         asyncio.run(run())
 
@@ -2323,6 +2357,10 @@ class CirculatioServiceTests(unittest.TestCase):
                 review_input["witnessState"]["stance"],
                 review_input["methodContextSnapshot"]["witnessState"]["stance"],
             )
+            self.assertTrue(review_input["threadDigests"])
+            self.assertTrue(
+                any(journey["id"] in item["journeyIds"] for item in review_input["threadDigests"])
+            )
 
             await service.generate_analysis_packet(
                 {
@@ -2350,6 +2388,7 @@ class CirculatioServiceTests(unittest.TestCase):
                 packet_input["witnessState"]["stance"],
                 packet_input["methodContextSnapshot"]["witnessState"]["stance"],
             )
+            self.assertTrue(packet_input["threadDigests"])
 
         asyncio.run(run())
 

@@ -23,6 +23,7 @@ from ..domain.types import (
     Id,
     MethodContextSnapshot,
     ResourceInvitationSummary,
+    ThreadDigest,
     UserAdaptationProfileSummary,
 )
 from .method_state_policy import (
@@ -39,6 +40,7 @@ class ProactiveEngine:
         memory_snapshot: MemoryKernelSnapshot,
         dashboard: DashboardSummary,
         method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
         recent_practices: list[PracticeSessionRecord],
         journeys: list[JourneyRecord],
         existing_briefs: list[ProactiveBriefRecord],
@@ -67,11 +69,18 @@ class ProactiveEngine:
             )
         seeds.extend(self._practice_followup_seeds(recent_practices=recent_practices, now=now))
         seeds.extend(self._journey_seeds(journeys=journeys, now=now))
-        seeds.extend(self._series_seeds(method_context=method_context, now=now))
+        seeds.extend(
+            self._series_seeds(
+                method_context=method_context,
+                thread_digests=thread_digests,
+                now=now,
+            )
+        )
         seeds.extend(
             self._threshold_invitation_seeds(
                 method_context=method_context,
                 memory_snapshot=memory_snapshot,
+                thread_digests=thread_digests,
                 now=now,
             )
         )
@@ -79,14 +88,22 @@ class ProactiveEngine:
             self._chapter_invitation_seeds(
                 method_context=method_context,
                 memory_snapshot=memory_snapshot,
+                thread_digests=thread_digests,
                 now=now,
             )
         )
-        seeds.extend(self._return_invitation_seeds(method_context=method_context, now=now))
+        seeds.extend(
+            self._return_invitation_seeds(
+                method_context=method_context,
+                thread_digests=thread_digests,
+                now=now,
+            )
+        )
         seeds.extend(
             self._bridge_invitation_seeds(
                 method_context=method_context,
                 memory_snapshot=memory_snapshot,
+                thread_digests=thread_digests,
                 now=now,
             )
         )
@@ -95,6 +112,7 @@ class ProactiveEngine:
                 user_id=user_id,
                 method_context=method_context,
                 memory_snapshot=memory_snapshot,
+                thread_digests=thread_digests,
                 now=now,
             )
         )
@@ -102,6 +120,7 @@ class ProactiveEngine:
             self._goal_or_signal_seeds(
                 method_context=method_context,
                 memory_snapshot=memory_snapshot,
+                thread_digests=thread_digests,
                 now=now,
             )
         )
@@ -215,6 +234,7 @@ class ProactiveEngine:
             memory_snapshot=memory_snapshot,
             dashboard=dashboard,
             method_context=None,
+            thread_digests=None,
             recent_practices=[],
             journeys=[],
             existing_briefs=[],
@@ -262,6 +282,110 @@ class ProactiveEngine:
                 seen_loop_keys.add(coach_loop_key)
             deduped.append(seed)
         return deduped
+
+    def _merge_ids(self, existing: list[str], additions: list[str]) -> list[str]:
+        merged = list(existing)
+        for value in additions:
+            candidate = str(value).strip()
+            if candidate and candidate not in merged:
+                merged.append(candidate)
+        return merged
+
+    def _thread_seed_links(
+        self,
+        *,
+        thread_digests: list[ThreadDigest] | None,
+        candidate_ids: list[str],
+    ) -> dict[str, list[str]]:
+        normalized_candidate_ids = {
+            str(value).strip() for value in candidate_ids if str(value).strip()
+        }
+        if not normalized_candidate_ids:
+            return {
+                "relatedJourneyIds": [],
+                "relatedMaterialIds": [],
+                "relatedSymbolIds": [],
+                "relatedPracticeSessionIds": [],
+                "evidenceIds": [],
+            }
+        related_journey_ids: list[str] = []
+        related_material_ids: list[str] = []
+        related_symbol_ids: list[str] = []
+        related_practice_ids: list[str] = []
+        evidence_ids: list[str] = []
+        for digest in thread_digests or []:
+            if not isinstance(digest, dict):
+                continue
+            digest_candidate_ids: set[str] = set()
+            entity_refs = (
+                digest.get("entityRefs") if isinstance(digest.get("entityRefs"), dict) else {}
+            )
+            for ref_ids in entity_refs.values():
+                if not isinstance(ref_ids, list):
+                    continue
+                digest_candidate_ids.update(
+                    str(ref_id).strip() for ref_id in ref_ids if str(ref_id).strip()
+                )
+            digest_candidate_ids.update(
+                str(ref_id).strip()
+                for ref_id in digest.get("journeyIds", [])
+                if isinstance(ref_id, str) and ref_id.strip()
+            )
+            for source_ref in digest.get("sourceRecordRefs", []):
+                if not isinstance(source_ref, dict):
+                    continue
+                record_id = str(source_ref.get("recordId") or "").strip()
+                if record_id:
+                    digest_candidate_ids.add(record_id)
+            if not normalized_candidate_ids.intersection(digest_candidate_ids):
+                continue
+            related_journey_ids = self._merge_ids(
+                related_journey_ids,
+                [
+                    str(ref_id)
+                    for ref_id in digest.get("journeyIds", [])
+                    if isinstance(ref_id, str) and ref_id.strip()
+                ],
+            )
+            related_material_ids = self._merge_ids(
+                related_material_ids,
+                [
+                    str(ref_id)
+                    for ref_id in entity_refs.get("materials", [])
+                    if isinstance(ref_id, str) and ref_id.strip()
+                ],
+            )
+            related_symbol_ids = self._merge_ids(
+                related_symbol_ids,
+                [
+                    str(ref_id)
+                    for ref_id in entity_refs.get("symbols", [])
+                    if isinstance(ref_id, str) and ref_id.strip()
+                ],
+            )
+            related_practice_ids = self._merge_ids(
+                related_practice_ids,
+                [
+                    str(ref_id)
+                    for ref_id in entity_refs.get("practiceSessions", [])
+                    if isinstance(ref_id, str) and ref_id.strip()
+                ],
+            )
+            evidence_ids = self._merge_ids(
+                evidence_ids,
+                [
+                    str(ref_id)
+                    for ref_id in digest.get("evidenceIds", [])
+                    if isinstance(ref_id, str) and ref_id.strip()
+                ],
+            )
+        return {
+            "relatedJourneyIds": related_journey_ids,
+            "relatedMaterialIds": related_material_ids,
+            "relatedSymbolIds": related_symbol_ids,
+            "relatedPracticeSessionIds": related_practice_ids,
+            "evidenceIds": evidence_ids,
+        }
 
     def _practice_followup_seeds(
         self,
@@ -361,9 +485,7 @@ class ProactiveEngine:
                     str(item) for item in loop.get("relatedJourneyIds", []) if str(item).strip()
                 ],
                 "relatedMaterialIds": [
-                    str(item)
-                    for item in loop.get("relatedMaterialIds", [])
-                    if str(item).strip()
+                    str(item) for item in loop.get("relatedMaterialIds", []) if str(item).strip()
                 ],
                 "relatedSymbolIds": [
                     str(item) for item in loop.get("relatedSymbolIds", []) if str(item).strip()
@@ -443,6 +565,7 @@ class ProactiveEngine:
         self,
         *,
         method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if not method_context:
@@ -458,6 +581,13 @@ class ProactiveEngine:
             if last_seen and now_dt - self._parse_datetime(last_seen) > timedelta(days=14):
                 continue
             week_bucket = self._week_bucket(last_seen or now)
+            thread_links = self._thread_seed_links(
+                thread_digests=thread_digests,
+                candidate_ids=[
+                    str(series["id"]),
+                    *[str(item) for item in series.get("materialIds", [])],
+                ],
+            )
             seeds.append(
                 {
                     "briefType": "series_followup",
@@ -470,11 +600,17 @@ class ProactiveEngine:
                         "You can note what changed in the sequence, or leave it open."
                     ),
                     "priority": 80,
-                    "relatedJourneyIds": [],
-                    "relatedMaterialIds": list(series.get("materialIds", []))[:3],
-                    "relatedSymbolIds": list(series.get("symbolIds", []))[:3],
-                    "relatedPracticeSessionIds": [],
-                    "evidenceIds": [],
+                    "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                    "relatedMaterialIds": self._merge_ids(
+                        list(series.get("materialIds", []))[:3],
+                        thread_links["relatedMaterialIds"],
+                    )[:3],
+                    "relatedSymbolIds": self._merge_ids(
+                        list(series.get("symbolIds", []))[:3],
+                        thread_links["relatedSymbolIds"],
+                    )[:3],
+                    "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                    "evidenceIds": list(thread_links["evidenceIds"]),
                     "reason": "dream_series_recent",
                 }
             )
@@ -485,6 +621,7 @@ class ProactiveEngine:
         *,
         method_context: MethodContextSnapshot | None,
         memory_snapshot: MemoryKernelSnapshot,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if not method_context:
@@ -499,6 +636,13 @@ class ProactiveEngine:
                 memory_snapshot=memory_snapshot,
                 entity_id=str(threshold.get("id") or ""),
             )
+            thread_links = self._thread_seed_links(
+                thread_digests=thread_digests,
+                candidate_ids=[
+                    str(threshold.get("id") or ""),
+                    *related["materialIds"],
+                ],
+            )
             label = str(threshold.get("label") or "Threshold process")
             seeds.append(
                 {
@@ -512,11 +656,21 @@ class ProactiveEngine:
                         "You can ask for a threshold review, or leave it untouched."
                     ),
                     "priority": 95,
-                    "relatedJourneyIds": [],
-                    "relatedMaterialIds": related["materialIds"],
-                    "relatedSymbolIds": [],
-                    "relatedPracticeSessionIds": [],
-                    "evidenceIds": list(threshold.get("evidenceIds", [])),
+                    "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                    "relatedMaterialIds": self._merge_ids(
+                        related["materialIds"],
+                        thread_links["relatedMaterialIds"],
+                    )[:3],
+                    "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                    "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                    "evidenceIds": self._merge_ids(
+                        [
+                            str(item)
+                            for item in threshold.get("evidenceIds", [])
+                            if str(item).strip()
+                        ],
+                        thread_links["evidenceIds"],
+                    )[:5],
                     "reason": "threshold_process_ready",
                 }
             )
@@ -527,6 +681,7 @@ class ProactiveEngine:
         *,
         method_context: MethodContextSnapshot | None,
         memory_snapshot: MemoryKernelSnapshot,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if not method_context:
@@ -537,6 +692,10 @@ class ProactiveEngine:
         related = self._related_refs_for_entity(
             memory_snapshot=memory_snapshot,
             entity_id=str(chapter.get("id") or ""),
+        )
+        thread_links = self._thread_seed_links(
+            thread_digests=thread_digests,
+            candidate_ids=[str(chapter.get("id") or ""), *related["materialIds"]],
         )
         label = str(chapter.get("chapterLabel") or chapter.get("label") or "Current chapter")
         return [
@@ -551,11 +710,17 @@ class ProactiveEngine:
                     "You can ask for a living myth review, or simply note the chapter."
                 ),
                 "priority": 88,
-                "relatedJourneyIds": [],
-                "relatedMaterialIds": related["materialIds"],
-                "relatedSymbolIds": [],
-                "relatedPracticeSessionIds": [],
-                "evidenceIds": list(chapter.get("evidenceIds", [])),
+                "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                "relatedMaterialIds": self._merge_ids(
+                    related["materialIds"],
+                    thread_links["relatedMaterialIds"],
+                )[:3],
+                "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                "evidenceIds": self._merge_ids(
+                    [str(item) for item in chapter.get("evidenceIds", []) if str(item).strip()],
+                    thread_links["evidenceIds"],
+                )[:5],
                 "reason": "life_chapter_active",
             }
         ]
@@ -564,6 +729,7 @@ class ProactiveEngine:
         self,
         *,
         method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if not method_context:
@@ -574,6 +740,10 @@ class ProactiveEngine:
             if marker.get("markerType") != "return":
                 continue
             label = str(marker.get("label") or "Return marker")
+            thread_links = self._thread_seed_links(
+                thread_digests=thread_digests,
+                candidate_ids=[str(marker.get("id") or "")],
+            )
             return [
                 {
                     "briefType": "return_invitation",
@@ -584,11 +754,14 @@ class ProactiveEngine:
                     "summaryHint": f"{label} suggests a return may be ready for gentle reflection.",
                     "suggestedActionHint": "You can mark what is returning, or leave it open.",
                     "priority": 86,
-                    "relatedJourneyIds": [],
-                    "relatedMaterialIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedPracticeSessionIds": [],
-                    "evidenceIds": list(marker.get("evidenceIds", [])),
+                    "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                    "relatedMaterialIds": list(thread_links["relatedMaterialIds"]),
+                    "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                    "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                    "evidenceIds": self._merge_ids(
+                        [str(item) for item in marker.get("evidenceIds", []) if str(item).strip()],
+                        thread_links["evidenceIds"],
+                    )[:5],
                     "reason": "threshold_return_marker",
                 }
             ]
@@ -597,6 +770,10 @@ class ProactiveEngine:
             if threshold.get("phase") != "return":
                 continue
             label = str(threshold.get("label") or "Threshold process")
+            thread_links = self._thread_seed_links(
+                thread_digests=thread_digests,
+                candidate_ids=[str(threshold.get("id") or "")],
+            )
             return [
                 {
                     "briefType": "return_invitation",
@@ -609,11 +786,18 @@ class ProactiveEngine:
                         "You can note what is returning to life, or leave it for later."
                     ),
                     "priority": 84,
-                    "relatedJourneyIds": [],
-                    "relatedMaterialIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedPracticeSessionIds": [],
-                    "evidenceIds": list(threshold.get("evidenceIds", [])),
+                    "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                    "relatedMaterialIds": list(thread_links["relatedMaterialIds"]),
+                    "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                    "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                    "evidenceIds": self._merge_ids(
+                        [
+                            str(item)
+                            for item in threshold.get("evidenceIds", [])
+                            if str(item).strip()
+                        ],
+                        thread_links["evidenceIds"],
+                    )[:5],
                     "reason": "threshold_return_phase",
                 }
             ]
@@ -624,6 +808,7 @@ class ProactiveEngine:
         *,
         method_context: MethodContextSnapshot | None,
         memory_snapshot: MemoryKernelSnapshot,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if not method_context:
@@ -636,6 +821,10 @@ class ProactiveEngine:
             memory_snapshot=memory_snapshot,
             entity_id=str(bridge.get("id") or ""),
         )
+        thread_links = self._thread_seed_links(
+            thread_digests=thread_digests,
+            candidate_ids=[str(bridge.get("id") or ""), *related["materialIds"]],
+        )
         label = str(bridge.get("label") or "Bridge moment")
         return [
             {
@@ -647,11 +836,17 @@ class ProactiveEngine:
                     "You can note what it seems to connect, or leave it unforced."
                 ),
                 "priority": 82,
-                "relatedJourneyIds": [],
-                "relatedMaterialIds": related["materialIds"],
-                "relatedSymbolIds": [],
-                "relatedPracticeSessionIds": [],
-                "evidenceIds": list(bridge.get("evidenceIds", [])),
+                "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                "relatedMaterialIds": self._merge_ids(
+                    related["materialIds"],
+                    thread_links["relatedMaterialIds"],
+                )[:3],
+                "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                "evidenceIds": self._merge_ids(
+                    [str(item) for item in bridge.get("evidenceIds", []) if str(item).strip()],
+                    thread_links["evidenceIds"],
+                )[:5],
                 "reason": "bridge_moment_active",
             }
         ]
@@ -662,6 +857,7 @@ class ProactiveEngine:
         user_id: str,
         method_context: MethodContextSnapshot | None,
         memory_snapshot: MemoryKernelSnapshot,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if not method_context:
@@ -692,6 +888,10 @@ class ProactiveEngine:
                     evidence_ids.append(evidence_id)
             if len(related_material_ids) >= 3 and len(evidence_ids) >= 5:
                 break
+        thread_links = self._thread_seed_links(
+            thread_digests=thread_digests,
+            candidate_ids=[user_id, *related_material_ids],
+        )
         return [
             {
                 "briefType": "analysis_packet_invitation",
@@ -704,11 +904,14 @@ class ProactiveEngine:
                     "You can ask for an analysis packet, or leave the material where it is."
                 ),
                 "priority": 76,
-                "relatedJourneyIds": [],
-                "relatedMaterialIds": related_material_ids[:3],
-                "relatedSymbolIds": [],
-                "relatedPracticeSessionIds": [],
-                "evidenceIds": evidence_ids[:5],
+                "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                "relatedMaterialIds": self._merge_ids(
+                    related_material_ids[:3],
+                    thread_links["relatedMaterialIds"],
+                )[:3],
+                "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                "relatedPracticeSessionIds": list(thread_links["relatedPracticeSessionIds"]),
+                "evidenceIds": self._merge_ids(evidence_ids[:5], thread_links["evidenceIds"])[:5],
                 "reason": "analysis_packet_ready",
             }
         ]
@@ -718,6 +921,7 @@ class ProactiveEngine:
         *,
         method_context: MethodContextSnapshot | None,
         memory_snapshot: MemoryKernelSnapshot,
+        thread_digests: list[ThreadDigest] | None,
         now: str,
     ) -> list[RhythmicBriefSeed]:
         if method_context:
@@ -731,6 +935,10 @@ class ProactiveEngine:
                     balancing_direction
                     or "An active goal tension may be asking for gentle attention."
                 )
+                thread_links = self._thread_seed_links(
+                    thread_digests=thread_digests,
+                    candidate_ids=[active_goal_tension_id],
+                )
                 return [
                     {
                         "briefType": "daily",
@@ -743,17 +951,33 @@ class ProactiveEngine:
                             "You can name the live tension without forcing resolution."
                         ),
                         "priority": 74,
-                        "relatedJourneyIds": [],
-                        "relatedMaterialIds": [],
-                        "relatedSymbolIds": [],
-                        "relatedPracticeSessionIds": [],
-                        "evidenceIds": list(active_goal_tension.get("evidenceIds", [])),
+                        "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                        "relatedMaterialIds": list(thread_links["relatedMaterialIds"]),
+                        "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                        "relatedPracticeSessionIds": list(
+                            thread_links["relatedPracticeSessionIds"]
+                        ),
+                        "evidenceIds": self._merge_ids(
+                            [
+                                str(item)
+                                for item in active_goal_tension.get("evidenceIds", [])
+                                if str(item).strip()
+                            ],
+                            thread_links["evidenceIds"],
+                        )[:5],
                         "reason": "goal_tension_active_method_state",
                     }
                 ]
             signals = method_context.get("longitudinalSignals", [])
             if signals:
                 signal = signals[0]
+                thread_links = self._thread_seed_links(
+                    thread_digests=thread_digests,
+                    candidate_ids=[
+                        str(signal.get("id") or ""),
+                        *[str(item) for item in signal.get("materialIds", [])],
+                    ],
+                )
                 return [
                     {
                         "briefType": "daily",
@@ -762,17 +986,26 @@ class ProactiveEngine:
                         "summaryHint": "A recurring pattern may be ripe for a short check-in.",
                         "suggestedActionHint": "You can note it without pressing for an answer.",
                         "priority": 65,
-                        "relatedJourneyIds": [],
-                        "relatedMaterialIds": list(signal.get("materialIds", []))[:3],
-                        "relatedSymbolIds": [],
-                        "relatedPracticeSessionIds": [],
-                        "evidenceIds": [],
+                        "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                        "relatedMaterialIds": self._merge_ids(
+                            list(signal.get("materialIds", []))[:3],
+                            thread_links["relatedMaterialIds"],
+                        )[:3],
+                        "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                        "relatedPracticeSessionIds": list(
+                            thread_links["relatedPracticeSessionIds"]
+                        ),
+                        "evidenceIds": list(thread_links["evidenceIds"]),
                         "reason": "longitudinal_signal_active",
                     }
                 ]
         for item in memory_snapshot.get("items", [])[:3]:
             material_id = item.get("provenance", {}).get("materialId")
             if material_id:
+                thread_links = self._thread_seed_links(
+                    thread_digests=thread_digests,
+                    candidate_ids=[str(item.get("entityId") or ""), str(material_id)],
+                )
                 return [
                     {
                         "briefType": "daily",
@@ -785,11 +1018,23 @@ class ProactiveEngine:
                         ),
                         "suggestedActionHint": "You can simply note it and move on.",
                         "priority": 60,
-                        "relatedJourneyIds": [],
-                        "relatedMaterialIds": [material_id],
-                        "relatedSymbolIds": [],
-                        "relatedPracticeSessionIds": [],
-                        "evidenceIds": list(item.get("provenance", {}).get("evidenceIds", [])),
+                        "relatedJourneyIds": list(thread_links["relatedJourneyIds"]),
+                        "relatedMaterialIds": self._merge_ids(
+                            [str(material_id)],
+                            thread_links["relatedMaterialIds"],
+                        )[:3],
+                        "relatedSymbolIds": list(thread_links["relatedSymbolIds"]),
+                        "relatedPracticeSessionIds": list(
+                            thread_links["relatedPracticeSessionIds"]
+                        ),
+                        "evidenceIds": self._merge_ids(
+                            [
+                                str(evidence_id)
+                                for evidence_id in item.get("provenance", {}).get("evidenceIds", [])
+                                if str(evidence_id).strip()
+                            ],
+                            thread_links["evidenceIds"],
+                        )[:5],
                         "reason": "memory_kernel_recent",
                     }
                 ]

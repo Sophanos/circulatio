@@ -54,6 +54,7 @@ from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
     AdaptationPreferenceScope,
     AmplificationSourceSummary,
+    AnalysisPacketInput,
     CirculationSummaryInput,
     CirculationSummaryResult,
     CoachCaptureContract,
@@ -67,6 +68,7 @@ from ..domain.types import (
     InterpretationOptions,
     InterpretationResult,
     LifeContextSnapshot,
+    LivingMythReviewInput,
     MaterialInterpretationInput,
     MemoryWritePlan,
     MemoryWriteProposal,
@@ -74,10 +76,13 @@ from ..domain.types import (
     PracticeInteractionFeedback,
     PracticeOutcomeWritePayload,
     PracticePlan,
+    PracticeRecommendationInput,
     ResourceInvitationSummary,
     RhythmicBriefInput,
     SafetyContext,
     SessionContext,
+    ThreadDigest,
+    ThresholdReviewInput,
     UserAdaptationProfileSummary,
     UserAssociationInput,
     WitnessStateSummary,
@@ -220,6 +225,7 @@ class CirculatioService:
         warnings: list[str] = []
         method_context: MethodContextSnapshot | None = None
         dashboard: DashboardSummary | None = None
+        thread_digests: list[ThreadDigest] = []
         try:
             method_snapshot = await self._repository.build_method_context_snapshot_from_records(
                 material["userId"],
@@ -240,6 +246,22 @@ class CirculatioService:
             )
             warnings.append("method_context_unavailable")
         try:
+            thread_digests = self._merge_thread_digests(
+                await self._repository.build_thread_digests_from_records(
+                    material["userId"],
+                    window_start=window_start,
+                    window_end=window_end,
+                    material_id=material["id"],
+                ),
+                self._build_coach_loop_thread_digests(method_context),
+            )
+        except Exception:
+            LOGGER.exception(
+                "Post-store thread digest derivation failed for material %s",
+                material["id"],
+            )
+            warnings.append("thread_digest_unavailable")
+        try:
             dashboard = await self._repository.get_dashboard_summary(material["userId"])
         except Exception:
             LOGGER.exception(
@@ -256,6 +278,7 @@ class CirculatioService:
                 window_start=window_start,
                 window_end=window_end,
                 method_context=method_context,
+                thread_digests=thread_digests,
                 dashboard=dashboard,
                 warnings=warnings,
             )
@@ -292,6 +315,7 @@ class CirculatioService:
                     "activePatternCount": 0,
                     "activeJourneyCount": 0,
                     "longitudinalSignalCount": 0,
+                    "threadDigestCount": 0,
                     "intakeItemCount": 0,
                     "pendingProposalCount": 0,
                 },
@@ -1190,6 +1214,210 @@ class CirculatioService:
             result["dashboard"] = await self._repository.get_dashboard_summary(user_id=user_id)
         return result
 
+    def _merge_thread_digests(
+        self,
+        base: list[ThreadDigest] | None,
+        additions: list[ThreadDigest] | None,
+    ) -> list[ThreadDigest]:
+        merged: list[ThreadDigest] = []
+        seen_keys: set[str] = set()
+        for digest in [*(base or []), *(additions or [])]:
+            if not isinstance(digest, dict):
+                continue
+            thread_key = self._optional_str(digest.get("threadKey"))
+            if not thread_key or thread_key in seen_keys:
+                continue
+            seen_keys.add(thread_key)
+            merged.append(cast(ThreadDigest, deepcopy(digest)))
+        merged.sort(
+            key=lambda item: str(item.get("lastTouchedAt") or ""),
+            reverse=True,
+        )
+        return merged
+
+    def _build_coach_loop_thread_digests(
+        self,
+        method_context: MethodContextSnapshot | None,
+    ) -> list[ThreadDigest]:
+        if not isinstance(method_context, dict):
+            return []
+        coach_state = method_context.get("coachState")
+        if not isinstance(coach_state, dict):
+            return []
+        generated_at = str(
+            coach_state.get("generatedAt") or method_context.get("windowEnd") or now_iso()
+        )
+        digests: list[ThreadDigest] = []
+        seen_loop_keys: set[str] = set()
+        loop_candidates = [
+            item for item in coach_state.get("activeLoops", []) if isinstance(item, dict)
+        ]
+        selected_move = coach_state.get("selectedMove")
+        if isinstance(selected_move, dict):
+            loop_candidates.append(selected_move)
+        for loop in loop_candidates:
+            loop_key = self._optional_str(loop.get("loopKey"))
+            if not loop_key or loop_key in seen_loop_keys:
+                continue
+            seen_loop_keys.add(loop_key)
+            summary = (
+                self._optional_str(loop.get("summaryHint"))
+                or self._optional_str(loop.get("titleHint"))
+                or self._optional_str(
+                    (
+                        loop.get("promptFrame") if isinstance(loop.get("promptFrame"), dict) else {}
+                    ).get("askAbout")
+                )
+                or "Coach loop remains live."
+            )
+            status = self._optional_str(loop.get("status")) or "eligible"
+            surface_readiness = {
+                "aliveToday": "ready" if status == "eligible" else "available",
+                "journeyPage": "ready" if status == "eligible" else "available",
+                "rhythmicBrief": "ready" if status == "eligible" else "available",
+                "methodStateResponse": "available",
+            }
+            entity_refs: dict[str, list[Id]] = {}
+            for key, ref_key in (
+                ("journeys", "relatedJourneyIds"),
+                ("materials", "relatedMaterialIds"),
+                ("symbols", "relatedSymbolIds"),
+                ("practiceSessions", "relatedPracticeSessionIds"),
+            ):
+                values = [
+                    str(value)
+                    for value in loop.get(ref_key, [])
+                    if isinstance(value, str) and value.strip()
+                ]
+                if values:
+                    entity_refs[key] = values
+            digests.append(
+                {
+                    "threadKey": f"coach_loop:{loop_key}",
+                    "kind": "coach_loop",
+                    "status": status,
+                    "summary": self._compact_page_text(summary, max_length=220),
+                    "entityRefs": entity_refs,
+                    "evidenceIds": [
+                        str(value)
+                        for value in loop.get("evidenceIds", [])
+                        if isinstance(value, str) and value.strip()
+                    ],
+                    "journeyIds": list(entity_refs.get("journeys", [])),
+                    "sourceRecordRefs": [
+                        {
+                            "recordType": "CoachLoop",
+                            "recordId": loop_key,
+                            "summary": self._compact_page_text(summary, max_length=180),
+                        }
+                    ],
+                    "lastTouchedAt": generated_at,
+                    "surfaceReadiness": surface_readiness,
+                }
+            )
+        return digests
+
+    def _thread_digest_label(self, digest: ThreadDigest) -> str:
+        kind = self._optional_str(digest.get("kind")) or "thread"
+        mapping = {
+            "journey": "Journey thread",
+            "dream_series": "Dream series",
+            "threshold_process": "Threshold process",
+            "relational_scene": "Relational scene",
+            "goal_tension": "Goal tension",
+            "practice_loop": "Practice loop",
+            "longitudinal_signal": "Longitudinal signal",
+            "coach_loop": "Coach loop",
+        }
+        return mapping.get(kind, kind.replace("_", " ").title())
+
+    async def _load_surface_context_bundle(
+        self,
+        *,
+        user_id: Id,
+        window_start: str,
+        window_end: str,
+        surface: str = "generic",
+        payload: dict[str, object] | None = None,
+        material_id: Id | None = None,
+        include_dashboard: bool = False,
+        memory_query: MemoryRetrievalQuery | None = None,
+        explicit_question: str | None = None,
+        safety_context: SafetyContext | None = None,
+        sync_longitudinal: bool = False,
+    ) -> dict[str, object]:
+        prepared_payload = (
+            deepcopy(payload)
+            if payload is not None
+            else deepcopy(
+                await self._repository.build_circulation_summary_input(
+                    user_id,
+                    window_start=window_start,
+                    window_end=window_end,
+                )
+            )
+        )
+        coach_runtime = await self._load_coach_runtime_inputs(
+            user_id=user_id,
+            include_dashboard=include_dashboard,
+        )
+        dashboard = cast(DashboardSummary | None, coach_runtime.get("dashboard"))
+        method_context = self._enrich_method_context_snapshot(
+            cast(MethodContextSnapshot | None, prepared_payload.get("methodContextSnapshot")),
+            window_start=window_start,
+            window_end=window_end,
+            surface=surface,
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            dashboard=dashboard,
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            safety_context=safety_context,
+        )
+        thread_digests = self._merge_thread_digests(
+            await self._repository.build_thread_digests_from_records(
+                user_id,
+                window_start=window_start,
+                window_end=window_end,
+                material_id=material_id,
+            ),
+            self._build_coach_loop_thread_digests(method_context),
+        )
+        prepared_payload["methodContextSnapshot"] = deepcopy(method_context)
+        if thread_digests:
+            prepared_payload["threadDigests"] = deepcopy(thread_digests)
+        else:
+            prepared_payload.pop("threadDigests", None)
+        if explicit_question:
+            prepared_payload["explicitQuestion"] = explicit_question
+        if safety_context is not None:
+            prepared_payload["safetyContext"] = deepcopy(safety_context)
+        if sync_longitudinal:
+            prepared_payload = cast(
+                dict[str, object],
+                self._sync_longitudinal_input_fields(prepared_payload),
+            )
+        memory_snapshot = None
+        if memory_query is not None:
+            memory_snapshot = await self._repository.build_memory_kernel_snapshot(
+                user_id,
+                query=memory_query,
+            )
+        return {
+            "preparedPayload": prepared_payload,
+            "methodContextSnapshot": method_context,
+            "threadDigests": thread_digests,
+            "dashboard": dashboard,
+            "memorySnapshot": memory_snapshot,
+            "recentPractices": coach_runtime["recentPractices"],
+            "journeys": coach_runtime["journeys"],
+            "existingBriefs": coach_runtime["existingBriefs"],
+            "profile": coach_runtime["profile"],
+            "adaptationSummary": coach_runtime["adaptationSummary"],
+        }
+
     def _coach_expected_targets_from_context(
         self,
         *,
@@ -1625,7 +1853,7 @@ class CirculatioService:
             "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
             "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
             "relatedDreamSeriesIds": [],
-            "relatedJourneyIds": [],
+            "relatedJourneyIds": list(input_data.get("relatedJourneyIds", [])),
             "relatedPracticeSessionIds": [],
             "privacyClass": str(input_data.get("privacyClass") or "user_private"),
             "details": {
@@ -1707,7 +1935,7 @@ class CirculatioService:
                 "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
                 "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
                 "relatedDreamSeriesIds": list(input_data.get("relatedDreamSeriesIds", [])),
-                "relatedJourneyIds": [],
+                "relatedJourneyIds": list(input_data.get("relatedJourneyIds", [])),
                 "relatedPracticeSessionIds": [],
                 "privacyClass": str(input_data.get("privacyClass") or "user_private"),
                 "details": details,
@@ -1747,6 +1975,10 @@ class CirculatioService:
                     "relatedDreamSeriesIds": self._merge_ids(
                         list(existing.get("relatedDreamSeriesIds", [])),
                         list(input_data.get("relatedDreamSeriesIds", [])),
+                    ),
+                    "relatedJourneyIds": self._merge_ids(
+                        list(existing.get("relatedJourneyIds", [])),
+                        list(input_data.get("relatedJourneyIds", [])),
                     ),
                     "privacyClass": str(
                         input_data.get("privacyClass")
@@ -1808,7 +2040,7 @@ class CirculatioService:
                 "relatedSymbolIds": [],
                 "relatedGoalIds": list(input_data.get("relatedGoalIds", [])),
                 "relatedDreamSeriesIds": [],
-                "relatedJourneyIds": [],
+                "relatedJourneyIds": list(input_data.get("relatedJourneyIds", [])),
                 "relatedPracticeSessionIds": [],
                 "privacyClass": str(input_data.get("privacyClass") or "user_private"),
                 "details": {
@@ -1857,6 +2089,10 @@ class CirculatioService:
                     "relatedGoalIds": self._merge_ids(
                         list(existing.get("relatedGoalIds", [])),
                         list(input_data.get("relatedGoalIds", [])),
+                    ),
+                    "relatedJourneyIds": self._merge_ids(
+                        list(existing.get("relatedJourneyIds", [])),
+                        list(input_data.get("relatedJourneyIds", [])),
                     ),
                     "privacyClass": str(
                         input_data.get("privacyClass")
@@ -1927,7 +2163,7 @@ class CirculatioService:
                 "relatedSymbolIds": list(input_data.get("symbolIds", [])),
                 "relatedGoalIds": [],
                 "relatedDreamSeriesIds": [],
-                "relatedJourneyIds": [],
+                "relatedJourneyIds": list(input_data.get("relatedJourneyIds", [])),
                 "relatedPracticeSessionIds": [],
                 "privacyClass": str(input_data.get("privacyClass") or "user_private"),
                 "details": details,
@@ -1975,6 +2211,10 @@ class CirculatioService:
                         list(existing.get("relatedSymbolIds", [])),
                         list(input_data.get("symbolIds", [])),
                     ),
+                    "relatedJourneyIds": self._merge_ids(
+                        list(existing.get("relatedJourneyIds", [])),
+                        list(input_data.get("relatedJourneyIds", [])),
+                    ),
                     "privacyClass": str(
                         input_data.get("privacyClass")
                         or existing.get("privacyClass")
@@ -2017,7 +2257,7 @@ class CirculatioService:
             "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
             "relatedGoalIds": [],
             "relatedDreamSeriesIds": [],
-            "relatedJourneyIds": [],
+            "relatedJourneyIds": list(input_data.get("relatedJourneyIds", [])),
             "relatedPracticeSessionIds": [],
             "privacyClass": str(input_data.get("privacyClass") or "user_private"),
             "details": {
@@ -2071,7 +2311,7 @@ class CirculatioService:
             "relatedSymbolIds": list(input_data.get("relatedSymbolIds", [])),
             "relatedGoalIds": [],
             "relatedDreamSeriesIds": [],
-            "relatedJourneyIds": [],
+            "relatedJourneyIds": list(input_data.get("relatedJourneyIds", [])),
             "relatedPracticeSessionIds": [],
             "privacyClass": str(input_data.get("privacyClass") or "user_private"),
             "details": details,
@@ -2413,20 +2653,20 @@ class CirculatioService:
             window_end=window_end,
             material_id=str(anchor_refs.get("materialId") or response_material["id"]),
         )
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=user_id)
-        method_context = self._enrich_method_context_snapshot(
-            method_context,
+        bundle = await self._load_surface_context_bundle(
+            user_id=user_id,
             window_start=window_start,
             window_end=window_end,
             surface="method_state_response",
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            payload={"methodContextSnapshot": method_context},
+            material_id=cast(
+                Id | None,
+                anchor_refs.get("materialId") or response_material["id"],
             ),
-            safety_context=input_data.get("safetyContext"),
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
+        method_context = cast(MethodContextSnapshot, bundle["methodContextSnapshot"])
+        thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
         warnings: list[str] = []
         if not expected_targets:
             coach_loop_key = str(anchor_refs.get("coachLoopKey") or "").strip()
@@ -2470,6 +2710,7 @@ class CirculatioService:
                     "expectedTargets": list(expected_targets),
                     "clarificationIntent": deepcopy(anchors.get("clarificationIntent", {})),
                     "methodContextSnapshot": deepcopy(method_context or {}),
+                    "threadDigests": deepcopy(thread_digests),
                     "lifeContextSnapshot": deepcopy(life_context or {}),
                     "hermesMemoryContext": deepcopy(hermes_memory),
                     "safetyContext": deepcopy(input_data.get("safetyContext", {})),
@@ -3147,25 +3388,13 @@ class CirculatioService:
         window_start: str,
         window_end: str,
     ) -> WeeklyReviewRecord:
-        summary_input = await self._repository.build_circulation_summary_input(
-            user_id,
-            window_start=window_start,
-            window_end=window_end,
-        )
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=user_id)
-        summary_input = deepcopy(summary_input)
-        summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            summary_input.get("methodContextSnapshot"),
+        bundle = await self._load_surface_context_bundle(
+            user_id=user_id,
             window_start=window_start,
             window_end=window_end,
             surface="weekly_review",
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-            ),
         )
+        summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
         result = await self._core.generate_weekly_review_summary(summary_input)
         practice_session = await self._store_review_practice(user_id=user_id, result=result)
         context_snapshots = await self._repository.list_context_snapshots(
@@ -3233,21 +3462,18 @@ class CirculatioService:
             namespaces = [str(value) for value in raw_namespaces if str(value).strip()]
             if namespaces:
                 memory_query["namespaces"] = namespaces  # type: ignore[typeddict-item]
-        method_context = await self._repository.build_method_context_snapshot_from_records(
-            input_data["userId"],
-            window_start=resolved_start,
-            window_end=resolved_end,
-        )
-        method_context = self._enrich_method_context_snapshot(
-            method_context,
-            window_start=resolved_start,
-            window_end=resolved_end,
-        )
-        dashboard = await self.get_dashboard_summary(user_id=input_data["userId"])
-        memory_snapshot = await self.build_memory_kernel_snapshot(
+        bundle = await self._load_surface_context_bundle(
             user_id=input_data["userId"],
-            query=memory_query,
+            window_start=resolved_start,
+            window_end=resolved_end,
+            include_dashboard=True,
+            memory_query=memory_query,
+            explicit_question=explicit_question,
         )
+        method_context = cast(MethodContextSnapshot | None, bundle["methodContextSnapshot"])
+        thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
+        dashboard = cast(DashboardSummary, bundle["dashboard"])
+        memory_snapshot = cast(MemoryKernelSnapshot, bundle["memorySnapshot"])
         root_node_ids = self._normalize_discovery_root_ids(input_data.get("rootNodeIds"))
         if not root_node_ids:
             root_node_ids = self._derive_discovery_root_ids(
@@ -3269,6 +3495,7 @@ class CirculatioService:
             memory_snapshot=memory_snapshot,
             graph=graph,
             method_context=method_context,
+            thread_digests=thread_digests,
             max_items=max_items,
         )
         warnings = [
@@ -3282,6 +3509,7 @@ class CirculatioService:
             "activePatternCount": len(dashboard["activePatterns"]),
             "pendingProposalCount": dashboard["pendingProposalCount"],
             "memoryItemCount": len(memory_snapshot["items"]),
+            "threadDigestCount": len(thread_digests),
             "graphNodeCount": len(graph["nodes"]),
             "graphEdgeCount": len(graph["edges"]),
         }
@@ -3368,12 +3596,17 @@ class CirculatioService:
         cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
         adaptation_summary = self._adaptation_engine.summarize(profile)
         method_context = summary_input.get("methodContextSnapshot")
+        thread_digests = cast(
+            list[ThreadDigest],
+            [item for item in summary_input.get("threadDigests", []) if isinstance(item, dict)],
+        )
         generated_at = now_iso()
         seeds = self._proactive_engine.build_candidate_seeds(
             user_id=input_data["userId"],
             memory_snapshot=memory_snapshot,
             dashboard=dashboard,
             method_context=method_context,
+            thread_digests=thread_digests,
             recent_practices=recent_practices,
             journeys=journeys,
             existing_briefs=existing_briefs,
@@ -3415,7 +3648,6 @@ class CirculatioService:
             self._build_journey_analysis_packet_preview(
                 summary=summary,
                 summary_input=summary_input,
-                journeys=journeys,
                 recent_practices=recent_practices,
                 window_start=resolved_start,
                 window_end=resolved_end,
@@ -3519,23 +3751,16 @@ class CirculatioService:
             threshold_process_id=input_data.get("thresholdProcessId"),
             explicit_question=input_data.get("explicitQuestion"),
         )
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
-        review_input = deepcopy(review_input)
-        review_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            review_input.get("methodContextSnapshot"),
+        bundle = await self._load_surface_context_bundle(
+            user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
             surface="generic",
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-            ),
+            payload=cast(dict[str, object], review_input),
+            explicit_question=self._optional_str(input_data.get("explicitQuestion")),
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
-        if input_data.get("safetyContext") is not None:
-            review_input["safetyContext"] = deepcopy(input_data["safetyContext"])
+        review_input = cast(ThresholdReviewInput, bundle["preparedPayload"])
         result = await self._core.generate_threshold_review(review_input)
         practice_session: PracticeSessionRecord | None = None
         practice = result.get("practiceRecommendation")
@@ -3634,24 +3859,17 @@ class CirculatioService:
             window_end=resolved_end,
             explicit_question=input_data.get("explicitQuestion"),
         )
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
-        review_input = deepcopy(review_input)
-        review_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            review_input.get("methodContextSnapshot"),
+        bundle = await self._load_surface_context_bundle(
+            user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
             surface="generic",
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-            ),
+            payload=cast(dict[str, object], review_input),
+            explicit_question=self._optional_str(input_data.get("explicitQuestion")),
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+            sync_longitudinal=True,
         )
-        review_input = cast(dict[str, object], self._sync_longitudinal_input_fields(review_input))
-        if input_data.get("safetyContext") is not None:
-            review_input["safetyContext"] = deepcopy(input_data["safetyContext"])
+        review_input = cast(LivingMythReviewInput, bundle["preparedPayload"])
         result = await self._core.generate_living_myth_review(review_input)
         practice_session: PracticeSessionRecord | None = None
         practice = result.get("practiceRecommendation")
@@ -3757,24 +3975,17 @@ class CirculatioService:
             packet_focus=input_data.get("packetFocus"),
             explicit_question=input_data.get("explicitQuestion"),
         )
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
-        packet_input = deepcopy(packet_input)
-        packet_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            packet_input.get("methodContextSnapshot"),
+        bundle = await self._load_surface_context_bundle(
+            user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
             surface="analysis_packet",
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-            ),
+            payload=cast(dict[str, object], packet_input),
+            explicit_question=self._optional_str(input_data.get("explicitQuestion")),
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+            sync_longitudinal=True,
         )
-        packet_input = cast(dict[str, object], self._sync_longitudinal_input_fields(packet_input))
-        if input_data.get("safetyContext") is not None:
-            packet_input["safetyContext"] = deepcopy(input_data["safetyContext"])
+        packet_input = cast(AnalysisPacketInput, bundle["preparedPayload"])
         result = await self._core.generate_analysis_packet(packet_input)
         workflow: AnalysisPacketWorkflowResult = {"result": result}
         if input_data.get("persist", True):
@@ -3825,28 +4036,24 @@ class CirculatioService:
         if input_data.get("options") is not None:
             adapter_input["options"] = normalize_options(input_data["options"])
         practice_input = await self._context_adapter.build_practice_input(adapter_input)
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
-        profile = cast(dict[str, object] | None, coach_runtime["profile"])
-        practice_hints = self._adaptation_engine.derive_practice_hints(profile=profile)
-        practice_input = deepcopy(practice_input)
         practice_surface: Literal["generic", "practice_followup"] = (
             "practice_followup"
             if str(trigger.get("triggerType") or "manual") == "practice_followup"
             else "generic"
         )
-        practice_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            practice_input.get("methodContextSnapshot"),
+        bundle = await self._load_surface_context_bundle(
+            user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
             surface=practice_surface,
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-            ),
+            payload=cast(dict[str, object], practice_input),
+            material_id=cast(Id | None, trigger.get("materialId")),
+            explicit_question=self._optional_str(input_data.get("explicitQuestion")),
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
+        practice_input = cast(PracticeRecommendationInput, bundle["preparedPayload"])
+        profile = cast(dict[str, object] | None, bundle["profile"])
+        practice_hints = self._adaptation_engine.derive_practice_hints(profile=profile)
         practice_input["practiceHints"] = deepcopy(practice_hints)
         practice_input["adaptationHints"] = deepcopy(practice_hints)
         llm_result = await self._core.generate_practice(practice_input)
@@ -4064,35 +4271,33 @@ class CirculatioService:
             fallback_start=input_data.get("windowStart"),
             fallback_end=input_data.get("windowEnd"),
         )
-        summary_input = await self._repository.build_circulation_summary_input(
-            input_data["userId"],
-            window_start=resolved_start,
-            window_end=resolved_end,
-        )
-        memory_snapshot = await self._repository.build_memory_kernel_snapshot(input_data["userId"])
-        dashboard = await self._repository.get_dashboard_summary(user_id=input_data["userId"])
-        coach_runtime = await self._load_coach_runtime_inputs(user_id=input_data["userId"])
-        recent_practices = cast(list[PracticeSessionRecord], coach_runtime["recentPractices"])
-        journeys = cast(list[JourneyRecord], coach_runtime["journeys"])
-        existing_briefs = cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"])
-        profile = cast(dict[str, object] | None, coach_runtime["profile"])
-        cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
-        adaptation_summary = cast(
-            UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-        )
-        summary_input = deepcopy(summary_input)
-        summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            summary_input.get("methodContextSnapshot"),
+        bundle = await self._load_surface_context_bundle(
+            user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
             surface="rhythmic_brief",
-            existing_briefs=existing_briefs,
-            recent_practices=recent_practices,
-            journeys=journeys,
-            dashboard=dashboard,
-            adaptation_profile=adaptation_summary,
+            payload=cast(
+                dict[str, object],
+                await self._repository.build_circulation_summary_input(
+                    input_data["userId"],
+                    window_start=resolved_start,
+                    window_end=resolved_end,
+                ),
+            ),
+            include_dashboard=True,
+            memory_query={},
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
+        summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
+        memory_snapshot = cast(MemoryKernelSnapshot, bundle["memorySnapshot"])
+        dashboard = cast(DashboardSummary, bundle["dashboard"])
+        thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
+        recent_practices = cast(list[PracticeSessionRecord], bundle["recentPractices"])
+        journeys = cast(list[JourneyRecord], bundle["journeys"])
+        existing_briefs = cast(list[ProactiveBriefRecord], bundle["existingBriefs"])
+        profile = cast(dict[str, object] | None, bundle["profile"])
+        cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
+        adaptation_summary = cast(UserAdaptationProfileSummary | None, bundle["adaptationSummary"])
         method_context = summary_input.get("methodContextSnapshot")
         consent_status = self._consent_status(
             method_context.get("consentPreferences", []) if method_context else [],
@@ -4109,6 +4314,7 @@ class CirculatioService:
             memory_snapshot=memory_snapshot,
             dashboard=dashboard,
             method_context=method_context,
+            thread_digests=thread_digests,
             recent_practices=recent_practices,
             journeys=journeys,
             existing_briefs=existing_briefs,
@@ -4144,6 +4350,8 @@ class CirculatioService:
                 brief_input["lifeContextSnapshot"] = deepcopy(summary_input["lifeContextSnapshot"])
             if method_context is not None:
                 brief_input["methodContextSnapshot"] = deepcopy(method_context)
+            if summary_input.get("threadDigests"):
+                brief_input["threadDigests"] = deepcopy(summary_input["threadDigests"])
             if adaptation_summary is not None:
                 brief_input["adaptationProfile"] = deepcopy(adaptation_summary)
             if input_data.get("safetyContext") is not None:
@@ -4524,6 +4732,7 @@ class CirculatioService:
         memory_snapshot: MemoryKernelSnapshot,
         graph: GraphQueryResult,
         method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
         max_items: int,
     ) -> list[DiscoverySection]:
         candidates = self._discovery_candidates(
@@ -4531,6 +4740,7 @@ class CirculatioService:
             memory_snapshot=memory_snapshot,
             graph=graph,
             method_context=method_context,
+            thread_digests=thread_digests,
         )
         recurring = self._build_recurring_discovery_section(
             candidates=candidates,
@@ -4593,6 +4803,7 @@ class CirculatioService:
         memory_snapshot: MemoryKernelSnapshot,
         graph: GraphQueryResult,
         method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
     ) -> dict[str, dict[str, object]]:
         candidates: dict[str, dict[str, object]] = {}
         degree_by_node_id = self._discovery_graph_degree_map(graph)
@@ -4680,6 +4891,11 @@ class CirculatioService:
         self._add_method_context_discovery_candidates(
             candidates,
             method_context=method_context,
+            degree_by_node_id=degree_by_node_id,
+        )
+        self._add_thread_digest_discovery_candidates(
+            candidates,
+            thread_digests=thread_digests,
             degree_by_node_id=degree_by_node_id,
         )
         return candidates
@@ -5325,6 +5541,61 @@ class CirculatioService:
                     longitudinal_context=True,
                 )
 
+    def _add_thread_digest_discovery_candidates(
+        self,
+        candidates: dict[str, dict[str, object]],
+        *,
+        thread_digests: list[ThreadDigest] | None,
+        degree_by_node_id: dict[Id, int],
+    ) -> None:
+        for digest in thread_digests or []:
+            if not isinstance(digest, dict):
+                continue
+            thread_key = self._optional_str(digest.get("threadKey"))
+            summary = self._optional_str(digest.get("summary"))
+            if not thread_key or not summary:
+                continue
+            kind = self._optional_str(digest.get("kind")) or "thread"
+            entity_refs = deepcopy(
+                digest.get("entityRefs") if isinstance(digest.get("entityRefs"), dict) else {}
+            )
+            journey_ids = [
+                str(value)
+                for value in digest.get("journeyIds", [])
+                if isinstance(value, str) and value.strip()
+            ]
+            if journey_ids:
+                entity_refs["journeys"] = self._merge_ids(
+                    cast(list[Id], entity_refs.get("journeys", [])),
+                    cast(list[Id], journey_ids),
+                )
+            graph_degree = max(
+                [
+                    degree_by_node_id.get(ref_id, 0)
+                    for ref_ids in entity_refs.values()
+                    if isinstance(ref_ids, list)
+                    for ref_id in ref_ids
+                    if isinstance(ref_id, str) and ref_id.strip()
+                ],
+                default=0,
+            )
+            self._add_discovery_candidate(
+                candidates,
+                key=thread_key,
+                label=self._thread_digest_label(digest),
+                summary=summary,
+                criteria=["thread_digest", f"thread_kind:{kind}"],
+                source_kind="thread_digest",
+                entity_refs=entity_refs,
+                evidence_ids=[
+                    str(value)
+                    for value in digest.get("evidenceIds", [])
+                    if isinstance(value, str) and value.strip()
+                ],
+                graph_degree=graph_degree,
+                longitudinal_context=True,
+            )
+
     def _add_discovery_candidate(
         self,
         candidates: dict[str, dict[str, object]],
@@ -5791,6 +6062,7 @@ class CirculatioService:
             candidate
             for candidate in candidates.values()
             if "method_context_active_journey" in candidate.get("criteria", [])
+            or "thread_digest" in candidate.get("criteria", [])
         ]
         items = [
             self._candidate_to_discovery_item(candidate)
@@ -5799,9 +6071,9 @@ class CirculatioService:
             ]
         ]
         summary = (
-            "Active journeys that still organize the current symbolic field."
+            "Derived threads that still organize the current symbolic field."
             if items
-            else "No active journey thread surfaced in this bounded discovery digest."
+            else "No live thread surfaced in this bounded discovery digest."
         )
         return {
             "key": "journey_threads",
@@ -6259,6 +6531,7 @@ class CirculatioService:
         window_start: str,
         window_end: str,
         method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
         dashboard: DashboardSummary | None,
         warnings: list[str],
     ) -> IntakeContextPacket:
@@ -6268,6 +6541,8 @@ class CirculatioService:
             material=material,
             method_context=method_context,
         ):
+            self._add_intake_item(items, item=item, seen_keys=seen_keys)
+        for item in self._intake_items_from_thread_digests(thread_digests=thread_digests):
             self._add_intake_item(items, item=item, seen_keys=seen_keys)
         for item in self._intake_items_from_dashboard(
             material=material,
@@ -6296,6 +6571,11 @@ class CirculatioService:
                 1
                 for record in (method_context or {}).get("activeJourneys", [])
                 if isinstance(record, dict) and self._optional_str(record.get("id"))
+            ),
+            "threadDigestCount": sum(
+                1
+                for record in (thread_digests or [])
+                if isinstance(record, dict) and self._optional_str(record.get("threadKey"))
             ),
             "longitudinalSignalCount": sum(
                 1
@@ -6350,6 +6630,57 @@ class CirculatioService:
         if text_preview:
             anchor["textPreview"] = text_preview
         return anchor
+
+    def _intake_items_from_thread_digests(
+        self,
+        *,
+        thread_digests: list[ThreadDigest] | None,
+    ) -> list[IntakeContextItem]:
+        items: list[IntakeContextItem] = []
+        seen_keys: set[str] = set()
+        for digest in (thread_digests or [])[:4]:
+            if not isinstance(digest, dict):
+                continue
+            thread_key = self._optional_str(digest.get("threadKey"))
+            summary = self._truncate_intake_text(digest.get("summary"), limit=180)
+            if not thread_key or not summary:
+                continue
+            kind = self._optional_str(digest.get("kind")) or "thread"
+            if kind == "coach_loop":
+                continue
+            entity_refs = deepcopy(
+                digest.get("entityRefs") if isinstance(digest.get("entityRefs"), dict) else {}
+            )
+            journey_ids = [
+                str(value)
+                for value in digest.get("journeyIds", [])
+                if isinstance(value, str) and value.strip()
+            ]
+            if journey_ids:
+                entity_refs["journeys"] = self._merge_ids(
+                    cast(list[Id], entity_refs.get("journeys", [])),
+                    cast(list[Id], journey_ids),
+                )
+            self._add_intake_item(
+                items,
+                item={
+                    "key": f"thread_digest:{thread_key}",
+                    "kind": "thread_digest",
+                    "label": self._thread_digest_label(digest),
+                    "summary": summary,
+                    "sourceKind": "method_context",
+                    "criteria": ["thread_digest", f"thread_kind:{kind}"],
+                    "entityRefs": entity_refs,
+                    "evidenceIds": [
+                        str(value)
+                        for value in digest.get("evidenceIds", [])
+                        if isinstance(value, str) and value.strip()
+                    ],
+                },
+                seen_keys=seen_keys,
+                max_items=4,
+            )
+        return items
 
     def _intake_items_from_dashboard(
         self,
@@ -7331,31 +7662,15 @@ class CirculatioService:
         explicit_question: str | None = None,
         surface: Literal["alive_today", "journey_page"] = "alive_today",
     ) -> tuple[CirculationSummaryInput, CirculationSummaryResult]:
-        summary_input = await self._repository.build_circulation_summary_input(
-            user_id,
-            window_start=window_start,
-            window_end=window_end,
-        )
-        coach_runtime = await self._load_coach_runtime_inputs(
+        bundle = await self._load_surface_context_bundle(
             user_id=user_id,
-            include_dashboard=True,
-        )
-        summary_input = deepcopy(summary_input)
-        summary_input["methodContextSnapshot"] = self._enrich_method_context_snapshot(
-            summary_input.get("methodContextSnapshot"),
             window_start=window_start,
             window_end=window_end,
+            include_dashboard=True,
             surface=surface,
-            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
-            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
-            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-            dashboard=cast(DashboardSummary | None, coach_runtime.get("dashboard")),
-            adaptation_profile=cast(
-                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-            ),
+            explicit_question=explicit_question,
         )
-        if explicit_question:
-            summary_input["explicitQuestion"] = explicit_question
+        summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
         return summary_input, await self._core.generate_circulation_summary(summary_input)
 
     def _build_journey_alive_surface(
@@ -7659,7 +7974,6 @@ class CirculatioService:
         *,
         summary: CirculationSummaryResult,
         summary_input: CirculationSummaryInput,
-        journeys: list[dict[str, object]],
         recent_practices: list[PracticeSessionRecord],
         window_start: str,
         window_end: str,
@@ -7776,24 +8090,36 @@ class CirculatioService:
                     "items": method_items[:5],
                 }
             )
-        active_journeys = [item for item in journeys if item.get("status") == "active"][:5]
-        if active_journeys:
+        thread_digests = [
+            item
+            for item in summary_input.get("threadDigests", [])
+            if isinstance(item, dict) and self._optional_str(item.get("threadKey"))
+        ]
+        if thread_digests:
             sections.append(
                 {
                     "sectionType": "journey_threads",
-                    "title": "Journey threads",
+                    "title": "Live threads",
                     "items": [
                         {
-                            "label": str(item.get("label") or "Journey"),
+                            "label": self._thread_digest_label(cast(ThreadDigest, item)),
                             "summary": self._compact_page_text(
-                                str(item.get("currentQuestion") or ""),
+                                str(item.get("summary") or ""),
                                 max_length=220,
                             ),
-                            "entityType": "Journey",
-                            "entityId": item.get("id"),
-                            "source": "journey",
+                            "entityType": str(item.get("kind") or "Thread")
+                            .replace("_", " ")
+                            .title(),
+                            "entityId": (
+                                item.get("sourceRecordRefs", [{}])[0].get("recordId")
+                                if isinstance(item.get("sourceRecordRefs"), list)
+                                and item.get("sourceRecordRefs")
+                                and isinstance(item["sourceRecordRefs"][0], dict)
+                                else None
+                            ),
+                            "source": "thread_digest",
                         }
-                        for item in active_journeys
+                        for item in thread_digests[:5]
                     ],
                 }
             )

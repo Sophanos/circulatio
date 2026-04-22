@@ -119,6 +119,7 @@ def build_weekly_review_messages(
         "windowEnd": input_data["windowEnd"],
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "symbolicMemory": {
             "recurringSymbols": input_data["hermesMemoryContext"]["recurringSymbols"][:8],
             "activeComplexCandidates": input_data["hermesMemoryContext"]["activeComplexCandidates"][
@@ -155,6 +156,7 @@ def build_alive_today_messages(
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "symbolicMemory": {
             "recurringSymbols": input_data["hermesMemoryContext"]["recurringSymbols"][:6],
             "activeComplexCandidates": input_data["hermesMemoryContext"]["activeComplexCandidates"][
@@ -218,6 +220,7 @@ def build_practice_messages(
         "sessionContext": normalize_session_context(input_data.get("sessionContext")),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "safetyContext": input_data.get("safetyContext"),
         "explicitQuestion": input_data.get("explicitQuestion"),
         "practiceHints": input_data.get("practiceHints") or input_data.get("adaptationHints"),
@@ -256,6 +259,7 @@ def build_rhythmic_brief_messages(
         "seed": input_data["seed"],
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "adaptationProfile": input_data.get("adaptationProfile"),
         "safetyContext": input_data.get("safetyContext"),
         "symbolicMemory": {
@@ -289,6 +293,7 @@ def build_threshold_review_messages(
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "safetyContext": input_data.get("safetyContext"),
         "targetThresholdProcess": input_data.get("targetThresholdProcess"),
         "relatedRealityAnchors": list(input_data.get("relatedRealityAnchors", [])),
@@ -326,6 +331,7 @@ def build_living_myth_review_messages(
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "activeGoalTension": input_data.get("activeGoalTension"),
         "practiceLoop": input_data.get("practiceLoop"),
         "latestSymbolicWellbeing": input_data.get("latestSymbolicWellbeing"),
@@ -366,6 +372,7 @@ def build_method_state_routing_messages(
         "expectedTargets": list(input_data.get("expectedTargets", [])),
         "clarificationIntent": input_data.get("clarificationIntent"),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "symbolicMemory": normalize_hermes_memory_context(input_data.get("hermesMemoryContext")),
         "safetyContext": input_data.get("safetyContext"),
@@ -399,6 +406,7 @@ def build_analysis_packet_messages(
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
+        "threadDigests": list(input_data.get("threadDigests", [])),
         "activeGoalTension": input_data.get("activeGoalTension"),
         "practiceLoop": input_data.get("practiceLoop"),
         "latestSymbolicWellbeing": input_data.get("latestSymbolicWellbeing"),

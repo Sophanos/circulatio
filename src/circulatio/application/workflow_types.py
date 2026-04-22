@@ -95,6 +95,7 @@ IntakeContextItemKind = Literal[
     "recent_material",
     "recurring_symbol",
     "active_pattern",
+    "thread_digest",
     "recent_body_state",
     "active_dream_series",
     "recent_dream_dynamic",
@@ -159,6 +160,7 @@ class IntakeContextSourceCounts(TypedDict):
     activePatternCount: int
     activeJourneyCount: int
     longitudinalSignalCount: int
+    threadDigestCount: int
     intakeItemCount: int
     pendingProposalCount: int
 
@@ -391,6 +393,7 @@ class DiscoverySourceCounts(TypedDict):
     activePatternCount: int
     pendingProposalCount: int
     memoryItemCount: int
+    threadDigestCount: int
     graphNodeCount: int
     graphEdgeCount: int
 
@@ -741,6 +744,7 @@ class CaptureRealityAnchorsInput(TypedDict, total=False):
     relatedMaterialIds: NotRequired[list[Id]]
     relatedSymbolIds: NotRequired[list[Id]]
     relatedGoalIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -762,6 +766,7 @@ class UpsertThresholdProcessInput(TypedDict, total=False):
     relatedSymbolIds: NotRequired[list[Id]]
     relatedGoalIds: NotRequired[list[Id]]
     relatedDreamSeriesIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
 
@@ -777,6 +782,7 @@ class RecordRelationalSceneInput(TypedDict, total=False):
     normalizedSceneKey: Required[str]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedGoalIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
@@ -790,6 +796,7 @@ class RecordInnerOuterCorrespondenceInput(TypedDict, total=False):
     innerRefs: NotRequired[list[Id]]
     outerRefs: NotRequired[list[Id]]
     symbolIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     userCharge: Required[str]
     caveat: Required[str]
     normalizedCorrespondenceKey: Required[str]
@@ -807,6 +814,7 @@ class RecordNuminousEncounterInput(TypedDict, total=False):
     interpretationConstraint: Required[str]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedSymbolIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 
@@ -822,6 +830,7 @@ class RecordAestheticResonanceInput(TypedDict, total=False):
     bodySensations: NotRequired[list[str]]
     relatedMaterialIds: NotRequired[list[Id]]
     relatedSymbolIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     evidenceIds: NotRequired[list[Id]]
     privacyClass: NotRequired[PrivacyClass]
 

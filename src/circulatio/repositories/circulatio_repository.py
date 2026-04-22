@@ -86,6 +86,7 @@ from ..domain.types import (
     LifeContextSnapshot,
     LivingMythReviewInput,
     MethodContextSnapshot,
+    ThreadDigest,
     ThresholdReviewInput,
 )
 from ..domain.typology import TypologyLensRecord, TypologyLensUpdate
@@ -1008,6 +1009,17 @@ class CirculatioRepository(GraphMemoryRepository):
         window_end: ISODateString,
         material_id: Id | None = None,
     ) -> MethodContextSnapshot | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def build_thread_digests_from_records(
+        self,
+        user_id: Id,
+        *,
+        window_start: ISODateString,
+        window_end: ISODateString,
+        material_id: Id | None = None,
+    ) -> list[ThreadDigest]:
         raise NotImplementedError
 
     @abstractmethod
