@@ -49,32 +49,15 @@ pip install -e ".[dev]" --upgrade
 
 ## First workflow
 
-Store material without interpreting it yet:
+You are washing dishes. A dream from last night surfaces — a bear, charging. You mention it to your agent. Circulatio stores it. No interpretation. No pressure.
 
-```bash
-/circulation dream "I walked through a house and found a snake in the cellar."
-```
+Three days later, you feel tension before a call. You note it. Circulatio holds that too.
 
-Ask for interpretation when you are ready:
+A week passes. You ask, *"What is alive today?"* Circulatio sees the bear, the tension, a recurring image of doors. It offers a proposal: the bear as unclaimed force, the door as threshold. You read it. You approve what rings true. You reject what does not.
 
-```bash
-/circulation reflect "A snake image kept returning after the conflict."
-```
+Months later, you ask about patterns. Circulatio shows you the arc you could not see alone.
 
-Review what Circulatio proposes before it becomes memory:
-
-```bash
-/circulation approve last p1
-/circulation reject last p1 --reason "do not save this"
-```
-
-Explore longer-term patterns:
-
-```bash
-/circulation discovery --query "snake and chest tension" --limit 4
-/circulation review threshold
-/circulation review week
-```
+Commands are available (`dream`, `reflect`, `approve`, `discovery`, `review`), but you rarely need to remember them. The agent understands intent. You simply speak.
 
 ---
 
