@@ -9,9 +9,8 @@ from .runtime import CirculatioRuntime
 
 BootCheckStatus = Literal["ok", "warning", "error"]
 
-_EXPECTED_ENTRY_POINT = "circulatio_hermes_plugin:register"
+_EXPECTED_ENTRY_POINT = "circulatio_hermes_plugin"
 _EXPECTED_ENTRY_POINT_MODULE = "circulatio_hermes_plugin"
-_EXPECTED_ENTRY_POINT_ATTR = "register"
 _ASSET_PATHS = {
     "plugin.yaml": ("circulatio_hermes_plugin", "plugin.yaml"),
     "skills/circulation/SKILL.md": (
@@ -86,18 +85,18 @@ def validate_plugin_distribution(*, strict_installed: bool) -> BootValidationRep
         return _report(profile="installed-distribution", checks=checks)
 
     status: BootCheckStatus = "ok"
-    message = "The installed circulatio entry point resolves to circulatio_hermes_plugin:register."
-    expected_target = getattr(plugin_module, _EXPECTED_ENTRY_POINT_ATTR, None)
+    message = "The installed circulatio entry point resolves to the circulatio_hermes_plugin module."
     if (
         entry_point.value != _EXPECTED_ENTRY_POINT
         or entry_point.module != _EXPECTED_ENTRY_POINT_MODULE
-        or entry_point.attr != _EXPECTED_ENTRY_POINT_ATTR
-        or loaded_target is not expected_target
+        or entry_point.attr is not None
+        or loaded_target is not plugin_module
+        or not hasattr(plugin_module, "register")
     ):
         status = "error"
         message = (
             "The installed circulatio entry point does not resolve to "
-            "circulatio_hermes_plugin:register."
+            "the circulatio_hermes_plugin module."
         )
     checks.append(
         {
@@ -109,6 +108,7 @@ def validate_plugin_distribution(*, strict_installed: bool) -> BootValidationRep
                 "entryPoint": entry_point.value,
                 "entryPointModule": entry_point.module,
                 "entryPointAttr": entry_point.attr,
+                "hasRegister": hasattr(plugin_module, "register"),
             },
         }
     )

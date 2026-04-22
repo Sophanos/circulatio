@@ -89,6 +89,16 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 __all__ = list(dict.fromkeys([*_domain_all, *_EXPORTS.keys()]))
 
 
+def register(ctx: Any) -> None:
+    """Compatibility shim for hosts that import the top-level package by plugin name."""
+    from circulatio_hermes_plugin import register as plugin_register
+
+    plugin_register(ctx)
+
+
+__all__.append("register")
+
+
 def __getattr__(name: str) -> Any:
     target = _EXPORTS.get(name)
     if target is None:

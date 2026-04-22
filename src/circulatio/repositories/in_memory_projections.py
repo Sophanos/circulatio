@@ -27,7 +27,10 @@ from ..domain.types import (
     Id,
     LifeContextSnapshot,
     LivingMythReviewInput,
+    MethodStateSourceRef,
     MethodContextSnapshot,
+    ThreadDigest,
+    ThreadSurfaceReadiness,
     ThresholdReviewInput,
 )
 from .in_memory_bucket import UserCirculatioBucket
@@ -588,6 +591,108 @@ def build_memory_kernel_snapshot_locked(
             importance_score=0.5,
             importance_reasons=["typology_signal"],
             last_seen=lens.get("updatedAt", lens.get("createdAt")),
+        )
+        if _matches_memory_query(item, namespaces=namespaces, query=query):
+            items.append(item)
+
+    for tension in bucket.goal_tensions.values():
+        if tension.get("status") == "deleted" or tension.get("userId") != user_id:
+            continue
+        status = str(tension.get("status") or "active")
+        item = _build_memory_item(
+            user_id=user_id,
+            namespace="goal_tensions",
+            entity_id=tension["id"],
+            entity_type="GoalTension",
+            label="Goal tension",
+            summary=str(tension.get("tensionSummary") or "A live goal tension remains active."),
+            keywords=_expand_symbolic_keywords(
+                [tension.get("tensionSummary"), *tension.get("polarityLabels", [])]
+            ),
+            source_id=tension["id"],
+            evidence_ids=list(tension.get("evidenceIds", [])),
+            privacy_class="approved_summary",
+            created_at=tension.get("createdAt"),
+            updated_at=tension.get("updatedAt", tension.get("createdAt")),
+            observed_at=tension.get("updatedAt", tension.get("createdAt")),
+            importance_score=0.68 if status == "active" else 0.5,
+            importance_reasons=["goal_tension"],
+            user_confirmed=status == "user_confirmed",
+            last_seen=tension.get("updatedAt", tension.get("createdAt")),
+        )
+        if _matches_memory_query(item, namespaces=namespaces, query=query):
+            items.append(item)
+
+    for series in bucket.dream_series.values():
+        if series.get("status") == "deleted" or series.get("userId") != user_id:
+            continue
+        material_ids = list(series.get("materialIds", []))
+        symbol_ids = list(series.get("symbolIds", []))
+        item = _build_memory_item(
+            user_id=user_id,
+            namespace="dream_series",
+            entity_id=series["id"],
+            entity_type="DreamSeries",
+            label=str(series.get("label") or "Dream series"),
+            summary=str(
+                series.get("progressionSummary")
+                or f"Dream series with {len(material_ids)} linked material(s)."
+            ),
+            keywords=_expand_symbolic_keywords(
+                [
+                    series.get("label"),
+                    series.get("progressionSummary"),
+                    *series.get("motifKeys", []),
+                    *series.get("settingKeys", []),
+                ]
+            ),
+            symbolic_fingerprint=symbol_ids[:5],
+            source_id=series["id"],
+            material_id=material_ids[0] if material_ids else None,
+            privacy_class="approved_summary",
+            created_at=series.get("createdAt"),
+            updated_at=series.get("updatedAt", series.get("createdAt")),
+            observed_at=series.get("lastSeen", series.get("updatedAt", series.get("createdAt"))),
+            importance_score=_record_confidence_score(series.get("confidence"), default=0.62),
+            importance_reasons=["dream_series"],
+            recurrence_count=len(material_ids),
+            last_seen=series.get("lastSeen", series.get("updatedAt", series.get("createdAt"))),
+        )
+        if _matches_memory_query(item, namespaces=namespaces, query=query):
+            items.append(item)
+
+    for journey in bucket.journeys.values():
+        if journey.get("status") == "deleted" or journey.get("userId") != user_id:
+            continue
+        status = str(journey.get("status") or "active")
+        material_ids = list(journey.get("relatedMaterialIds", []))
+        symbol_ids = list(journey.get("relatedSymbolIds", []))
+        item = _build_memory_item(
+            user_id=user_id,
+            namespace="journeys",
+            entity_id=journey["id"],
+            entity_type="Journey",
+            label=str(journey.get("label") or "Journey"),
+            summary=str(
+                journey.get("currentQuestion")
+                or f"{journey.get('label') or 'Journey'} remains open."
+            ),
+            keywords=_expand_symbolic_keywords(
+                [journey.get("label"), journey.get("currentQuestion"), status]
+            ),
+            symbolic_fingerprint=symbol_ids[:5],
+            source_id=journey["id"],
+            material_id=material_ids[0] if material_ids else None,
+            privacy_class="approved_summary",
+            created_at=journey.get("createdAt"),
+            updated_at=journey.get("updatedAt", journey.get("createdAt")),
+            observed_at=journey.get(
+                "nextReviewDueAt",
+                journey.get("updatedAt", journey.get("createdAt")),
+            ),
+            importance_score=0.72 if status == "active" else 0.48,
+            importance_reasons=["journey_thread"],
+            last_seen=journey.get("updatedAt", journey.get("createdAt")),
         )
         if _matches_memory_query(item, namespaces=namespaces, query=query):
             items.append(item)
@@ -1662,6 +1767,526 @@ def build_method_context_snapshot_locked(
     )
 
 
+def _thread_source_ref(
+    record_type: str,
+    record_id: Id,
+    *,
+    summary: str | None = None,
+) -> MethodStateSourceRef:
+    ref: MethodStateSourceRef = {
+        "recordType": record_type,
+        "recordId": record_id,
+    }
+    if summary:
+        ref["summary"] = _truncate(summary, 180)
+    return ref
+
+
+def _thread_entity_refs(
+    *,
+    entity_ids: list[Id] | None = None,
+    material_ids: list[Id] | None = None,
+    symbol_ids: list[Id] | None = None,
+    pattern_ids: list[Id] | None = None,
+    goal_ids: list[Id] | None = None,
+    dream_series_ids: list[Id] | None = None,
+    journey_ids: list[Id] | None = None,
+    practice_session_ids: list[Id] | None = None,
+) -> dict[str, list[Id]]:
+    refs: dict[str, list[Id]] = {}
+    if entity_ids:
+        refs["entities"] = list(dict.fromkeys(entity_ids))
+    if material_ids:
+        refs["materials"] = list(dict.fromkeys(material_ids))
+    if symbol_ids:
+        refs["symbols"] = list(dict.fromkeys(symbol_ids))
+    if pattern_ids:
+        refs["patterns"] = list(dict.fromkeys(pattern_ids))
+    if goal_ids:
+        refs["goals"] = list(dict.fromkeys(goal_ids))
+    if dream_series_ids:
+        refs["dreamSeries"] = list(dict.fromkeys(dream_series_ids))
+    if journey_ids:
+        refs["journeys"] = list(dict.fromkeys(journey_ids))
+    if practice_session_ids:
+        refs["practiceSessions"] = list(dict.fromkeys(practice_session_ids))
+    return refs
+
+
+def _thread_surface_readiness(
+    kind: str,
+    *,
+    status: str,
+    invitation_readiness: str | None = None,
+) -> ThreadSurfaceReadiness:
+    ready = status in {"active", "eligible", "ready", "user_confirmed"}
+    review_ready = invitation_readiness in {"ask", "ready"} or ready
+    if kind == "journey":
+        return {
+            "intakeContext": "available",
+            "discovery": "ready" if ready else "available",
+            "aliveToday": "ready" if ready else "available",
+            "weeklyReview": "available",
+            "journeyPage": "ready" if ready else "available",
+            "rhythmicBrief": "available",
+            "livingMythReview": "available",
+            "analysisPacket": "available",
+            "methodStateResponse": "available",
+        }
+    if kind == "dream_series":
+        return {
+            "intakeContext": "available",
+            "discovery": "available",
+            "aliveToday": "available",
+            "journeyPage": "available",
+            "rhythmicBrief": "ready" if ready else "available",
+            "analysisPacket": "available",
+        }
+    if kind == "threshold_process":
+        return {
+            "intakeContext": "available",
+            "discovery": "available",
+            "journeyPage": "available",
+            "rhythmicBrief": "ready" if review_ready else "available",
+            "thresholdReview": "ready" if review_ready else "available",
+            "livingMythReview": "available",
+            "analysisPacket": "available",
+            "methodStateResponse": "available",
+        }
+    if kind == "relational_scene":
+        return {
+            "intakeContext": "available",
+            "discovery": "available",
+            "journeyPage": "available",
+            "rhythmicBrief": "available",
+            "thresholdReview": "available",
+            "analysisPacket": "available",
+            "methodStateResponse": "available",
+        }
+    if kind == "goal_tension":
+        return {
+            "discovery": "ready" if ready else "available",
+            "aliveToday": "available",
+            "journeyPage": "available",
+            "rhythmicBrief": "available",
+            "livingMythReview": "available",
+            "analysisPacket": "available",
+            "methodStateResponse": "available",
+            "practice": "available",
+        }
+    if kind == "practice_loop":
+        return {
+            "discovery": "available",
+            "journeyPage": "available",
+            "rhythmicBrief": "available",
+            "analysisPacket": "available",
+            "methodStateResponse": "available",
+            "practice": "ready" if ready else "available",
+        }
+    return {
+        "discovery": "available",
+        "aliveToday": "available",
+        "journeyPage": "available",
+        "rhythmicBrief": "available",
+        "analysisPacket": "available",
+        "methodStateResponse": "available",
+    }
+
+
+def _journey_ids_for_entity_refs(
+    bucket: UserCirculatioBucket,
+    entity_refs: dict[str, list[Id]],
+) -> list[Id]:
+    journey_ids = list(entity_refs.get("journeys", []))
+    material_ids = set(entity_refs.get("materials", []))
+    symbol_ids = set(entity_refs.get("symbols", []))
+    pattern_ids = set(entity_refs.get("patterns", []))
+    goal_ids = set(entity_refs.get("goals", []))
+    dream_series_ids = set(entity_refs.get("dreamSeries", []))
+    entity_ids = set(entity_refs.get("entities", []))
+    for journey in bucket.journeys.values():
+        if journey.get("status") == "deleted":
+            continue
+        explicit_ids = set(journey.get("relatedMaterialIds", []))
+        explicit_ids.update(journey.get("relatedSymbolIds", []))
+        explicit_ids.update(journey.get("relatedPatternIds", []))
+        explicit_ids.update(journey.get("relatedGoalIds", []))
+        explicit_ids.update(journey.get("relatedDreamSeriesIds", []))
+        if (
+            material_ids.intersection(journey.get("relatedMaterialIds", []))
+            or symbol_ids.intersection(journey.get("relatedSymbolIds", []))
+            or pattern_ids.intersection(journey.get("relatedPatternIds", []))
+            or goal_ids.intersection(journey.get("relatedGoalIds", []))
+            or dream_series_ids.intersection(journey.get("relatedDreamSeriesIds", []))
+            or entity_ids.intersection(explicit_ids)
+        ):
+            journey_ids.append(journey["id"])
+    return list(dict.fromkeys(journey_ids))
+
+
+def _thread_source_last_touched(
+    bucket: UserCirculatioBucket,
+    source_refs: list[MethodStateSourceRef],
+    *,
+    fallback: str,
+) -> str:
+    timestamps = [fallback]
+    stores = {
+        "PracticeSession": bucket.practice_sessions,
+        "GoalTension": bucket.goal_tensions,
+        "Journey": bucket.journeys,
+        "DreamSeries": bucket.dream_series,
+        "ThresholdProcess": bucket.individuation_records,
+        "RelationalScene": bucket.individuation_records,
+    }
+    for ref in source_refs:
+        record_type = str(ref.get("recordType") or "")
+        record_id = str(ref.get("recordId") or "")
+        store = stores.get(record_type)
+        if store is None or record_id not in store:
+            continue
+        record = store[record_id]
+        timestamp = str(
+            record.get("updatedAt")
+            or record.get("windowEnd")
+            or record.get("lastSeen")
+            or record.get("completedAt")
+            or record.get("createdAt")
+            or fallback
+        )
+        timestamps.append(timestamp)
+    return max(timestamps)
+
+
+def build_thread_digests_locked(
+    bucket: UserCirculatioBucket,
+    *,
+    user_id: Id,
+    window_start: str,
+    window_end: str,
+    material_id: Id | None = None,
+) -> list[ThreadDigest]:
+    method_context = build_method_context_snapshot_locked(
+        bucket,
+        user_id=user_id,
+        window_start=window_start,
+        window_end=window_end,
+        material_id=material_id,
+    )
+    if not isinstance(method_context, dict):
+        return []
+    digests: list[ThreadDigest] = []
+    seen_keys: set[str] = set()
+
+    def append_digest(digest: ThreadDigest) -> None:
+        thread_key = str(digest.get("threadKey") or "").strip()
+        if not thread_key or thread_key in seen_keys:
+            return
+        seen_keys.add(thread_key)
+        digests.append(digest)
+
+    for summary in method_context.get("activeJourneys", []):
+        if not isinstance(summary, dict):
+            continue
+        journey_id = str(summary.get("id") or "").strip()
+        if not journey_id:
+            continue
+        record = bucket.journeys.get(journey_id, {})
+        entity_refs = _thread_entity_refs(
+            journey_ids=[journey_id],
+            material_ids=list(record.get("relatedMaterialIds", summary.get("relatedMaterialIds", []))),
+            symbol_ids=list(record.get("relatedSymbolIds", summary.get("relatedSymbolIds", []))),
+            pattern_ids=list(record.get("relatedPatternIds", summary.get("relatedPatternIds", []))),
+            goal_ids=list(record.get("relatedGoalIds", summary.get("relatedGoalIds", []))),
+            dream_series_ids=list(
+                record.get("relatedDreamSeriesIds", summary.get("relatedDreamSeriesIds", []))
+            ),
+        )
+        summary_text = str(
+            summary.get("currentQuestion")
+            or record.get("currentQuestion")
+            or summary.get("label")
+            or record.get("label")
+            or "Journey thread"
+        )
+        status = str(record.get("status") or summary.get("status") or "active")
+        append_digest(
+            {
+                "threadKey": f"journey:{journey_id}",
+                "kind": "journey",
+                "status": status,
+                "summary": _truncate(summary_text, 220),
+                "entityRefs": entity_refs,
+                "evidenceIds": [],
+                "journeyIds": [journey_id],
+                "sourceRecordRefs": [_thread_source_ref("Journey", journey_id, summary=summary_text)],
+                "lastTouchedAt": str(
+                    record.get("updatedAt")
+                    or record.get("nextReviewDueAt")
+                    or record.get("createdAt")
+                    or window_end
+                ),
+                "surfaceReadiness": _thread_surface_readiness("journey", status=status),
+            }
+        )
+
+    for summary in method_context.get("activeDreamSeries", []):
+        if not isinstance(summary, dict):
+            continue
+        series_id = str(summary.get("id") or "").strip()
+        if not series_id:
+            continue
+        record = bucket.dream_series.get(series_id, {})
+        entity_refs = _thread_entity_refs(
+            dream_series_ids=[series_id],
+            material_ids=list(record.get("materialIds", summary.get("materialIds", []))),
+            symbol_ids=list(record.get("symbolIds", summary.get("symbolIds", []))),
+        )
+        summary_text = str(
+            record.get("progressionSummary")
+            or summary.get("progressionSummary")
+            or record.get("label")
+            or summary.get("label")
+            or "Dream series"
+        )
+        status = str(record.get("status") or summary.get("status") or "active")
+        append_digest(
+            {
+                "threadKey": f"dream_series:{series_id}",
+                "kind": "dream_series",
+                "status": status,
+                "summary": _truncate(summary_text, 220),
+                "entityRefs": entity_refs,
+                "evidenceIds": [],
+                "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
+                "sourceRecordRefs": [
+                    _thread_source_ref("DreamSeries", series_id, summary=summary_text),
+                ],
+                "lastTouchedAt": str(
+                    record.get("lastSeen")
+                    or record.get("updatedAt")
+                    or record.get("createdAt")
+                    or window_end
+                ),
+                "surfaceReadiness": _thread_surface_readiness("dream_series", status=status),
+            }
+        )
+
+    individuation = (
+        method_context.get("individuationContext")
+        if isinstance(method_context.get("individuationContext"), dict)
+        else {}
+    )
+    for collection_name, record_type, kind in (
+        ("thresholdProcesses", "ThresholdProcess", "threshold_process"),
+        ("relationalScenes", "RelationalScene", "relational_scene"),
+    ):
+        for summary in individuation.get(collection_name, [])[:8]:
+            if not isinstance(summary, dict):
+                continue
+            record_id = str(summary.get("id") or "").strip()
+            if not record_id:
+                continue
+            record = bucket.individuation_records.get(record_id, {})
+            entity_refs = _thread_entity_refs(
+                entity_ids=[record_id],
+                material_ids=list(record.get("relatedMaterialIds", [])),
+                symbol_ids=list(record.get("relatedSymbolIds", [])),
+                goal_ids=list(record.get("relatedGoalIds", [])),
+                dream_series_ids=list(record.get("relatedDreamSeriesIds", [])),
+                journey_ids=list(record.get("relatedJourneyIds", [])),
+                practice_session_ids=list(record.get("relatedPracticeSessionIds", [])),
+            )
+            summary_text = str(
+                record.get("summary")
+                or summary.get("summary")
+                or summary.get("sceneSummary")
+                or summary.get("whatIsEnding")
+                or summary.get("label")
+                or record_type
+            )
+            status = str(record.get("status") or "active")
+            invitation_readiness = None
+            if isinstance(record.get("details"), dict):
+                invitation_readiness = str(record["details"].get("invitationReadiness") or "").strip()
+            append_digest(
+                {
+                    "threadKey": f"{kind}:{record_id}",
+                    "kind": kind,
+                    "status": status,
+                    "summary": _truncate(summary_text, 220),
+                    "entityRefs": entity_refs,
+                    "evidenceIds": list(record.get("evidenceIds", summary.get("evidenceIds", []))),
+                    "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
+                    "sourceRecordRefs": [
+                        _thread_source_ref(record_type, record_id, summary=summary_text),
+                    ],
+                    "lastTouchedAt": str(
+                        record.get("windowEnd")
+                        or record.get("updatedAt")
+                        or record.get("createdAt")
+                        or window_end
+                    ),
+                    "surfaceReadiness": _thread_surface_readiness(
+                        kind,
+                        status=status,
+                        invitation_readiness=invitation_readiness,
+                    ),
+                }
+            )
+
+    for summary in method_context.get("goalTensions", []):
+        if not isinstance(summary, dict):
+            continue
+        tension_id = str(summary.get("id") or "").strip()
+        if not tension_id:
+            continue
+        record = bucket.goal_tensions.get(tension_id, {})
+        entity_refs = _thread_entity_refs(
+            entity_ids=[tension_id],
+            goal_ids=list(record.get("goalIds", summary.get("goalIds", []))),
+        )
+        summary_text = str(
+            record.get("tensionSummary")
+            or summary.get("tensionSummary")
+            or "Goal tension remains active."
+        )
+        status = str(record.get("status") or summary.get("status") or "active")
+        append_digest(
+            {
+                "threadKey": f"goal_tension:{tension_id}",
+                "kind": "goal_tension",
+                "status": status,
+                "summary": _truncate(summary_text, 220),
+                "entityRefs": entity_refs,
+                "evidenceIds": list(record.get("evidenceIds", summary.get("evidenceIds", []))),
+                "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
+                "sourceRecordRefs": [
+                    _thread_source_ref("GoalTension", tension_id, summary=summary_text),
+                ],
+                "lastTouchedAt": str(
+                    record.get("updatedAt") or record.get("createdAt") or window_end
+                ),
+                "surfaceReadiness": _thread_surface_readiness("goal_tension", status=status),
+            }
+        )
+
+    method_state = (
+        method_context.get("methodState")
+        if isinstance(method_context.get("methodState"), dict)
+        else {}
+    )
+    practice_loop = (
+        method_state.get("practiceLoop") if isinstance(method_state.get("practiceLoop"), dict) else {}
+    )
+    if practice_loop:
+        source_refs = [
+            _thread_source_ref(
+                str(item.get("recordType") or "PracticeSession"),
+                str(item.get("recordId") or ""),
+                summary=str(item.get("summary") or "").strip() or None,
+            )
+            for item in practice_loop.get("sourceRecordRefs", [])
+            if isinstance(item, dict) and str(item.get("recordId") or "").strip()
+        ]
+        practice_session_ids: list[Id] = []
+        material_ids: list[Id] = []
+        goal_ids: list[Id] = []
+        journey_ids: list[Id] = []
+        entity_ids: list[Id] = []
+        for ref in source_refs:
+            record_type = str(ref.get("recordType") or "")
+            record_id = str(ref.get("recordId") or "")
+            entity_ids.append(record_id)
+            if record_type == "PracticeSession" and record_id in bucket.practice_sessions:
+                practice = bucket.practice_sessions[record_id]
+                practice_session_ids.append(record_id)
+                if practice.get("materialId"):
+                    material_ids.append(str(practice["materialId"]))
+            elif record_type == "GoalTension" and record_id in bucket.goal_tensions:
+                goal_ids.extend(str(item) for item in bucket.goal_tensions[record_id].get("goalIds", []))
+            elif record_type == "Journey":
+                journey_ids.append(record_id)
+        entity_refs = _thread_entity_refs(
+            entity_ids=entity_ids,
+            material_ids=material_ids,
+            goal_ids=goal_ids,
+            journey_ids=journey_ids,
+            practice_session_ids=practice_session_ids,
+        )
+        summary_text = str(
+            practice_loop.get("recentOutcomeTrend")
+            or practice_loop.get("guidance")
+            or "Practice loop remains active."
+        )
+        append_digest(
+            {
+                "threadKey": "practice_loop:current",
+                "kind": "practice_loop",
+                "status": "active",
+                "summary": _truncate(summary_text, 220),
+                "entityRefs": entity_refs,
+                "evidenceIds": list(practice_loop.get("evidenceIds", [])),
+                "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
+                "sourceRecordRefs": source_refs or [
+                    _thread_source_ref("PracticeLoop", "practice_loop:current", summary=summary_text)
+                ],
+                "lastTouchedAt": _thread_source_last_touched(
+                    bucket,
+                    source_refs,
+                    fallback=str(method_context.get("windowEnd") or window_end),
+                ),
+                "surfaceReadiness": _thread_surface_readiness("practice_loop", status="active"),
+            }
+        )
+
+    for signal in method_context.get("longitudinalSignals", [])[:8]:
+        if not isinstance(signal, dict):
+            continue
+        signal_id = str(signal.get("id") or "").strip()
+        signal_summary = str(signal.get("summary") or "").strip()
+        if not signal_id or not signal_summary:
+            continue
+        entity_refs = _thread_entity_refs(
+            entity_ids=[
+                str(item)
+                for item in signal.get("sourceEntityIds", [])
+                if isinstance(item, str) and item.strip()
+            ],
+            material_ids=[
+                str(item)
+                for item in signal.get("materialIds", [])
+                if isinstance(item, str) and item.strip()
+            ],
+        )
+        append_digest(
+            {
+                "threadKey": f"longitudinal_signal:{signal_id}",
+                "kind": "longitudinal_signal",
+                "status": str(signal.get("strength") or "active"),
+                "summary": _truncate(signal_summary, 220),
+                "entityRefs": entity_refs,
+                "evidenceIds": [],
+                "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
+                "sourceRecordRefs": [
+                    _thread_source_ref(
+                        "LongitudinalSignal",
+                        signal_id,
+                        summary=signal_summary,
+                    )
+                ],
+                "lastTouchedAt": str(signal.get("lastSeen") or window_end),
+                "surfaceReadiness": _thread_surface_readiness(
+                    "longitudinal_signal",
+                    status=str(signal.get("strength") or "active"),
+                ),
+            }
+        )
+
+    digests.sort(key=lambda item: str(item.get("lastTouchedAt") or ""), reverse=True)
+    return deepcopy(digests[:20])
+
+
 def build_circulation_summary_input_locked(
     bucket: UserCirculatioBucket,
     *,
@@ -1797,6 +2422,7 @@ __all__ = [
     "query_graph_locked",
     "build_life_context_snapshot_locked",
     "build_method_context_snapshot_locked",
+    "build_thread_digests_locked",
     "build_circulation_summary_input_locked",
     "build_dashboard_summary_locked",
     "build_symbolic_memory_snapshot_locked",

@@ -1,0 +1,61 @@
+name: circulatio
+version: 0.4.0
+description: Circulatio ambient intake, on-demand symbolic weaving, and approval-gated interpretation memory
+provides_tools:
+  - circulatio_store_dream
+  - circulatio_store_event
+  - circulatio_store_reflection
+  - circulatio_store_symbolic_note
+  - circulatio_store_body_state
+  - circulatio_alive_today
+  - circulatio_query_graph
+  - circulatio_memory_kernel
+  - circulatio_dashboard_summary
+  - circulatio_discovery
+  - circulatio_journey_page
+  - circulatio_create_journey
+  - circulatio_list_journeys
+  - circulatio_get_journey
+  - circulatio_update_journey
+  - circulatio_set_journey_status
+  - circulatio_list_materials
+  - circulatio_get_material
+  - circulatio_interpret_material
+  - circulatio_list_pending
+  - circulatio_approve_proposals
+  - circulatio_reject_proposals
+  - circulatio_list_pending_review_proposals
+  - circulatio_approve_review_proposals
+  - circulatio_reject_review_proposals
+  - circulatio_reject_hypotheses
+  - circulatio_record_interpretation_feedback
+  - circulatio_record_practice_feedback
+  - circulatio_revise_entity
+  - circulatio_delete_entity
+  - circulatio_symbols_list
+  - circulatio_symbol_get
+  - circulatio_symbol_history
+  - circulatio_weekly_review
+  - circulatio_threshold_review
+  - circulatio_living_myth_review
+  - circulatio_analysis_packet
+  - circulatio_witness_state
+  - circulatio_capture_conscious_attitude
+  - circulatio_capture_reality_anchors
+  - circulatio_upsert_threshold_process
+  - circulatio_record_relational_scene
+  - circulatio_record_inner_outer_correspondence
+  - circulatio_record_numinous_encounter
+  - circulatio_record_aesthetic_resonance
+  - circulatio_set_consent
+  - circulatio_answer_amplification
+  - circulatio_method_state_respond
+  - circulatio_upsert_goal
+  - circulatio_upsert_goal_tension
+  - circulatio_set_cultural_frame
+  - circulatio_generate_practice_recommendation
+  - circulatio_respond_practice_recommendation
+  - circulatio_generate_rhythmic_briefs
+  - circulatio_respond_rhythmic_brief
+provides_commands:
+  - circulation

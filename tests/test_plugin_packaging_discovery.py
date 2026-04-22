@@ -39,8 +39,10 @@ class PluginPackagingDiscoveryTests(unittest.TestCase):
         self.assertEqual(report["status"], "ok")
         self.assertEqual(
             report["checks"][0]["details"]["entryPoint"],
-            "circulatio_hermes_plugin:register",
+            "circulatio_hermes_plugin",
         )
+        self.assertIsNone(report["checks"][0]["details"]["entryPointAttr"])
+        self.assertTrue(report["checks"][0]["details"]["hasRegister"])
 
     def test_plugin_manifest_tool_list_matches_registered_schemas(self) -> None:
         plugin_yaml = (
@@ -69,6 +71,14 @@ class PluginPackagingDiscoveryTests(unittest.TestCase):
 
         self.assertEqual({schema["name"] for schema in TOOL_SCHEMAS}, set(tools))
         self.assertEqual(commands, ["circulation"])
+
+    def test_wrapper_plugin_manifest_matches_packaged_plugin_manifest(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        packaged_manifest = (
+            resources.files("circulatio_hermes_plugin").joinpath("plugin.yaml").read_text()
+        )
+        wrapper_manifest = (repo_root / "hermes_plugin" / "circulatio" / "plugin.yaml").read_text()
+        self.assertEqual(packaged_manifest, wrapper_manifest)
 
     def test_shadow_build_files_match_src_when_present(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

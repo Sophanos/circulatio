@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+WRAPPER_PLUGIN_DIR = REPO_ROOT / "hermes_plugin" / "circulatio"
 DEFAULT_NOTE_TEXT = "I keep thinking about her when I do my wash."
 DEFAULT_LABEL = "Laundry return"
 DEFAULT_UPDATED_LABEL = "Laundry return thread"
@@ -29,8 +30,8 @@ class SmokeSkip(RuntimeError):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run an external Hermes-host smoke path against a temporary Hermes home and "
-            "a temporary packaged install of this repo."
+            "Run an external Hermes-host smoke path against a temporary Hermes home using "
+            "the Circulatio plugin installed in the active Hermes environment."
         )
     )
     parser.add_argument(
@@ -70,7 +71,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--keep-temp",
         action="store_true",
-        help="Keep the temporary Hermes home and site-packages directory.",
+        help="Keep the temporary Hermes home directory.",
     )
     return parser.parse_args()
 
@@ -88,15 +89,17 @@ def copy_if_present(source: Path, target: Path) -> None:
         shutil.copy2(source, target)
 
 
-def build_env(*, hermes_home: Path, site_packages: Path) -> dict[str, str]:
+def stage_wrapper_plugin(hermes_home: Path) -> Path:
+    plugins_dir = hermes_home / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+    target = plugins_dir / "circulatio"
+    shutil.copytree(WRAPPER_PLUGIN_DIR, target)
+    return target
+
+
+def build_env(*, hermes_home: Path) -> dict[str, str]:
     env = os.environ.copy()
-    existing_pythonpath = env.get("PYTHONPATH", "")
     env["HERMES_HOME"] = str(hermes_home)
-    env["PYTHONPATH"] = (
-        f"{site_packages}{os.pathsep}{existing_pythonpath}"
-        if existing_pythonpath
-        else str(site_packages)
-    )
     env["TERM"] = env.get("TERM", "dumb")
     env["NO_COLOR"] = "1"
     env["COLUMNS"] = env.get("COLUMNS", "120")
@@ -120,27 +123,28 @@ def run_process(
     )
 
 
-def install_repo(site_packages: Path) -> None:
+def enable_plugin(
+    *,
+    hermes_bin: str,
+    env: dict[str, str],
+    plugin_name: str,
+) -> str:
     result = run_process(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--quiet",
-            "--no-deps",
-            str(REPO_ROOT),
-            "-t",
-            str(site_packages),
-        ],
-        env=os.environ.copy(),
-        timeout=180,
+        [hermes_bin, "plugins", "enable", plugin_name],
+        env=env,
+        timeout=60,
     )
+    output = sanitize_output(f"{result.stdout}\n{result.stderr}")
     if result.returncode != 0:
+        if "not installed or bundled" in output:
+            raise SmokeSkip(
+                "Circulatio is not installed in the Hermes environment used by the hermes "
+                "binary. Install it there first, then rerun the smoke harness."
+            )
         raise RuntimeError(
-            "Failed to install Circulatio into the temporary site-packages directory.\n"
-            f"{result.stdout}\n{result.stderr}"
+            f"Hermes could not enable the {plugin_name} plugin in the temporary profile.\n{output}"
         )
+    return output
 
 
 def require_hermes_binary(raw_path: str | None) -> str:
@@ -296,27 +300,22 @@ def extract_journey_id(output: str) -> str:
 def main() -> int:
     args = parse_args()
     temp_home_path = Path(tempfile.mkdtemp(prefix="circulatio-hermes-home-"))
-    temp_site_path = Path(tempfile.mkdtemp(prefix="circulatio-hermes-site-"))
     try:
         hermes_bin = require_hermes_binary(args.hermes_bin)
         source_home = Path(args.source_hermes_home).expanduser()
-        install_repo(temp_site_path)
+        staged_plugin_dir = stage_wrapper_plugin(temp_home_path)
         copy_if_present(source_home / "config.yaml", temp_home_path / "config.yaml")
         copy_if_present(source_home / ".env", temp_home_path / ".env")
-        env = build_env(hermes_home=temp_home_path, site_packages=temp_site_path)
+        env = build_env(hermes_home=temp_home_path)
+        enable_plugin(hermes_bin=hermes_bin, env=env, plugin_name="circulatio")
 
-        tools_output = sanitize_output(
-            run_process(
-                [hermes_bin, "tools", "list"],
-                env=env,
-                timeout=60,
-            ).stdout
+        plugins_output = run_slash_command(
+            hermes_bin=hermes_bin,
+            env=env,
+            command="/plugins",
+            expected_substrings=["circulatio"],
+            timeout=30,
         )
-        if "Plugin toolsets (cli):" not in tools_output or "circulatio" not in tools_output:
-            raise RuntimeError(
-                "Hermes did not report the circulatio plugin toolset in the temporary profile.\n"
-                f"{tools_output}"
-            )
 
         slash_list_output = run_slash_command(
             hermes_bin=hermes_bin,
@@ -406,17 +405,18 @@ def main() -> int:
         print("PASS: external Hermes host smoke succeeded.")
         print(f"Hermes binary: {hermes_bin}")
         print(f"Temporary Hermes home: {temp_home_path}")
-        print(f"Temporary site-packages: {temp_site_path}")
+        print(f"Staged wrapper plugin: {staged_plugin_dir}")
         print(f"Material id: {material_id}")
         print(f"Journey id: {journey_id}")
         print("Verified:")
-        print("- plugin loads and circulatio toolset is visible to Hermes")
+        print("- plugin is discoverable, enabled, and loaded in a real Hermes session")
         print("- host-routed reflection storage succeeds")
         print("- /circulation journey list|create|get|update|pause|resume works")
         print("- journey state persists across separate Hermes invocations")
         print("- /circulation journey renders the journey page surface")
 
         _ = (
+            plugins_output,
             slash_list_output,
             get_output,
             update_output,
@@ -438,12 +438,10 @@ def main() -> int:
         print(f"FAIL: {exc}", file=sys.stderr)
         if args.keep_temp:
             print(f"Temporary Hermes home: {temp_home_path}", file=sys.stderr)
-            print(f"Temporary site-packages: {temp_site_path}", file=sys.stderr)
         return 1
     finally:
         if not args.keep_temp:
             shutil.rmtree(temp_home_path, ignore_errors=True)
-            shutil.rmtree(temp_site_path, ignore_errors=True)
 
 
 if __name__ == "__main__":

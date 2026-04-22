@@ -24,7 +24,9 @@ It holds, remembers, and helps patterns become visible.
 
 ---
 
-## Quickstart
+## Setup And Installation
+
+### Library / tests
 
 ```bash
 git clone https://github.com/Sophanos/circulatio.git
@@ -44,6 +46,34 @@ pip install -e ".[dev]" --upgrade
 ```bash
 .venv/bin/python scripts/evaluate_circulatio_method.py --strict
 ```
+
+### Hermes plugin
+
+```bash
+which hermes
+head -n 1 "$(which hermes)"
+~/.hermes/hermes-agent/venv/bin/python3 -m ensurepip --upgrade
+~/.hermes/hermes-agent/venv/bin/python3 -m pip install -e /absolute/path/to/circulatio
+mkdir -p ~/.hermes/plugins
+ln -sfn /absolute/path/to/circulatio/hermes_plugin/circulatio ~/.hermes/plugins/circulatio
+hermes plugins enable circulatio
+hermes plugins list
+```
+
+### Verify
+
+Start a new Hermes session, then run:
+
+```text
+/plugins
+/circulation journey list
+```
+
+Expected:
+- `/plugins` shows `circulatio`
+- `/circulation journey list` does not say `Unknown command`
+
+If `hermes plugins enable circulatio` says `Plugin 'circulatio' is not installed or bundled.`, you installed Circulatio into the wrong Python environment. Use the interpreter shown in the `head -n 1 "$(which hermes)"` step above.
 
 ---
 
