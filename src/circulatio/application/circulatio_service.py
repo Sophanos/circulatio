@@ -9358,17 +9358,9 @@ class CirculatioService:
         ):
             return True
         depth_engine_health = result.get("depthEngineHealth")
-        if isinstance(depth_engine_health, dict) and (
+        return isinstance(depth_engine_health, dict) and (
             self._optional_str(depth_engine_health.get("source")) == "fallback"
-        ):
-            return True
-        clarification_intent = result.get("clarificationIntent")
-        if not isinstance(clarification_intent, dict):
-            return False
-        return self._optional_str(clarification_intent.get("refKey")) in {
-            "clarify_dream_primary_image",
-            "clarify_primary_image",
-        }
+        )
 
     async def _record_clarification_answer_from_method_state(
         self,

@@ -1493,7 +1493,11 @@ class HermesBridgePluginTests(unittest.TestCase):
         self.assertIn("circulatio_weekly_review", ctx.tools)
         self.assertIn("circulatio_method_state_respond", ctx.tools)
         self.assertIn(
-            "do not call this tool again in the same turn with unchanged material",
+            "continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial",
+            ctx.tools["circulatio_interpret_material"]["description"],
+        )
+        self.assertIn(
+            "do not call this tool again with unchanged material",
             ctx.tools["circulatio_interpret_material"]["description"],
         )
         self.assertIn(
