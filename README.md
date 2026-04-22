@@ -26,11 +26,79 @@ It holds, remembers, and helps patterns become visible.
 
 ## Setup And Installation
 
-### Library / tests
+### Prerequisites
+
+- Python 3.11+
+- [Hermes](https://github.com/hermes-ai/hermes) installed and on your `PATH` (`which hermes` should return a path)
+
+### Step 1 — Clone the repo
 
 ```bash
 git clone https://github.com/Sophanos/circulatio.git
 cd circulatio
+```
+
+From here on, `$CIRCULATIO_PATH` means the absolute path to this directory (e.g. `/Users/you/projects/circulatio` or `/home/you/circulatio`).
+
+### Step 2 — Install Circulatio into Hermes's Python environment
+
+Circulatio must be installed into the **same virtual environment that Hermes runs in**, not a separate one.
+
+```bash
+# Confirm where Hermes lives
+which hermes
+head -n 1 "$(which hermes)"
+
+# Make sure Hermes's venv has pip
+~/.hermes/hermes-agent/venv/bin/python3 -m ensurepip --upgrade
+
+# Install Circulatio (replace $CIRCULATIO_PATH with the actual path)
+~/.hermes/hermes-agent/venv/bin/python3 -m pip install -e "$CIRCULATIO_PATH"
+```
+
+**What this does:** installs the `circulatio` library and the `circulatio_hermes_plugin` Python package into Hermes's interpreter so the tools and commands can be imported at runtime.
+
+### Step 3 — Symlink the plugin manifest
+
+Hermes discovers plugins by looking for a directory containing a `plugin.yaml` file inside `~/.hermes/plugins/`.
+
+```bash
+mkdir -p ~/.hermes/plugins
+ln -sfn "$CIRCULATIO_PATH/hermes_plugin/circulatio" ~/.hermes/plugins/circulatio
+```
+
+**What this does:** creates a symlink pointing Hermes to the plugin manifest (`hermes_plugin/circulatio/plugin.yaml`) that declares which tools and commands Circulatio provides.
+
+> **Why two steps?** `pip install -e` makes the Python code importable; the symlink tells Hermes "there is a plugin here and here is its manifest." Both are required.
+
+### Step 4 — Enable the plugin
+
+```bash
+hermes plugins enable circulatio
+hermes plugins list
+```
+
+### Step 5 — Verify
+
+Start a new Hermes session, then run:
+
+```text
+/plugins
+/circulation journey list
+```
+
+Expected:
+- `/plugins` shows `circulatio`
+- `/circulation journey list` does not say `Unknown command`
+
+---
+
+### Library / tests (optional)
+
+If you want to run the test suite or evaluate method quality locally:
+
+```bash
+cd "$CIRCULATIO_PATH"
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -47,33 +115,16 @@ pip install -e ".[dev]" --upgrade
 .venv/bin/python scripts/evaluate_circulatio_method.py --strict
 ```
 
-### Hermes plugin
+---
 
-```bash
-which hermes
-head -n 1 "$(which hermes)"
-~/.hermes/hermes-agent/venv/bin/python3 -m ensurepip --upgrade
-~/.hermes/hermes-agent/venv/bin/python3 -m pip install -e /absolute/path/to/circulatio
-mkdir -p ~/.hermes/plugins
-ln -sfn /absolute/path/to/circulatio/hermes_plugin/circulatio ~/.hermes/plugins/circulatio
-hermes plugins enable circulatio
-hermes plugins list
-```
+### Troubleshooting
 
-### Verify
-
-Start a new Hermes session, then run:
-
-```text
-/plugins
-/circulation journey list
-```
-
-Expected:
-- `/plugins` shows `circulatio`
-- `/circulation journey list` does not say `Unknown command`
-
-If `hermes plugins enable circulatio` says `Plugin 'circulatio' is not installed or bundled.`, you installed Circulatio into the wrong Python environment. Use the interpreter shown in the `head -n 1 "$(which hermes)"` step above.
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `which hermes` returns nothing | Hermes is not installed or not on your `PATH` | Install Hermes first |
+| `Plugin 'circulatio' is not installed or bundled.` | You installed Circulatio into the wrong Python environment | Use the interpreter shown by `head -n 1 "$(which hermes)"` |
+| `plugin.yaml not found` or plugin fails to load | The symlink points to the wrong directory | Make sure the symlink target is `$CIRCULATIO_PATH/hermes_plugin/circulatio` (the directory that contains `plugin.yaml`) |
+| Permission denied on `~/.hermes/plugins` | The directory does not exist or has wrong permissions | Run `mkdir -p ~/.hermes/plugins` and check ownership |
 
 ---
 
