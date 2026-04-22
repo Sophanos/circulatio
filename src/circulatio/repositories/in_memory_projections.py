@@ -1837,9 +1837,12 @@ def _thread_surface_readiness(
             "intakeContext": "available",
             "discovery": "available",
             "aliveToday": "available",
+            "weeklyReview": "available",
             "journeyPage": "available",
             "rhythmicBrief": "ready" if ready else "available",
+            "livingMythReview": "available",
             "analysisPacket": "available",
+            "methodStateResponse": "available",
         }
     if kind == "threshold_process":
         return {
@@ -1881,6 +1884,18 @@ def _thread_surface_readiness(
             "analysisPacket": "available",
             "methodStateResponse": "available",
             "practice": "ready" if ready else "available",
+        }
+    if kind == "longitudinal_signal":
+        signal_ready = status in {"strong", "active", "eligible", "ready", "user_confirmed"}
+        return {
+            "discovery": "available",
+            "aliveToday": "available",
+            "weeklyReview": "available",
+            "journeyPage": "available",
+            "rhythmicBrief": "ready" if signal_ready else "available",
+            "livingMythReview": "available",
+            "analysisPacket": "available",
+            "methodStateResponse": "available",
         }
     return {
         "discovery": "available",
@@ -2053,6 +2068,11 @@ def build_thread_digests_locked(
             or "Dream series"
         )
         status = str(record.get("status") or summary.get("status") or "active")
+        evidence_ids = [
+            str(item)
+            for item in record.get("materialIds", summary.get("materialIds", []))
+            if isinstance(item, str) and item.strip()
+        ]
         append_digest(
             {
                 "threadKey": f"dream_series:{series_id}",
@@ -2060,7 +2080,7 @@ def build_thread_digests_locked(
                 "status": status,
                 "summary": _truncate(summary_text, 220),
                 "entityRefs": entity_refs,
-                "evidenceIds": [],
+                "evidenceIds": evidence_ids,
                 "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
                 "sourceRecordRefs": [
                     _thread_source_ref("DreamSeries", series_id, summary=summary_text),
@@ -2271,6 +2291,11 @@ def build_thread_digests_locked(
                 if isinstance(item, str) and item.strip()
             ],
         )
+        evidence_ids = [
+            str(item)
+            for item in signal.get("materialIds", [])
+            if isinstance(item, str) and item.strip()
+        ]
         append_digest(
             {
                 "threadKey": f"longitudinal_signal:{signal_id}",
@@ -2278,7 +2303,7 @@ def build_thread_digests_locked(
                 "status": str(signal.get("strength") or "active"),
                 "summary": _truncate(signal_summary, 220),
                 "entityRefs": entity_refs,
-                "evidenceIds": [],
+                "evidenceIds": evidence_ids,
                 "journeyIds": _journey_ids_for_entity_refs(bucket, entity_refs),
                 "sourceRecordRefs": [
                     _thread_source_ref(
