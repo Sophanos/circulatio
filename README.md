@@ -89,6 +89,21 @@ You → Hermes (routing, rhythm, gateway)
 - **Proactive rhythm.** Brief check-ins, weekly synthesis, and journey pages arrive on a rhythm you consent to. You can always say not now.
 - **Embeddable and open.** Built as a backend you can plug into an agent, script against, or run locally when the time is right.
 
+## How It Interprets
+
+Circulatio does not guess meanings from a symbol dictionary. It follows a hermeneutic method rooted in Jung, Marie-Louise von Franz, and Robert A. Johnson:
+
+- **Dreams are letters from the Self.** The agent treats every dream as a message, not a puzzle to solve or a problem to fix. Its role is to help you learn the symbolic language so you can read your own mail.
+- **Context before claim.** Before any interpretation, it gathers the dream narrative, your conscious attitude, recent life events, body states, and recurring relational scenes. No full interpretation is offered when prerequisites are missing.
+- **Personal amplification first.** Every significant image is circled through your own associations, memories, and emotional qualities — stored as linked records, not replaced by dictionary definitions.
+- **Subjective level by default.** Dream figures are treated as personified features of your own personality (complexes), not literal external people. Objective interpretation is explored only when you confirm external relevance.
+- **Compensation, not prediction.** The dream's ending (the lysis) is compared against your tracked conscious attitude to determine whether the dream opposes, varies within, or confirms your stance — and this is presented as a question, not a conclusion.
+- **Body is symbol.** Somatic states are correlated with dream content and series progression. Tension is held as meaningful, not managed as symptom.
+- **Series over snapshots.** A single dream is a snapshot; a series is a conversation. The system tracks narrative progression, ego-strength trajectories, and compensatory shifts across time.
+- **Containment before depth.** Reality anchors — work continuity, sleep, relationships, reflective capacity — are assessed before shadow, anima/animus, or archetypal language is offered. When grounding is weak, the system favors body awareness, simpler reflection, or bounded analysis packets.
+- **Assimilation, not just understanding.** Integration is "this AND that," not "this OR that." The agent honors your conscious values while presenting the unconscious perspective as complementary, and it warns against rushing to action based on a single dream.
+- **Held lightly enough to refuse.** Every interpretation is offered as a resonant possibility. You can decline it without guilt. The goal is to help you become your own witness.
+
 ## The Bottom Line
 
 Circulatio is not a wellness tracker (no calories, streaks, or mood scores). It is not a productivity OS (no tasks, habits, or optimization loops). It is not a therapy simulator (no diagnosis, no unqualified clinical language). It is not a chatbot that interprets everything you drop into it. It is not a dashboard that reports on you.
