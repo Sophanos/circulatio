@@ -38,6 +38,7 @@ class HermesCommandResult(TypedDict, total=False):
     individuationRecord: NotRequired[IndividuationRecord]
     practiceSession: NotRequired[PracticeSessionRecord]
     practiceRecommendation: NotRequired[PracticePlan]
+    continuity: NotRequired[dict[str, object]]
     brief: NotRequired[ProactiveBriefRecord]
     briefs: NotRequired[list[ProactiveBriefRecord]]
     symbols: NotRequired[list[SymbolRecord]]
@@ -183,15 +184,17 @@ class HermesCirculationCommandRouter:
         user_id: Id,
         payload: dict[str, object],
     ) -> HermesCommandResult:
-        record = await self._service.respond_practice_recommendation({"userId": user_id, **payload})
+        result = await self._service.respond_practice_recommendation({"userId": user_id, **payload})
         action = str(payload["action"])
+        practice = result["practiceSession"]
         return {
             "command": f"/circulation practice {'accept' if action == 'accepted' else 'skip'}",
             "userId": user_id,
             "status": "ok",
             "message": "Practice accepted." if action == "accepted" else "Practice skipped.",
-            "practiceSession": record,
-            "affectedEntityIds": [record["id"]],
+            "practiceSession": practice,
+            "continuity": result.get("continuity"),
+            "affectedEntityIds": [practice["id"]],
         }
 
     async def brief(

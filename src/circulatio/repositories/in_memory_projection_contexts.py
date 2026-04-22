@@ -864,26 +864,6 @@ def build_living_myth_review_input_locked(
     )
     if method_context is not None:
         payload["methodContextSnapshot"] = method_context
-        method_state = method_context.get("methodState") if isinstance(method_context, dict) else {}
-        if isinstance(method_state, dict):
-            active_goal_tension = method_state.get("activeGoalTension")
-            if isinstance(active_goal_tension, dict):
-                payload["activeGoalTension"] = deepcopy(active_goal_tension)
-            practice_loop = method_state.get("practiceLoop")
-            if isinstance(practice_loop, dict):
-                payload["practiceLoop"] = deepcopy(practice_loop)
-        living_myth_context = (
-            method_context.get("livingMythContext") if isinstance(method_context, dict) else {}
-        )
-        if isinstance(living_myth_context, dict):
-            symbolic_wellbeing = living_myth_context.get("latestSymbolicWellbeing")
-            if isinstance(symbolic_wellbeing, dict):
-                payload["latestSymbolicWellbeing"] = deepcopy(symbolic_wellbeing)
-        if method_context.get("activeJourneys"):
-            payload["activeJourneys"] = deepcopy(method_context["activeJourneys"][:5])
-        witness_state = method_context.get("witnessState")
-        if isinstance(witness_state, dict):
-            payload["witnessState"] = deepcopy(witness_state)
     payload["recentMaterialSummaries"] = build_memory_context_locked(bucket)[
         "recentMaterialSummaries"
     ][:8]
@@ -927,28 +907,12 @@ def build_analysis_packet_input_locked(
     )
     if method_context is not None:
         payload["methodContextSnapshot"] = method_context
-        method_state = method_context.get("methodState") if isinstance(method_context, dict) else {}
-        if isinstance(method_state, dict):
-            active_goal_tension = method_state.get("activeGoalTension")
-            if isinstance(active_goal_tension, dict):
-                payload["activeGoalTension"] = deepcopy(active_goal_tension)
-            practice_loop = method_state.get("practiceLoop")
-            if isinstance(practice_loop, dict):
-                payload["practiceLoop"] = deepcopy(practice_loop)
-        if method_context.get("activeJourneys"):
-            payload["activeJourneys"] = deepcopy(method_context["activeJourneys"][:5])
-        witness_state = method_context.get("witnessState")
-        if isinstance(witness_state, dict):
-            payload["witnessState"] = deepcopy(witness_state)
         if method_context.get("activeDreamSeries"):
             payload["currentDreamSeries"] = deepcopy(method_context["activeDreamSeries"][:5])
         if method_context.get("recentBodyStates"):
             payload["bodyEchoes"] = deepcopy(method_context["recentBodyStates"][:5])
         individuation_context = method_context.get("individuationContext") or {}
         living_myth_context = method_context.get("livingMythContext") or {}
-        symbolic_wellbeing = living_myth_context.get("latestSymbolicWellbeing")
-        if isinstance(symbolic_wellbeing, dict):
-            payload["latestSymbolicWellbeing"] = deepcopy(symbolic_wellbeing)
         if individuation_context.get("thresholdProcesses"):
             payload["activeThresholdProcesses"] = deepcopy(
                 individuation_context["thresholdProcesses"][:5]

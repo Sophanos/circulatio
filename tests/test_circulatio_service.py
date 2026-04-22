@@ -428,6 +428,12 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertIn("method_context_reality_anchor", criteria)
             self.assertIn("dashboard_recent_material", criteria)
             self.assertFalse(any(item.get("kind") == "coach_loop" for item in packet["items"]))
+            self.assertIn("continuity", workflow)
+            self.assertTrue(workflow["continuity"]["threadDigests"])
+            self.assertEqual(
+                workflow["continuity"]["methodContextSnapshot"]["windowEnd"],
+                packet["windowEnd"],
+            )
             runs = await repository.list_interpretation_runs("user_1")
             reviews = await repository.list_weekly_reviews("user_1")
             practices = await repository.list_practice_sessions("user_1")
@@ -838,6 +844,8 @@ class CirculatioServiceTests(unittest.TestCase):
                 material_id=material["id"],
             )
             self.assertEqual(result["captureRun"]["status"], "completed")
+            self.assertIn("continuity", result)
+            self.assertTrue(result["continuity"]["threadDigests"])
             self.assertTrue(updated_material["dreamStructure"]["methodDynamics"])
             self.assertTrue(state["recentDreamDynamics"])
             self.assertEqual(state["recentDreamDynamics"][0]["materialId"], material["id"])
@@ -1361,8 +1369,10 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
             profile = await repository.get_adaptation_profile("user_1")
-            self.assertEqual(accepted["status"], "accepted")
-            self.assertEqual(skipped["status"], "skipped")
+            self.assertEqual(accepted["practiceSession"]["status"], "accepted")
+            self.assertEqual(skipped["practiceSession"]["status"], "skipped")
+            self.assertIn("continuity", accepted)
+            self.assertIn("continuity", skipped)
             self.assertEqual(profile["sampleCounts"]["practice_accepted"], 1)
             self.assertEqual(profile["sampleCounts"]["practice_skipped"], 1)
 
@@ -1399,8 +1409,9 @@ class CirculatioServiceTests(unittest.TestCase):
             practice_integrations = [
                 item for item in integrations if item["action"] == "practice_outcome"
             ]
-            self.assertEqual(completed["status"], "completed")
-            self.assertEqual(completed["id"], again["id"])
+            self.assertEqual(completed["practiceSession"]["status"], "completed")
+            self.assertEqual(completed["practiceSession"]["id"], again["practiceSession"]["id"])
+            self.assertTrue(completed["continuity"]["threadDigests"])
             self.assertEqual(len(practice_integrations), 1)
 
         asyncio.run(run())
@@ -2592,7 +2603,7 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
 
-            await service.generate_living_myth_review(
+            review_workflow = await service.generate_living_myth_review(
                 {
                     "userId": "user_1",
                     "windowStart": "2026-04-12T00:00:00Z",
@@ -2629,7 +2640,7 @@ class CirculatioServiceTests(unittest.TestCase):
                 any(journey["id"] in item["journeyIds"] for item in review_input["threadDigests"])
             )
 
-            await service.generate_analysis_packet(
+            packet_workflow = await service.generate_analysis_packet(
                 {
                     "userId": "user_1",
                     "windowStart": "2026-04-12T00:00:00Z",
@@ -2656,6 +2667,15 @@ class CirculatioServiceTests(unittest.TestCase):
                 packet_input["methodContextSnapshot"]["witnessState"]["stance"],
             )
             self.assertTrue(packet_input["threadDigests"])
+            self.assertEqual(
+                review_workflow["continuity"]["methodContextSnapshot"]["witnessState"]["stance"],
+                review_input["witnessState"]["stance"],
+            )
+            self.assertTrue(review_workflow["continuity"]["threadDigests"])
+            self.assertEqual(
+                packet_workflow["continuity"]["methodContextSnapshot"]["witnessState"]["stance"],
+                packet_input["witnessState"]["stance"],
+            )
 
         asyncio.run(run())
 
@@ -2797,6 +2817,11 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertIn("methodContextSnapshot", llm.alive_today_calls[0])
             self.assertTrue(llm.alive_today_calls[0]["methodContextSnapshot"]["recentBodyStates"])
             self.assertTrue(llm.alive_today_calls[0]["methodContextSnapshot"]["activeGoals"])
+            self.assertTrue(page["continuity"]["threadDigests"])
+            self.assertEqual(
+                page["continuity"]["methodContextSnapshot"]["recentBodyStates"][0]["bodyRegion"],
+                "chest",
+            )
 
         asyncio.run(run())
 

@@ -134,6 +134,7 @@ from .workflow_types import (
     MaterialWorkflowResult,
     MethodStateWorkflowResult,
     PatternHistoryResult,
+    PracticeMutationResult,
     PracticeWorkflowResult,
     ProcessMethodStateResponseInput,
     RecordAestheticResonanceInput,
@@ -149,6 +150,7 @@ from .workflow_types import (
     StoreBodyStateResult,
     StoreMaterialWithIntakeContextResult,
     SymbolHistoryResult,
+    ThreadAwareContinuityBundle,
     ThresholdReviewWorkflowResult,
     UpdateJourneyInput,
     UpsertGoalInput,
@@ -330,7 +332,13 @@ class CirculatioService:
                 },
                 "warnings": fallback_warnings,
             }
-        return {"material": material, "intakeContext": intake_context}
+        continuity = self._build_thread_aware_continuity_bundle(
+            window_start=window_start,
+            window_end=window_end,
+            method_context=method_context,
+            thread_digests=thread_digests,
+        )
+        return {"material": material, "intakeContext": intake_context, "continuity": continuity}
 
     async def create_material(self, input_data: CreateMaterialInput) -> MaterialRecord:
         text = (input_data.get("text") or "").strip()
@@ -1056,9 +1064,18 @@ class CirculatioService:
             }
         return enriched
 
-    def _sync_longitudinal_input_fields(self, payload: dict[str, object]) -> dict[str, object]:
+    def _sync_longitudinal_input_fields(
+        self,
+        payload: dict[str, object],
+        *,
+        continuity: ThreadAwareContinuityBundle | None = None,
+    ) -> dict[str, object]:
         synced = deepcopy(payload)
-        method_context = synced.get("methodContextSnapshot")
+        method_context = (
+            continuity.get("methodContextSnapshot")
+            if continuity is not None
+            else synced.get("methodContextSnapshot")
+        )
         if not isinstance(method_context, dict):
             return synced
         method_state = (
@@ -1340,6 +1357,70 @@ class CirculatioService:
         }
         return mapping.get(kind, kind.replace("_", " ").title())
 
+    def _build_thread_aware_continuity_bundle(
+        self,
+        *,
+        window_start: str,
+        window_end: str,
+        method_context: MethodContextSnapshot | None,
+        thread_digests: list[ThreadDigest] | None,
+    ) -> ThreadAwareContinuityBundle:
+        continuity: ThreadAwareContinuityBundle = {
+            "generatedAt": now_iso(),
+            "windowStart": str((method_context or {}).get("windowStart") or window_start),
+            "windowEnd": str((method_context or {}).get("windowEnd") or window_end),
+            "threadDigests": deepcopy(thread_digests or []),
+        }
+        if isinstance(method_context, dict):
+            continuity["methodContextSnapshot"] = deepcopy(method_context)
+        return continuity
+
+    def _hydrate_payload_from_continuity(
+        self,
+        payload: dict[str, object],
+        *,
+        continuity: ThreadAwareContinuityBundle,
+        sync_longitudinal: bool = False,
+    ) -> dict[str, object]:
+        hydrated = deepcopy(payload)
+        method_context = continuity.get("methodContextSnapshot")
+        if isinstance(method_context, dict):
+            hydrated["methodContextSnapshot"] = deepcopy(method_context)
+        else:
+            hydrated.pop("methodContextSnapshot", None)
+        thread_digests = [
+            deepcopy(item)
+            for item in continuity.get("threadDigests", [])
+            if isinstance(item, dict)
+        ]
+        if thread_digests:
+            hydrated["threadDigests"] = thread_digests
+        else:
+            hydrated.pop("threadDigests", None)
+        if sync_longitudinal:
+            hydrated = self._sync_longitudinal_input_fields(hydrated, continuity=continuity)
+        return hydrated
+
+    async def _reload_thread_aware_continuity_bundle(
+        self,
+        *,
+        user_id: Id,
+        anchor: str,
+        material_id: Id | None = None,
+        surface: str = "generic",
+        safety_context: SafetyContext | None = None,
+    ) -> ThreadAwareContinuityBundle:
+        window_start, window_end = self._resolve_window(anchor=anchor)
+        bundle = await self._load_surface_context_bundle(
+            user_id=user_id,
+            window_start=window_start,
+            window_end=window_end,
+            surface=surface,
+            material_id=material_id,
+            safety_context=safety_context,
+        )
+        return cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
+
     async def _load_surface_context_bundle(
         self,
         *,
@@ -1394,20 +1475,21 @@ class CirculatioService:
             ),
             self._build_coach_loop_thread_digests(method_context),
         )
-        prepared_payload["methodContextSnapshot"] = deepcopy(method_context)
-        if thread_digests:
-            prepared_payload["threadDigests"] = deepcopy(thread_digests)
-        else:
-            prepared_payload.pop("threadDigests", None)
+        continuity = self._build_thread_aware_continuity_bundle(
+            window_start=window_start,
+            window_end=window_end,
+            method_context=method_context,
+            thread_digests=thread_digests,
+        )
+        prepared_payload = self._hydrate_payload_from_continuity(
+            prepared_payload,
+            continuity=continuity,
+            sync_longitudinal=sync_longitudinal,
+        )
         if explicit_question:
             prepared_payload["explicitQuestion"] = explicit_question
         if safety_context is not None:
             prepared_payload["safetyContext"] = deepcopy(safety_context)
-        if sync_longitudinal:
-            prepared_payload = cast(
-                dict[str, object],
-                self._sync_longitudinal_input_fields(prepared_payload),
-            )
         memory_snapshot = None
         if memory_query is not None:
             memory_snapshot = await self._repository.build_memory_kernel_snapshot(
@@ -1416,6 +1498,7 @@ class CirculatioService:
             )
         return {
             "preparedPayload": prepared_payload,
+            "continuity": continuity,
             "methodContextSnapshot": method_context,
             "threadDigests": thread_digests,
             "dashboard": dashboard,
@@ -3030,6 +3113,13 @@ class CirculatioService:
                     "entityId": applied_ref.get("entityId"),
                 },
             )
+        continuity = await self._reload_thread_aware_continuity_bundle(
+            user_id=user_id,
+            anchor=observed_at,
+            material_id=cast(Id | None, anchor_refs.get("materialId") or response_material["id"]),
+            surface="method_state_response",
+            safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+        )
         return {
             "captureRun": updated_run,
             "responseMaterial": response_material,
@@ -3041,6 +3131,7 @@ class CirculatioService:
             ],
             "withheldCandidates": withheld_candidates,
             "warnings": warnings,
+            "continuity": continuity,
         }
 
     async def approve_method_state_capture_proposals(
@@ -3703,6 +3794,7 @@ class CirculatioService:
             "graphNodeCount": len(graph["nodes"]),
             "graphEdgeCount": len(graph["edges"]),
         }
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
         discovery: DiscoveryResult = {
             "discoveryId": create_id("discovery"),
             "userId": input_data["userId"],
@@ -3718,6 +3810,7 @@ class CirculatioService:
                 explicit_question=explicit_question,
             ),
             "warnings": warnings,
+            "continuity": continuity,
         }
         if explicit_question:
             discovery["explicitQuestion"] = explicit_question
@@ -3736,14 +3829,14 @@ class CirculatioService:
             fallback_start=window_start,
             fallback_end=window_end,
         )
-        _, summary = await self._build_ephemeral_circulation_summary(
+        continuity, _, summary = await self._build_ephemeral_circulation_summary(
             user_id=user_id,
             window_start=resolved_start,
             window_end=resolved_end,
             explicit_question=explicit_question,
             surface="alive_today",
         )
-        return {"summary": summary}
+        return {"summary": summary, "continuity": continuity}
 
     async def generate_journey_page(
         self,
@@ -3756,7 +3849,7 @@ class CirculatioService:
         )
         max_invitations = min(max(int(input_data.get("maxInvitations", 3)), 0), 5)
         include_analysis_packet = bool(input_data.get("includeAnalysisPacket", True))
-        summary_input, summary = await self._build_ephemeral_circulation_summary(
+        continuity, summary_input, summary = await self._build_ephemeral_circulation_summary(
             user_id=input_data["userId"],
             window_start=resolved_start,
             window_end=resolved_end,
@@ -3918,6 +4011,7 @@ class CirculatioService:
                 window_end=resolved_end,
             ),
             "warnings": [],
+            "continuity": continuity,
         }
         if analysis_packet is not None:
             result["analysisPacket"] = analysis_packet
@@ -3951,6 +4045,7 @@ class CirculatioService:
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
         review_input = cast(ThresholdReviewInput, bundle["preparedPayload"])
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
         result = await self._core.generate_threshold_review(review_input)
         practice_session: PracticeSessionRecord | None = None
         practice = result.get("practiceRecommendation")
@@ -3963,6 +4058,7 @@ class CirculatioService:
         workflow: ThresholdReviewWorkflowResult = {
             "result": result,
             "pendingProposals": list(result.get("memoryWritePlan", {}).get("proposals", [])),
+            "continuity": continuity,
         }
         if practice_session is not None:
             workflow["practiceSession"] = practice_session
@@ -4060,6 +4156,7 @@ class CirculatioService:
             sync_longitudinal=True,
         )
         review_input = cast(LivingMythReviewInput, bundle["preparedPayload"])
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
         result = await self._core.generate_living_myth_review(review_input)
         practice_session: PracticeSessionRecord | None = None
         practice = result.get("practiceRecommendation")
@@ -4072,6 +4169,7 @@ class CirculatioService:
         workflow: LivingMythReviewWorkflowResult = {
             "result": result,
             "pendingProposals": list(result.get("memoryWritePlan", {}).get("proposals", [])),
+            "continuity": continuity,
         }
         if practice_session is not None:
             workflow["practiceSession"] = practice_session
@@ -4176,8 +4274,9 @@ class CirculatioService:
             sync_longitudinal=True,
         )
         packet_input = cast(AnalysisPacketInput, bundle["preparedPayload"])
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
         result = await self._core.generate_analysis_packet(packet_input)
-        workflow: AnalysisPacketWorkflowResult = {"result": result}
+        workflow: AnalysisPacketWorkflowResult = {"result": result, "continuity": continuity}
         if input_data.get("persist", True):
             packet_record: AnalysisPacketRecord = {
                 "id": create_id("analysis_packet"),
@@ -4242,6 +4341,7 @@ class CirculatioService:
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
         practice_input = cast(PracticeRecommendationInput, bundle["preparedPayload"])
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
         profile = cast(dict[str, object] | None, bundle["profile"])
         practice_hints = self._adaptation_engine.derive_practice_hints(profile=profile)
         practice_input["practiceHints"] = deepcopy(practice_hints)
@@ -4271,15 +4371,35 @@ class CirculatioService:
             "practiceRecommendation": llm_result["practiceRecommendation"],
             "userFacingResponse": llm_result["userFacingResponse"],
             "llmResult": llm_result,
+            "continuity": continuity,
         }
         if practice_session is not None:
             result["practiceSession"] = practice_session
         return result
 
+    async def _materialize_practice_mutation_result(
+        self,
+        *,
+        user_id: Id,
+        practice: PracticeSessionRecord,
+    ) -> PracticeMutationResult:
+        continuity = await self._reload_thread_aware_continuity_bundle(
+            user_id=user_id,
+            anchor=str(
+                practice.get("updatedAt")
+                or practice.get("completedAt")
+                or practice.get("createdAt")
+                or now_iso()
+            ),
+            material_id=cast(Id | None, practice.get("materialId")),
+            surface="practice_followup",
+        )
+        return {"practiceSession": practice, "continuity": continuity}
+
     async def respond_practice_recommendation(
         self,
         input_data: RespondPracticeInput,
-    ) -> PracticeSessionRecord:
+    ) -> PracticeMutationResult:
         action = str(input_data["action"])
         if action not in {"accepted", "skipped"}:
             raise ValidationError("Practice response action must be accepted or skipped.")
@@ -4289,7 +4409,10 @@ class CirculatioService:
         )
         previous_status = str(practice["status"])
         if previous_status == action:
-            return practice
+            return await self._materialize_practice_mutation_result(
+                user_id=input_data["userId"],
+                practice=practice,
+            )
         try:
             self._practice_engine.validate_transition(
                 current_status=previous_status,  # type: ignore[arg-type]
@@ -4344,7 +4467,10 @@ class CirculatioService:
             success=event.get("success"),
             sample_weight=event.get("sampleWeight"),
         )
-        return updated
+        return await self._materialize_practice_mutation_result(
+            user_id=input_data["userId"],
+            practice=updated,
+        )
 
     async def record_practice_outcome(
         self,
@@ -4353,7 +4479,7 @@ class CirculatioService:
         practice_session_id: Id | None,
         material_id: Id | None,
         outcome: PracticeOutcomeWritePayload,
-    ) -> PracticeSessionRecord:
+    ) -> PracticeMutationResult:
         timestamp = now_iso()
         previous_status: str | None = None
         should_record_adaptation = True
@@ -4367,7 +4493,10 @@ class CirculatioService:
                     and existing.get("activationBefore") == outcome.get("activationBefore")
                     and existing.get("activationAfter") == outcome.get("activationAfter")
                 ):
-                    return existing
+                    return await self._materialize_practice_mutation_result(
+                        user_id=user_id,
+                        practice=existing,
+                    )
                 should_record_adaptation = False
                 should_create_integration = False
             else:
@@ -4446,7 +4575,10 @@ class CirculatioService:
                 success=event.get("success"),
                 sample_weight=event.get("sampleWeight"),
             )
-        return practice
+        return await self._materialize_practice_mutation_result(
+            user_id=user_id,
+            practice=practice,
+        )
 
     async def generate_rhythmic_briefs(
         self,
@@ -4479,6 +4611,7 @@ class CirculatioService:
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
         )
         summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
         memory_snapshot = cast(MemoryKernelSnapshot, bundle["memorySnapshot"])
         dashboard = cast(DashboardSummary, bundle["dashboard"])
         thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
@@ -4498,6 +4631,7 @@ class CirculatioService:
             return {
                 "briefs": [],
                 "skippedReasons": ["scheduled_proactive_briefing_not_allowed"],
+                "continuity": continuity,
             }
         seeds = self._proactive_engine.build_candidate_seeds(
             user_id=input_data["userId"],
@@ -4521,7 +4655,7 @@ class CirculatioService:
             now=now,
         )
         if not due_seeds:
-            result: RhythmicBriefWorkflowResult = {"briefs": []}
+            result: RhythmicBriefWorkflowResult = {"briefs": [], "continuity": continuity}
             if skipped_reasons:
                 result["skippedReasons"] = skipped_reasons
             return result
@@ -4574,7 +4708,7 @@ class CirculatioService:
                     "triggerKey": brief.get("triggerKey"),
                 },
             )
-        result = {"briefs": persisted}
+        result: RhythmicBriefWorkflowResult = {"briefs": persisted, "continuity": continuity}
         if skipped_reasons:
             result["skippedReasons"] = skipped_reasons
         return result
@@ -7851,7 +7985,7 @@ class CirculatioService:
         window_end: str,
         explicit_question: str | None = None,
         surface: Literal["alive_today", "journey_page"] = "alive_today",
-    ) -> tuple[CirculationSummaryInput, CirculationSummaryResult]:
+    ) -> tuple[ThreadAwareContinuityBundle, CirculationSummaryInput, CirculationSummaryResult]:
         bundle = await self._load_surface_context_bundle(
             user_id=user_id,
             window_start=window_start,
@@ -7861,7 +7995,9 @@ class CirculatioService:
             explicit_question=explicit_question,
         )
         summary_input = cast(CirculationSummaryInput, bundle["preparedPayload"])
-        return summary_input, await self._core.generate_circulation_summary(summary_input)
+        continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
+        summary = await self._core.generate_circulation_summary(summary_input)
+        return continuity, summary_input, summary
 
     def _build_journey_alive_surface(
         self,
@@ -9492,6 +9628,19 @@ class CirculatioService:
             for evidence_id in capture_run.get("evidenceIds", [])
         ]
         plan = capture_run.get("memoryWritePlan", {"proposals": []})
+        anchor_refs = (
+            capture_run.get("anchorRefs") if isinstance(capture_run.get("anchorRefs"), dict) else {}
+        )
+        continuity = await self._reload_thread_aware_continuity_bundle(
+            user_id=capture_run["userId"],
+            anchor=str(
+                response_material.get("materialDate")
+                or response_material.get("createdAt")
+                or now_iso()
+            ),
+            material_id=cast(Id | None, anchor_refs.get("materialId") or response_material["id"]),
+            surface="method_state_response",
+        )
         return {
             "captureRun": capture_run,
             "responseMaterial": response_material,
@@ -9511,6 +9660,7 @@ class CirculatioService:
                 for item in capture_run.get("extractionResult", {}).get("routingWarnings", [])
                 if str(item).strip()
             ],
+            "continuity": continuity,
         }
 
     async def _load_method_state_anchors(
@@ -9945,7 +10095,7 @@ class CirculatioService:
             outcome_text = str(payload.get("outcome") or "").strip()
             if not practice_type or not outcome_text:
                 return {"warning": "practice_outcome_missing_required_fields"}
-            practice = await self.record_practice_outcome(
+            practice_result = await self.record_practice_outcome(
                 user_id=user_id,
                 practice_session_id=practice_session.get("id"),
                 material_id=response_material["id"],
@@ -9960,6 +10110,7 @@ class CirculatioService:
                     "outcomeEvidenceIds": evidence_ids,
                 },
             )
+            practice = practice_result["practiceSession"]
             return {
                 "appliedEntityRef": {
                     "entityType": "PracticeSession",

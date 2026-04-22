@@ -40,6 +40,7 @@ from ..domain.types import (
     LivingMythReviewResult,
     MaterialType,
     MemoryWriteProposal,
+    MethodContextSnapshot,
     PracticeOutcomeWritePayload,
     PracticePlan,
     PracticeRecommendationResult,
@@ -48,6 +49,7 @@ from ..domain.types import (
     RhythmicBriefResult,
     SafetyContext,
     SessionContext,
+    ThreadDigest,
     ThresholdReviewResult,
     UserAssociationInput,
 )
@@ -85,6 +87,14 @@ class MaterialWorkflowResult(TypedDict, total=False):
     pendingClarificationPrompts: NotRequired[list[ClarificationPromptRecord]]
     contextSnapshot: NotRequired[ContextSnapshot]
     practiceSession: NotRequired[PracticeSessionRecord]
+
+
+class ThreadAwareContinuityBundle(TypedDict, total=False):
+    generatedAt: Required[str]
+    windowStart: Required[str]
+    windowEnd: Required[str]
+    methodContextSnapshot: NotRequired[MethodContextSnapshot]
+    threadDigests: Required[list[ThreadDigest]]
 
 
 IntakeContextVisibility = Literal["host_only"]
@@ -184,9 +194,10 @@ class IntakeContextPacket(TypedDict):
     warnings: list[str]
 
 
-class StoreMaterialWithIntakeContextResult(TypedDict):
-    material: MaterialRecord
-    intakeContext: IntakeContextPacket
+class StoreMaterialWithIntakeContextResult(TypedDict, total=False):
+    material: Required[MaterialRecord]
+    intakeContext: Required[IntakeContextPacket]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class ApproveProposalsInput(TypedDict, total=False):
@@ -268,6 +279,7 @@ class MethodStateWorkflowResult(TypedDict, total=False):
     followUpPrompts: Required[list[str]]
     withheldCandidates: Required[list[dict[str, object]]]
     warnings: Required[list[str]]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class AnswerClarificationInput(TypedDict, total=False):
@@ -308,6 +320,12 @@ class PracticeWorkflowResult(TypedDict, total=False):
     userFacingResponse: Required[str]
     contextSnapshot: NotRequired[ContextSnapshot]
     llmResult: NotRequired[PracticeRecommendationResult]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
+
+
+class PracticeMutationResult(TypedDict):
+    practiceSession: PracticeSessionRecord
+    continuity: ThreadAwareContinuityBundle
 
 
 class RespondPracticeInput(TypedDict, total=False):
@@ -343,8 +361,9 @@ class ListMaterialsInput(TypedDict, total=False):
     filters: NotRequired[MaterialListFilters]
 
 
-class AliveTodayResult(TypedDict):
-    summary: CirculationSummaryResult
+class AliveTodayResult(TypedDict, total=False):
+    summary: Required[CirculationSummaryResult]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class GenerateDiscoveryInput(TypedDict, total=False):
@@ -409,6 +428,7 @@ class DiscoveryResult(TypedDict, total=False):
     sourceCounts: Required[DiscoverySourceCounts]
     fallbackText: Required[str]
     warnings: Required[list[str]]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 JourneyLifecycleStatus = Literal["active", "paused", "completed", "archived"]
@@ -630,6 +650,7 @@ class JourneyPageResult(TypedDict, total=False):
     analysisPacket: NotRequired[JourneyAnalysisPacketPreview]
     fallbackText: Required[str]
     warnings: Required[list[str]]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class GenerateRhythmicBriefsInput(TypedDict, total=False):
@@ -644,6 +665,7 @@ class GenerateRhythmicBriefsInput(TypedDict, total=False):
 class RhythmicBriefWorkflowResult(TypedDict, total=False):
     briefs: Required[list[ProactiveBriefRecord]]
     skippedReasons: NotRequired[list[str]]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class RespondRhythmicBriefInput(TypedDict, total=False):
@@ -850,6 +872,7 @@ class ThresholdReviewWorkflowResult(TypedDict, total=False):
     result: Required[ThresholdReviewResult]
     pendingProposals: Required[list[MemoryWriteProposal]]
     practiceSession: NotRequired[PracticeSessionRecord]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class GenerateLivingMythReviewInput(TypedDict, total=False):
@@ -866,6 +889,7 @@ class LivingMythReviewWorkflowResult(TypedDict, total=False):
     result: Required[LivingMythReviewResult]
     pendingProposals: Required[list[MemoryWriteProposal]]
     practiceSession: NotRequired[PracticeSessionRecord]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class GenerateAnalysisPacketInput(TypedDict, total=False):
@@ -881,6 +905,7 @@ class GenerateAnalysisPacketInput(TypedDict, total=False):
 class AnalysisPacketWorkflowResult(TypedDict, total=False):
     packet: NotRequired[AnalysisPacketRecord]
     result: Required[AnalysisPacketResult]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class ApproveLivingMythReviewProposalsInput(TypedDict, total=False):
