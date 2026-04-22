@@ -413,7 +413,218 @@ Operator mode: real `hermes chat` only, no mocks, no direct service calls
 - Verdict: PASS
 - Notes: this surface still showed intermittent ASCII transliteration in `Vorschläge` during one rerun
 
+### Case G1
+
+- Case: Witness state revalidation after sanitization
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Zeig mir bitte den Witness State für die letzten 7 Tage."`
+- Session ID: `20260423_005401_9758ee`
+- Tool called: `circulatio_witness_state`
+- Tool result: sanitized compact witness-state payload with empty `witnessStateSummary`; no ids, no backend state-machine labels, no hidden writes
+- Host reply: `Der Witness State für die letzten 7 Tage ... ist leer. Es sind keine gespeicherten Materialien, Körperzustände, Symbole oder aktiven Muster in diesem Fenster vorhanden.`
+- Expected: compact witness summary, no internal leak, and no overclaim beyond the actual returned summary
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: when `witnessStateSummary` is empty, reply that no compact witness summary is available for the window; do not infer absence of all stored materials or patterns unless the tool payload actually says that
+
+### Case G2
+
+- Case: Living-myth review revalidation after sanitization
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Mach bitte einen Living-Myth-Review für den Zeitraum der letzten 7 Tage."`
+- Session ID: `20260423_005401_5948d7`
+- Tool called: `circulatio_living_myth_review`
+- Tool result: plain temporary-unavailable message; no review ids, no backend/storage wording, no pending proposal leak
+- Host reply: `Fuer den Zeitraum der letzten 7 Tage liegt gerade kein Living-Myth-Review vor. ...`
+- Expected: bounded plain-language unavailability without internals
+- Verdict: PASS
+- Notes: visible reply still transliterated umlauts to ASCII (`Fuer`, `Koerperzustaenden`, `uebersichtlich`)
+
+### Case G3
+
+- Case: Alive-today revalidation and read-mostly discipline
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Was ist heute lebendig?"`
+- Session ID: `20260423_005401_657dd7`
+- Tool calls observed: `circulatio_alive_today` then extra host follow-up reads `circulatio_list_journeys` and `circulatio_dashboard_summary`
+- Initial tool result: `An active journey can be picked up from the thread that is already alive.` with no writes and no visible leak
+- Host reply: user-facing synthesis around `Schlangenzimmer`, childhood, father-theme, key/door image, and older dog dream
+- Expected: `alive_today` should stay on the requested synthesis surface and remain read-mostly; no opportunistic extra read expansion beyond the original surface unless needed for disambiguation
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: after a successful `circulatio_alive_today` reply, Hermes should present that bounded synthesis directly instead of widening into `list_journeys` and `dashboard_summary`
+
+### Case G4
+
+- Case: Embodied recurrence route
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich habe wieder diese Enge in der Brust nach dem Gespräch mit Alex."`
+- Session ID: `20260423_005522_b7c2b0`
+- Tool called: `circulatio_store_body_state`
+- Host reply: `Ich habe die Enge in der Brust und den Kontext mit Alex festgehalten. Möchtest du jetzt bei ihr verweilen, oder reicht es dir, dass sie eingetragen ist?`
+- Expected: store body state first, no interpretation, one gentle follow-up at most
+- Verdict: PASS
+
+### Case G5
+
+- Case: Relational scene recurrence route
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Es ist wieder passiert. Ich bin still geworden, als jemand laut wurde."`
+- Session ID: `20260423_005522_e7cec1`
+- Tool called: `circulatio_store_event`
+- Host reply: `Das ist festgehalten. Willst du einen Moment dabei verweilen, oder lieber erst einmal nichts weiter dazu sagen?`
+- Expected: `circulatio_record_relational_scene` for direct relational-scene capture from JOURNEY_FAMILIES coverage
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: route repeated scene-first phrasing like `ich bin still geworden, als jemand laut wurde` to `circulatio_record_relational_scene` instead of the generic charged-event lane
+
+### Case G6
+
+- Case: Return-after-absence route
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Hey, ich bin wieder da."`
+- Session ID: `20260423_005522_8b3472`
+- Tool called: none
+- Host reply: plain conversational greeting asking what moves the user today
+- Expected: `circulatio_alive_today` for lightweight re-entry / return-to-journey coverage
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: teach Hermes to treat bare re-entry phrases as a light `alive_today` invitation instead of a no-tool social reply
+
+### Case G7
+
+- Case: Goal-tension route
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich weiß, dass ich ruhen müsste, aber ich höre nicht auf zu pushen."`
+- Session ID: `20260423_005522_254cc5`
+- Tool called: `circulatio_store_reflection`
+- Host reply: `Ich halte das für dich. Zwischen dem Wissen und dem Handeln liegt oft etwas, das nicht nur Disziplin heißt. Was spürst du gerade im Körper, wenn du das sagst?`
+- Expected: JOURNEY_FAMILIES coverage points to goal-tension framing rather than generic reflection hold-first alone
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: for explicit two-pole conflict language, prefer `circulatio_upsert_goal_tension` or an `alive_today` route shaped around goal tension instead of only storing a reflection
+- Notes: visible reply stayed user-facing, but it drifted toward host-authored interpretation (`nicht nur Disziplin`) beyond a plain hold-first acknowledgment
+
+### Case G8
+
+- Case: Interpretation feedback routing
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Diese Interpretation hat mich verfehlt. Bitte speichere dieses Feedback wörtlich."`
+- Session ID: `20260423_005522_b68167`
+- Tool called: `circulatio_record_interpretation_feedback` with `runId: "last"`
+- Tool result: `not_found` / `Unknown interpretation run: last`
+- Host reply: asks the user for run id or offers to list recent interpretations
+- Expected: feedback route should anchor cleanly to the relevant recent interpretation instead of failing on literal `last`
+- Verdict: FAIL
+- Likely owner: service contract
+- Minimal fix direction: either support `runId = "last"` here consistently with the tool description or change the host/tool contract so Hermes resolves the latest run before calling the feedback tool
+
+### Case G9
+
+- Case: Reality anchors direct capture
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Meine Realitätspunkte heute: Arbeit stabil, Schlaf mittelmäßig, zwei Freunde erreichbar."`
+- Session ID: `20260423_005522_59f967`
+- Tool called: `circulatio_capture_reality_anchors`
+- Host reply: `Habe deine Realitätspunkte gehalten: stabile Arbeit, mittelmäßiger Schlaf, zwei erreichbare Freunde. Das ist ein brauchbares Fundament für heute.`
+- Expected: direct capture without internal leak
+- Verdict: PASS
+
+### Case G10
+
+- Case: Threshold-process direct capture
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich glaube, ich bin in einem Ablösungsprozess vom Elternhaus."`
+- Session ID: `20260423_005522_fb866a`
+- Tool called: `circulatio_store_reflection`
+- Host reply: `Ich habe das festgehalten. Das Thema Ablösung vom Elternhaus ist bei dir schon als laufender Threshold-Prozess im System — was erinnert dich gerade jetzt daran?`
+- Expected: `circulatio_upsert_threshold_process` or another direct threshold-process capture lane from the explicit threshold phrasing
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: when the user explicitly names an ongoing threshold process, route to `circulatio_upsert_threshold_process` instead of generic reflection storage
+- Notes: visible reply also leaked internal product phrasing (`laufender Threshold-Prozess im System`)
+
+### Case H1
+
+- Case: Re-entry route after host prompt tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Hey, ich bin wieder da."`
+- Session ID: `20260423_010101_356692`
+- Tool called: `circulatio_alive_today`
+- Host reply: `Willkommen zurück. Es liegt ein aktiver Faden bereit ...`
+- Expected: lightweight re-entry should route through `circulatio_alive_today`
+- Verdict: PASS
+- Notes: no extra dashboard/journey reads were added on this re-entry turn; the reply stayed bounded, but still ended with a question
+
+### Case H2
+
+- Case: Relational scene route after host prompt tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Es ist wieder passiert. Ich bin still geworden, als jemand laut wurde."`
+- Session ID: `20260423_010101_12a549`
+- Tool called: `circulatio_record_relational_scene`
+- Host reply: `Das ist festgehalten. Dieses Muster ist jetzt als wiederkehrende Szene verzeichnet. ...`
+- Expected: repeated interpersonal scene should route to direct relational-scene capture
+- Verdict: PASS
+- Notes: wording remains user-facing, though `wiederkehrende Szene verzeichnet` is still slightly product-shaped and umlauts were transliterated in the follow-up question (`Koerper`)
+
+### Case H3
+
+- Case: Threshold-process route after host prompt tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich glaube, ich bin in einem Ablösungsprozess vom Elternhaus."`
+- Session ID: `20260423_010101_90282c`
+- Tool called: none
+- Host reply: conversational acknowledgment plus one follow-up question
+- Expected: explicit threshold-process naming should route to `circulatio_upsert_threshold_process`
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: the skill/schema nudge was not sufficient; Hermes still avoids the threshold tool because the required payload feels underspecified. This likely needs either stronger skill instructions with fill strategy examples or a slimmer host-facing threshold capture contract.
+- Notes: visible reply still had transliteration and a typo-like deformation: `Ablösungsprozuss`
+
+### Case H4
+
+- Case: Alive-today discipline after host prompt tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Was ist heute lebendig?"`
+- Session ID: `20260423_010101_b2775c`
+- Tool calls observed: `circulatio_alive_today` then `circulatio_dashboard_summary`
+- Host reply: richer synthesis without raw ids or backend labels
+- Expected: stay on the `alive_today` surface without opportunistic widening
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: Hermes still treats thin `alive_today` payloads as permission to widen into dashboard reads. If that is acceptable, the contract should say so explicitly; otherwise the host prompt needs a stricter prohibition.
+
+### Case H5
+
+- Case: Practice recommendation fallback wording after host prompt tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Gib mir bitte eine Praxisempfehlung."`
+- Session ID: `20260423_010101_a6fd02`
+- Tool calls observed: `circulatio_generate_practice_recommendation` twice, then plain fallback reply
+- Host reply: plain grounding practice without model/storage/fallback leakage
+- Expected: bounded plain-language fallback if recommendation generation is temporarily unavailable
+- Verdict: PASS
+- Notes: visible reply no longer leaked `model`, `fallback`, or `storage` wording, but Hermes still used one bounded retry before falling back
+
+### Case H6
+
+- Case: Interpretation feedback without anchored run after host prompt tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Diese Interpretation hat mich verfehlt. Bitte speichere dieses Feedback wörtlich."`
+- Session ID: `20260423_010101_731b24`
+- Tool called: none
+- Host reply: asks the user to identify the interpretation by topic/material/date or to store it as a general reflection instead
+- Expected: do not guess a synthetic run id when no interpretation is anchored in context
+- Verdict: PASS
+
+### Case H7
+
+- Case: Practice follow-up skip response
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 --resume 20260423_005739_6c191a -q "Ich habe die Praxis ausgelassen, es war zu viel."`
+- Session ID: `20260423_005739_6c191a`
+- Tool called: `circulatio_respond_practice_recommendation`
+- Host reply: validates the skip without pressure and leaves the door open
+- Expected: skip/accept follow-up should route through the explicit practice response tool
+- Verdict: PASS
+
+### Case H8
+
+- Case: Practice completion follow-up
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 --resume 20260423_005739_6c191a -q "Ich habe die Übung gemacht. Mein Körper wurde etwas ruhiger."`
+- Session ID: `20260423_005739_6c191a`
+- Tool called: `circulatio_method_state_respond`
+- Host reply: `Gut, das ist notiert. Dass der Koerper ruhiger wird ...`
+- Expected: completed-practice outcome should prefer `circulatio_record_practice_feedback` from the explicit feedback lane
+- Verdict: FAIL
+- Likely owner: skill prompt
+- Minimal fix direction: the new instruction was not enough; Hermes still prefers generic anchored method-state capture for completed-practice reports instead of explicit practice-feedback recording
+
 ### Residual
 
-- Intermittent German ASCII transliteration is reduced but not fully eliminated. Example: `Vorschlaege` still appeared in one review-proposals rerun even after stronger host-tone guidance.
+- Intermittent German ASCII transliteration is reduced but not fully eliminated. New examples on 2026-04-23: `Fuer`, `Koerperzustaenden`, `uebersichtlich`, `Koerper`, `Ablösungsprozuss`, `verfuegbar`, `Uebung`, `Atmung`, `Fuesse`, `Spuer`, `Atemzuege`.
 - Replay sanitization was required because Hermes idempotency replays could otherwise continue serving old unsanitized bridge responses after the code change.
