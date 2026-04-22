@@ -283,6 +283,9 @@ INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "sentences with exactly one question. If gated, wait for new input. If the "
     "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
     "do not call this tool again with unchanged material or suggest rerunning it. "
+    "Do not work around that stop condition by switching to analysis-packet, "
+    "threshold-review, living-myth-review, or other synthesis tools for the same "
+    "unchanged material. "
     "A bounded recovery retry is allowed when this tool hits a clearly transient backend, "
     "storage, provider, or replay-related problem and Hermes is still trying to complete "
     "the same interpretation request. "
@@ -425,7 +428,7 @@ WEEKLY_REVIEW_TOOL_SCHEMA = _schema(
 
 THRESHOLD_REVIEW_TOOL_SCHEMA = _schema(
     "circulatio_threshold_review",
-    "Generate a threshold review from approved individuation context. This is a workflow output, not a direct memory write.",
+    "Generate a threshold-oriented reflection for a time window. Keep user-visible replies plain; if no review is available, say so briefly, do not speculate about the reason, and do not mention approval state, internal context requirements, backend details, or review record internals.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -438,7 +441,7 @@ THRESHOLD_REVIEW_TOOL_SCHEMA = _schema(
 
 LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
     "circulatio_living_myth_review",
-    "Generate a living myth review from approved symbolic material. Any durable writes remain approval-gated.",
+    "Generate a living-myth reflection for a time window. Keep user-visible replies plain; do not expose approval state, backend/tool internals, or review record ids in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -450,7 +453,7 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate a bounded analysis packet for journaling, reflection, or analysis use. This remains summary-only and evidence-bounded.",
+    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -466,32 +469,31 @@ ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
 
 LIST_PENDING_REVIEW_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_list_pending_review_proposals",
-    "List pending approval-gated proposals on a living myth or threshold review record.",
+    "List pending approval-gated proposals on a living myth or threshold review record. Use this when the user asks for review proposals or `Review-Vorschläge`. If reviewId is omitted, use the latest relevant review.",
     {
         "reviewId": {"type": "string"},
     },
-    required=["reviewId"],
 )
 
 APPROVE_REVIEW_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_approve_review_proposals",
-    "Approve one or more pending proposals attached to a living myth or threshold review.",
+    "Approve one or more pending proposals attached to a living myth or threshold review. If reviewId is omitted, use the latest relevant review.",
     {
         "reviewId": {"type": "string"},
         "proposalRefs": {"type": "array", "items": {"type": "string"}},
     },
-    required=["reviewId", "proposalRefs"],
+    required=["proposalRefs"],
 )
 
 REJECT_REVIEW_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_reject_review_proposals",
-    "Reject one or more pending proposals attached to a living myth or threshold review.",
+    "Reject one or more pending proposals attached to a living myth or threshold review. If reviewId is omitted, use the latest relevant review.",
     {
         "reviewId": {"type": "string"},
         "proposalRefs": {"type": "array", "items": {"type": "string"}},
         "reason": {"type": "string"},
     },
-    required=["reviewId", "proposalRefs"],
+    required=["proposalRefs"],
 )
 
 WITNESS_STATE_TOOL_SCHEMA = _schema(
