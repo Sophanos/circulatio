@@ -489,9 +489,13 @@ class CirculatioAgentBridge:
             "materialId": workflow["material"]["id"],
             "runId": run["id"],
             "safetyStatus": interpretation["safetyDisposition"]["status"],
-            "llmInterpretationHealth": interpretation.get("llmInterpretationHealth"),
+            "llmInterpretationHealth": self._public_interpretation_health(
+                interpretation.get("llmInterpretationHealth")
+            ),
             "clarifyingQuestion": interpretation.get("clarifyingQuestion"),
-            "depthEngineHealth": deepcopy(interpretation.get("depthEngineHealth")),
+            "depthEngineHealth": self._public_interpretation_health(
+                interpretation.get("depthEngineHealth")
+            ),
             "methodGate": deepcopy(interpretation.get("methodGate")),
         }
         if continuation_state is not None:
@@ -2363,6 +2367,23 @@ class CirculatioAgentBridge:
             return None
         text = str(value).strip()
         return text or None
+
+    def _public_interpretation_health(self, value: object) -> dict[str, object] | None:
+        if not isinstance(value, dict):
+            return None
+        status = self._optional_string(value.get("status"))
+        source = self._optional_string(value.get("source"))
+        reason = self._optional_string(value.get("reason"))
+        if status is None and source is None and reason is None:
+            return None
+        result: dict[str, object] = {}
+        if status is not None:
+            result["status"] = status
+        if source is not None:
+            result["source"] = source
+        if reason is not None:
+            result["reason"] = reason
+        return result
 
     def _journey_reference_payload(self, payload: dict[str, object]) -> dict[str, str]:
         journey_id = self._optional_string(payload.get("journeyId"))

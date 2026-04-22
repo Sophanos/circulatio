@@ -35,15 +35,19 @@ class CirculatioResultRenderer:
         if isinstance(llm_health, dict):
             status = str(llm_health.get("status") or "unknown")
             source = str(llm_health.get("source") or "unknown")
-            counts = ", ".join(
-                [
-                    f"symbols={llm_health.get('symbolMentions', 0)}",
-                    f"observations={llm_health.get('observations', 0)}",
-                    f"hypotheses={llm_health.get('hypotheses', 0)}",
-                    f"proposals={llm_health.get('proposalCandidates', 0)}",
-                ]
-            )
-            lines.append(f"LLM schema: {status} via {source} ({counts})")
+            count_parts = []
+            if "symbolMentions" in llm_health:
+                count_parts.append(f"symbols={llm_health.get('symbolMentions', 0)}")
+            if "observations" in llm_health:
+                count_parts.append(f"observations={llm_health.get('observations', 0)}")
+            if "hypotheses" in llm_health:
+                count_parts.append(f"hypotheses={llm_health.get('hypotheses', 0)}")
+            if "proposalCandidates" in llm_health:
+                count_parts.append(f"proposals={llm_health.get('proposalCandidates', 0)}")
+            summary = f"LLM schema: {status} via {source}"
+            if count_parts:
+                summary += " (" + ", ".join(count_parts) + ")"
+            lines.append(summary)
             if llm_health.get("reason"):
                 lines.append(f"LLM schema reason: {llm_health['reason']}")
         if result.get("integrationId"):

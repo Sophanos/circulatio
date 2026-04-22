@@ -310,6 +310,48 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_interpret_material_fallback_sanitizes_internal_diagnostics(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+        async def run() -> None:
+            self._install_in_memory_runtime(llm=TimeoutLlm())
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {
+                        "materialType": "dream",
+                        "text": "A snake moved through my childhood room.",
+                    },
+                    **self._tool_kwargs(call_id="tool_interpret_fallback_sanitized"),
+                )
+            )
+            llm_health = interpreted["result"]["llmInterpretationHealth"]
+            depth_health = interpreted["result"]["depthEngineHealth"]
+            self.assertEqual(
+                llm_health,
+                {
+                    "status": "opened",
+                    "source": "fallback",
+                    "reason": "collaborative_opening_started",
+                },
+            )
+            self.assertEqual(
+                depth_health,
+                {
+                    "status": "opened",
+                    "source": "fallback",
+                    "reason": "collaborative_opening_started",
+                },
+            )
+            self.assertNotIn("diagnosticReason", llm_health)
+            self.assertNotIn("observations", llm_health)
+            self.assertNotIn("symbolMentions", llm_health)
+            self.assertNotIn("proposalCandidates", llm_health)
+
+        asyncio.run(run())
+
     def test_method_state_context_only_fallback_returns_terminal_continuation_state(self) -> None:
         class TimeoutLlm:
             async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
