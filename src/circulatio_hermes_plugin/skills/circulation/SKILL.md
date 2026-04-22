@@ -14,14 +14,21 @@ Hermes plugin for ambient symbolic intake, on-demand weaving, and approval-gated
 - If the user shares material that clearly belongs to an ongoing thread, Hermes may autonomously create or update a journey after storing the note first via `circulatio_create_journey` or `circulatio_update_journey`.
 - When targeting an existing journey, prefer `journeyLabel`. If more than one journey could match, ask for clarification instead of guessing.
 - If the user wants a cross-pattern weave such as "what is alive today?" or "what does this seem connected to?", call `circulatio_alive_today`.
+- If the user is returning after absence or says things like `Hey, ich bin wieder da`, treat that as a light re-entry request and call `circulatio_alive_today` rather than answering socially without Circulatio.
+- After a successful `circulatio_alive_today` call, present that bounded synthesis directly. Do not widen the same turn into `circulatio_list_journeys`, `circulatio_dashboard_summary`, or other read surfaces unless the returned synthesis is genuinely too ambiguous to answer the user.
 - If the user wants an overview of ongoing threads or a read-mostly host surface, call `circulatio_list_journeys`, `circulatio_get_journey`, or `circulatio_journey_page`.
 - If the user wants meaning or interpretation, **you MUST call `circulatio_interpret_material`**. Do NOT do Jungian interpretation yourself in the host reply.
 - If collective amplification is opened, use the user's active cultural frames and the Hermes trusted amplification-source registry.
 - If the user wants a threshold reading, chapter-scale synthesis, or a bounded prep packet, call `circulatio_threshold_review`, `circulatio_living_myth_review`, or `circulatio_analysis_packet`.
 - If the user asks for `Review-Vorschläge`, review proposals, or proposals attached to a review, use `circulatio_list_pending_review_proposals` and the matching review-proposal approve/reject tools, not `circulatio_list_pending`. If no `reviewId` is already known, use the latest relevant review instead of switching tool families.
 - If the user is directly confirming lived individuation material rather than asking for inference, use direct capture tools such as `circulatio_capture_reality_anchors`, `circulatio_upsert_threshold_process`, `circulatio_record_relational_scene`, `circulatio_record_inner_outer_correspondence`, `circulatio_record_numinous_encounter`, and `circulatio_record_aesthetic_resonance`.
+- For repeated interpersonal scenes like `Ich bin still geworden, als jemand laut wurde`, prefer `circulatio_record_relational_scene` over generic `circulatio_store_event`.
+- If the user explicitly names an ongoing threshold process such as separation, initiation, exile, or return, prefer `circulatio_upsert_threshold_process` and fill it conservatively from the user's own words instead of downgrading it to a generic stored reflection.
 - If the user wants a practice or rhythmic surfacing, call `circulatio_generate_practice_recommendation` or `circulatio_generate_rhythmic_briefs`, then use the matching response tool only after the user accepts, skips, dismisses, or acts.
+- Use `circulatio_respond_practice_recommendation` for accept / skip decisions. If the user reports how a recommended practice actually landed after doing it, prefer `circulatio_record_practice_feedback` over generic follow-up capture.
+- If practice generation hits a transient conflict or temporary unavailability, keep the visible reply plain and bounded. Do not expose model / storage / fallback wording, do not switch to unrelated read surfaces, and do not keep retrying beyond one bounded retry.
 - If the user gives explicit feedback about a Circulatio interpretation or practice recommendation, call `circulatio_record_interpretation_feedback` or `circulatio_record_practice_feedback`. Preserve the user's own note text if they gave one, but **do not paraphrase that feedback into a new stored reflection or symbolic note**.
+- For interpretation feedback outside an already anchored interpretation thread, resolve the target interpretation explicitly first. Do not assume a literal run id like `last` unless that surface explicitly supports it.
 - Approval, rejection, revision, deletion, symbol history, and weekly review stay explicit follow-up operations.
 
 ## Tools

@@ -104,7 +104,7 @@ STORE_BODY_STATE_TOOL_SCHEMA = _schema(
 
 ALIVE_TODAY_TOOL_SCHEMA = _schema(
     "circulatio_alive_today",
-    "Generate an on-demand, non-persistent weave across recent Circulatio material, body states, goals, symbols, patterns, and life context. Use this for questions like 'what is alive today?' or 'what does this seem connected to?'",
+    "Generate an on-demand, non-persistent weave across recent Circulatio material, body states, goals, symbols, patterns, and life context. Use this for questions like 'what is alive today?', 'what does this seem connected to?', or lightweight re-entry turns such as 'I'm back'. After a successful call, present the returned synthesis directly instead of widening the same turn into dashboard or journey reads unless the result is too ambiguous to answer.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -558,7 +558,7 @@ CAPTURE_REALITY_ANCHORS_TOOL_SCHEMA = _schema(
 
 UPSERT_THRESHOLD_PROCESS_TOOL_SCHEMA = _schema(
     "circulatio_upsert_threshold_process",
-    "Create or update an explicit threshold-process record from user-provided material.",
+    "Create or update an explicit threshold-process record from user-provided material. Prefer this when the user explicitly names an ongoing transition such as separation, return, initiation, exile, or leaving home. When details are thin, fill the record conservatively from the user's own words rather than downgrading it to a generic reflection.",
     {
         "thresholdId": {"type": "string"},
         "label": {"type": "string"},
@@ -592,7 +592,7 @@ UPSERT_THRESHOLD_PROCESS_TOOL_SCHEMA = _schema(
 
 RECORD_RELATIONAL_SCENE_TOOL_SCHEMA = _schema(
     "circulatio_record_relational_scene",
-    "Store or merge a user-reported relational scene directly as a durable individuation record.",
+    "Store or merge a user-reported relational scene directly as a durable individuation record. Prefer this when the user is naming a repeated interpersonal scene such as going quiet when someone gets loud, shrinking, bracing, or repeating the same contact dynamic across people.",
     {
         "sceneId": {"type": "string"},
         "label": {"type": "string"},
@@ -802,7 +802,7 @@ SET_CULTURAL_FRAME_TOOL_SCHEMA = _schema(
 
 GENERATE_PRACTICE_TOOL_SCHEMA = _schema(
     "circulatio_generate_practice_recommendation",
-    "Generate a bounded LLM-shaped practice recommendation from recent Circulatio context. Safety and consent gates still apply. This generates the recommendation only; response recording stays in circulatio_respond_practice_recommendation.",
+    "Generate a bounded LLM-shaped practice recommendation from recent Circulatio context. Safety and consent gates still apply. This generates the recommendation only; response recording stays in circulatio_respond_practice_recommendation. If the practice is temporarily unavailable, keep visible wording plain and bounded, do not mention model/storage/fallback internals, and do not keep retrying beyond one bounded retry.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -829,7 +829,7 @@ RESPOND_PRACTICE_TOOL_SCHEMA = _schema(
 
 RECORD_INTERPRETATION_FEEDBACK_TOOL_SCHEMA = _schema(
     "circulatio_record_interpretation_feedback",
-    "Record explicit user feedback on a Circulatio interpretation run without parsing free-text notes.",
+    "Record explicit user feedback on a Circulatio interpretation run without parsing free-text notes. Use this only when the target interpretation run is already anchored in context or has been explicitly resolved first; do not guess a synthetic run id.",
     {
         "runId": {"type": "string"},
         "feedback": {
@@ -851,7 +851,7 @@ RECORD_INTERPRETATION_FEEDBACK_TOOL_SCHEMA = _schema(
 
 RECORD_PRACTICE_FEEDBACK_TOOL_SCHEMA = _schema(
     "circulatio_record_practice_feedback",
-    "Record explicit user feedback on a Circulatio practice recommendation or completed practice without parsing free-text notes.",
+    "Record explicit user feedback on a Circulatio practice recommendation or completed practice without parsing free-text notes. Prefer this when the user reports how a completed practice actually landed; use circulatio_respond_practice_recommendation only for accept / skip decisions.",
     {
         "practiceSessionId": {"type": "string"},
         "feedback": {
