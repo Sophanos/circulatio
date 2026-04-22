@@ -251,7 +251,9 @@ class HermesModelAdapterTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_clarifying_question_with_user_response_is_accepted_as_first_pass_structure(self) -> None:
+    def test_clarifying_question_with_user_response_is_accepted_as_first_pass_structure(
+        self,
+    ) -> None:
         async def run() -> None:
             calls = []
             response_payload = {
@@ -377,6 +379,111 @@ class HermesModelAdapterTests(unittest.TestCase):
                     calls[0]["response_format"]["json_schema"]["name"],
                     "circulatio_method_state_routing",
                 )
+
+        asyncio.run(run())
+
+    def test_route_method_state_response_classifies_timeout_warning(self) -> None:
+        async def run() -> None:
+            async def async_call_llm(**kwargs):
+                return {"text": json.dumps({})}
+
+            def extract_content_or_reasoning(response):
+                return response["text"]
+
+            with auxiliary_client_modules(
+                async_call_llm=async_call_llm,
+                extract_content_or_reasoning=extract_content_or_reasoning,
+            ):
+                adapter = HermesModelAdapter()
+                with mock.patch.object(
+                    adapter,
+                    "_call_json_with_client",
+                    new=mock.AsyncMock(side_effect=TimeoutError("timed out")),
+                ):
+                    output = await adapter.route_method_state_response(
+                        {
+                            "userId": "user_route_method_state",
+                            "responseText": "My jaw tightened when I pictured the door.",
+                            "source": "clarifying_answer",
+                            "anchorRefs": {"runId": "run_1", "clarificationRefKey": "clarify_door"},
+                            "expectedTargets": ["body_state"],
+                            "consentPreferences": [],
+                        }
+                    )
+                self.assertEqual(output["routingWarnings"], ["method_state_routing_timeout"])
+                self.assertEqual(output["captureCandidates"], [])
+
+        asyncio.run(run())
+
+    def test_route_method_state_response_classifies_contract_warning(self) -> None:
+        async def run() -> None:
+            async def async_call_llm(**kwargs):
+                return {"text": json.dumps({})}
+
+            def extract_content_or_reasoning(response):
+                return response["text"]
+
+            with auxiliary_client_modules(
+                async_call_llm=async_call_llm,
+                extract_content_or_reasoning=extract_content_or_reasoning,
+            ):
+                adapter = HermesModelAdapter()
+                with mock.patch.object(
+                    adapter,
+                    "_call_json_with_client",
+                    new=mock.AsyncMock(side_effect=ValueError("bad schema")),
+                ):
+                    output = await adapter.route_method_state_response(
+                        {
+                            "userId": "user_route_method_state",
+                            "responseText": "My jaw tightened when I pictured the door.",
+                            "source": "clarifying_answer",
+                            "anchorRefs": {"runId": "run_1", "clarificationRefKey": "clarify_door"},
+                            "expectedTargets": ["body_state"],
+                            "consentPreferences": [],
+                        }
+                    )
+                self.assertEqual(
+                    output["routingWarnings"],
+                    ["method_state_routing_contract_failed"],
+                )
+                self.assertEqual(output["captureCandidates"], [])
+
+        asyncio.run(run())
+
+    def test_route_method_state_response_classifies_provider_warning(self) -> None:
+        async def run() -> None:
+            async def async_call_llm(**kwargs):
+                return {"text": json.dumps({})}
+
+            def extract_content_or_reasoning(response):
+                return response["text"]
+
+            with auxiliary_client_modules(
+                async_call_llm=async_call_llm,
+                extract_content_or_reasoning=extract_content_or_reasoning,
+            ):
+                adapter = HermesModelAdapter()
+                with mock.patch.object(
+                    adapter,
+                    "_call_json_with_client",
+                    new=mock.AsyncMock(side_effect=RuntimeError("provider down")),
+                ):
+                    output = await adapter.route_method_state_response(
+                        {
+                            "userId": "user_route_method_state",
+                            "responseText": "My jaw tightened when I pictured the door.",
+                            "source": "clarifying_answer",
+                            "anchorRefs": {"runId": "run_1", "clarificationRefKey": "clarify_door"},
+                            "expectedTargets": ["body_state"],
+                            "consentPreferences": [],
+                        }
+                    )
+                self.assertEqual(
+                    output["routingWarnings"],
+                    ["method_state_routing_provider_failed"],
+                )
+                self.assertEqual(output["captureCandidates"], [])
 
         asyncio.run(run())
 
