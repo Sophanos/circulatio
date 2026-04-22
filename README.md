@@ -49,15 +49,17 @@ pip install -e ".[dev]" --upgrade
 
 ## First workflow
 
-You are washing dishes. A dream from last night surfaces — a bear, charging. You mention it to your agent. Circulatio stores it. No interpretation. No pressure.
+You share a thought, a feeling, an experience.
 
-Three days later, you feel tension before a call. You note it. Circulatio holds that too.
+You mention the snake hunting you in last night's dream. Circulatio **captures** it.
 
-A week passes. You ask, *"What is alive today?"* Circulatio sees the bear, the tension, a recurring image of doors. It offers a proposal: the bear as unclaimed force, the door as threshold. You read it. You approve what rings true. You reject what does not.
+Three days later, you describe the car crash — your hands still shaking. Circulatio **notices** the thread.
 
-Months later, you ask about patterns. Circulatio shows you the arc you could not see alone.
+A week later, you ask: *"What's showing up?"* Circulatio **sees the pattern**: the snake, the crash, the recurring image of losing control. It offers one grounded observation — a thread held up to the light, not a reading. You approve what rings true. You reject what does not.
 
-Commands are available (`dream`, `reflect`, `approve`, `discovery`, `review`), but you rarely need to remember them. The agent understands intent. You simply speak.
+Over time, you get a weekly synthesis — what recurred, what shifted, what was avoided. Seasonally, a life chapter — where you are in the story.
+
+You simply speak. The agent handles the rest.
 
 ---
 
@@ -85,7 +87,7 @@ It can run in-memory for testing or with a SQLite-backed profile runtime for dur
 |------|------------|
 | **Morning** | A brief pattern surfacing — *"You dreamed of water three times this month. Yesterday you noted chest tension before a meeting. Want a 3-minute body check-in?"* You choose. No guilt. |
 | **Day** | Drop a fragment: a dream, a body sensation, a strange coincidence, a mood shift. Circulatio stores it. It **holds** without pressing. |
-| **Evening** | You ask: *"What is alive today?"* It weaves the morning's tension into the recurring water symbol, offers a cultural parallel as invitation, and asks a gentle question. |
+| **Evening** | You ask: *"What's showing up?"* It weaves the morning's tension into the recurring water symbol, offers a cultural parallel as invitation, and asks a gentle question. |
 | **Weekly** | A deeper synthesis: what recurred, what shifted, what was avoided, what new symbol emerged, what goal tension is visible. You read it like a journal you did not write alone. |
 
 ---
