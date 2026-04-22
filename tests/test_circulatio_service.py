@@ -154,7 +154,9 @@ class CirculatioServiceTests(unittest.TestCase):
             )
             self.assertNotEqual(first["practiceSession"]["id"], second["practiceSession"]["id"])
             self.assertEqual(first["interpretation"]["llmInterpretationHealth"]["status"], "opened")
-            self.assertEqual(second["interpretation"]["llmInterpretationHealth"]["status"], "opened")
+            self.assertEqual(
+                second["interpretation"]["llmInterpretationHealth"]["status"], "opened"
+            )
 
         asyncio.run(run())
 
@@ -174,13 +176,19 @@ class CirculatioServiceTests(unittest.TestCase):
                     "text": "A bear moved through the trees.",
                 }
             )
-            self.assertEqual(workflow["interpretation"]["clarificationPlan"]["captureTarget"], "answer_only")
-            self.assertEqual(workflow["interpretation"]["clarificationIntent"]["expectedTargets"], [])
+            self.assertEqual(
+                workflow["interpretation"]["clarificationPlan"]["captureTarget"], "answer_only"
+            )
+            self.assertEqual(
+                workflow["interpretation"]["clarificationIntent"]["expectedTargets"], []
+            )
             self.assertEqual(
                 workflow["interpretation"]["clarificationIntent"]["storagePolicy"],
                 "no_storage_without_confirmation",
             )
-            self.assertEqual(workflow["pendingClarificationPrompts"][0]["captureTarget"], "answer_only")
+            self.assertEqual(
+                workflow["pendingClarificationPrompts"][0]["captureTarget"], "answer_only"
+            )
 
         asyncio.run(run())
 
@@ -223,9 +231,13 @@ class CirculatioServiceTests(unittest.TestCase):
                 del input_data
                 raise TimeoutError("timed out")
 
-            async def route_method_state_response(self, input_data: dict[str, object]) -> dict[str, object]:
+            async def route_method_state_response(
+                self, input_data: dict[str, object]
+            ) -> dict[str, object]:
                 del input_data
-                raise AssertionError("Fallback clarification answers should not hit method-state routing.")
+                raise AssertionError(
+                    "Fallback clarification answers should not hit method-state routing."
+                )
 
         async def run() -> None:
             repository = InMemoryCirculatioRepository()
@@ -255,7 +267,9 @@ class CirculatioServiceTests(unittest.TestCase):
                         "promptId": prompt["id"],
                         "materialId": workflow["material"]["id"],
                         "runId": workflow["run"]["id"],
-                        "clarificationRefKey": workflow["interpretation"]["clarificationIntent"]["refKey"],
+                        "clarificationRefKey": workflow["interpretation"]["clarificationIntent"][
+                            "refKey"
+                        ],
                     },
                     "expectedTargets": ["body_state", "personal_amplification"],
                 }
@@ -286,9 +300,13 @@ class CirculatioServiceTests(unittest.TestCase):
                 del input_data
                 raise TimeoutError("timed out")
 
-            async def route_method_state_response(self, input_data: dict[str, object]) -> dict[str, object]:
+            async def route_method_state_response(
+                self, input_data: dict[str, object]
+            ) -> dict[str, object]:
                 del input_data
-                raise AssertionError("Fallback clarification answers should not hit method-state routing.")
+                raise AssertionError(
+                    "Fallback clarification answers should not hit method-state routing."
+                )
 
         async def run() -> None:
             repository = InMemoryCirculatioRepository()
@@ -310,7 +328,9 @@ class CirculatioServiceTests(unittest.TestCase):
                         "promptId": first["pendingClarificationPrompts"][0]["id"],
                         "materialId": first["material"]["id"],
                         "runId": first["run"]["id"],
-                        "clarificationRefKey": first["interpretation"]["clarificationIntent"]["refKey"],
+                        "clarificationRefKey": first["interpretation"]["clarificationIntent"][
+                            "refKey"
+                        ],
                     },
                 }
             )
@@ -503,7 +523,9 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_store_material_with_intake_context_falls_back_after_invalid_material_date(self) -> None:
+    def test_store_material_with_intake_context_falls_back_after_invalid_material_date(
+        self,
+    ) -> None:
         async def run() -> None:
             repository, service, llm = self._service()
             workflow = await service.store_material_with_intake_context(
@@ -2406,7 +2428,7 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertIn("method_state_questioning_preference", criteria)
             self.assertIn("method_state_typology_method_state", criteria)
             self.assertIn("method_context_witness_state", criteria)
-            self.assertIn("clarification_state_recently_unrouted", criteria)
+            self.assertNotIn("clarification_state_recently_unrouted", criteria)
             self.assertIn("clarification_state_avoid_repeat", criteria)
 
         asyncio.run(run())

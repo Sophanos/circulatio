@@ -277,6 +277,86 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_interpret_material_fallback_returns_continuation_state(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+        async def run() -> None:
+            self._install_in_memory_runtime(llm=TimeoutLlm())
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {
+                        "materialType": "reflection",
+                        "text": "A bear moved through the trees.",
+                    },
+                    **self._tool_kwargs(call_id="tool_interpret_fallback_state"),
+                )
+            )
+            continuation = interpreted["result"]["continuationState"]
+            self.assertEqual(interpreted["status"], "ok")
+            self.assertEqual(interpreted["result"]["llmInterpretationHealth"]["source"], "fallback")
+            self.assertEqual(continuation["kind"], "waiting_for_follow_up")
+            self.assertEqual(continuation["reason"], "fallback_collaborative_opening")
+            self.assertEqual(continuation["storagePolicy"], "no_storage_without_confirmation")
+            self.assertEqual(continuation["expectedTargets"], [])
+            self.assertTrue(continuation["doNotRetryInterpretMaterialWithUnchangedMaterial"])
+            self.assertEqual(continuation["nextTool"], "circulatio_method_state_respond")
+            self.assertEqual(
+                continuation["anchorRefs"]["materialId"], interpreted["result"]["materialId"]
+            )
+            self.assertEqual(continuation["anchorRefs"]["runId"], interpreted["result"]["runId"])
+
+        asyncio.run(run())
+
+    def test_method_state_context_only_fallback_returns_terminal_continuation_state(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+            async def route_method_state_response(
+                self, input_data: dict[str, object]
+            ) -> dict[str, object]:
+                del input_data
+                raise AssertionError(
+                    "Fallback clarification answers should not hit method-state routing."
+                )
+
+        async def run() -> None:
+            self._install_in_memory_runtime(llm=TimeoutLlm())
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {
+                        "materialType": "reflection",
+                        "text": "A wolf stood at the edge of the clearing.",
+                    },
+                    **self._tool_kwargs(call_id="tool_interpret_fallback_followup"),
+                )
+            )
+            continuation = interpreted["result"]["continuationState"]
+            responded = json.loads(
+                await method_state_respond_tool(
+                    {
+                        "source": "clarifying_answer",
+                        "responseText": "The wolf at the edge still feels the most alive.",
+                        "anchorRefs": continuation["anchorRefs"],
+                    },
+                    **self._tool_kwargs(call_id="tool_interpret_fallback_followup_answer"),
+                )
+            )
+            next_state = responded["result"]["continuationState"]
+            self.assertEqual(responded["status"], "ok")
+            self.assertEqual(next_state["kind"], "context_answer_recorded")
+            self.assertTrue(next_state["doNotRetryInterpretMaterialWithUnchangedMaterial"])
+            self.assertEqual(next_state["nextAction"], "await_user_input")
+            self.assertEqual(responded["message"], "I've kept that with the material.")
+            self.assertNotIn("backend", responded["message"].lower())
+            self.assertNotIn("failed", responded["message"].lower())
+
+        asyncio.run(run())
+
     def test_safety_block_returns_blocked_without_pending_proposals(self) -> None:
         async def run() -> None:
             runtime = self._install_fake_runtime()
@@ -753,7 +833,9 @@ class HermesBridgePluginTests(unittest.TestCase):
             )
             self.assertIn("intakeContext", stored_dream["result"])
             self.assertEqual(stored_dream["result"]["intakeContext"]["visibility"], "host_only")
-            self.assertEqual(stored_dream["result"]["intakeContext"]["source"], "circulatio-post-store")
+            self.assertEqual(
+                stored_dream["result"]["intakeContext"]["source"], "circulatio-post-store"
+            )
             self.assertTrue(stored_dream["result"]["intakeContext"]["hostGuidance"]["holdFirst"])
             self.assertFalse(
                 stored_dream["result"]["intakeContext"]["hostGuidance"]["allowAutoInterpretation"]
@@ -776,7 +858,9 @@ class HermesBridgePluginTests(unittest.TestCase):
             materials = await runtime.service.repository.list_materials("hermes:default:local")
             runs = await runtime.service.repository.list_interpretation_runs("hermes:default:local")
             body_states = await runtime.service.repository.list_body_states("hermes:default:local")
-            practices = await runtime.service.repository.list_practice_sessions("hermes:default:local")
+            practices = await runtime.service.repository.list_practice_sessions(
+                "hermes:default:local"
+            )
             self.assertEqual(len(runs), 0)
             self.assertEqual(len(body_states), 1)
             self.assertEqual(practices, [])
@@ -836,7 +920,9 @@ class HermesBridgePluginTests(unittest.TestCase):
             runtime = get_runtime("default")
             runs = await runtime.service.repository.list_interpretation_runs("hermes:default:local")
             reviews = await runtime.service.repository.list_weekly_reviews("hermes:default:local")
-            practices = await runtime.service.repository.list_practice_sessions("hermes:default:local")
+            practices = await runtime.service.repository.list_practice_sessions(
+                "hermes:default:local"
+            )
             self.assertEqual(runs, [])
             self.assertEqual(reviews, [])
             self.assertEqual(practices, [])
@@ -874,7 +960,9 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "hermes:default:local",
                 stored["result"]["materialId"],
             )
-            self.assertEqual(material["dreamStructure"], stored["result"]["material"]["dreamStructure"])
+            self.assertEqual(
+                material["dreamStructure"], stored["result"]["material"]["dreamStructure"]
+            )
             self.assertEqual(
                 await runtime.service.repository.list_interpretation_runs("hermes:default:local"),
                 [],
@@ -902,7 +990,9 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "Keep this brief note without opening it yet.",
             )
             self.assertNotIn("text", response["result"]["material"])
-            self.assertEqual(response["result"]["intakeContext"]["materialId"], response["result"]["materialId"])
+            self.assertEqual(
+                response["result"]["intakeContext"]["materialId"], response["result"]["materialId"]
+            )
             self.assertEqual(
                 await runtime.service.repository.list_interpretation_runs("hermes:default:local"),
                 [],
