@@ -300,7 +300,7 @@ class HermesBridgePluginTests(unittest.TestCase):
             self.assertEqual(continuation["kind"], "waiting_for_follow_up")
             self.assertEqual(continuation["reason"], "fallback_collaborative_opening")
             self.assertEqual(continuation["storagePolicy"], "no_storage_without_confirmation")
-            self.assertEqual(continuation["expectedTargets"], [])
+            self.assertEqual(continuation["expectedTargets"], ["personal_amplification"])
             self.assertTrue(continuation["doNotRetryInterpretMaterialWithUnchangedMaterial"])
             self.assertEqual(continuation["nextTool"], "circulatio_method_state_respond")
             self.assertEqual(

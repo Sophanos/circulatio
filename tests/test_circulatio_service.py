@@ -177,17 +177,20 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
             self.assertEqual(
-                workflow["interpretation"]["clarificationPlan"]["captureTarget"], "answer_only"
+                workflow["interpretation"]["clarificationPlan"]["captureTarget"],
+                "personal_amplification",
             )
             self.assertEqual(
-                workflow["interpretation"]["clarificationIntent"]["expectedTargets"], []
+                workflow["interpretation"]["clarificationIntent"]["expectedTargets"],
+                ["personal_amplification"],
             )
             self.assertEqual(
                 workflow["interpretation"]["clarificationIntent"]["storagePolicy"],
                 "no_storage_without_confirmation",
             )
             self.assertEqual(
-                workflow["pendingClarificationPrompts"][0]["captureTarget"], "answer_only"
+                workflow["pendingClarificationPrompts"][0]["captureTarget"],
+                "personal_amplification",
             )
 
         asyncio.run(run())
