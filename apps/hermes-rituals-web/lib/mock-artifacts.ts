@@ -49,6 +49,15 @@ const artifacts: PresentationArtifact[] = [
     sessionId: "session-river-gate",
     journeyId: "journey-threshold-river",
     coverImageUrl: "https://picsum.photos/seed/river-gate/1600/1200",
+    stageVideo: {
+      provider: "youtube",
+      url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      title: "River gate ambient study",
+      posterImageUrl: "https://picsum.photos/seed/river-gate-video/1920/1080",
+      playbackMode: "ambient_loop",
+      presentation: "full_background",
+      startAtSeconds: 12
+    },
     transcript:
       "Let the river stay a river for a moment. Let the gate remain closed, silver, and patient. You do not need to explain why it returned. Breathe with the distance between your body and the image. Let the dog stand at the edge if it wants to. Notice what changes when you do not advance.",
     captions: [

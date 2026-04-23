@@ -272,7 +272,11 @@ export function RitualArtifactClient({
   const [currentMs, setCurrentMs] = useState(0)
   const [railOpen, setRailOpen] = useState(false)
   const [railTab, setRailTab] = useState<RailTab>("sections")
-  const [stageLens, setStageLens] = useState<RitualStageLens>("breath")
+  const [stageLens, setStageLens] = useState<RitualStageLens>(() =>
+    artifact.stageVideo || (artifact.videoUrl && !artifact.videoUrl.startsWith("mock://"))
+      ? "cinema"
+      : "breath"
+  )
   const [masterVolume, setMasterVolume] = useState(0.75)
   const [sections, setSections] = useState<RitualSection[]>(
     artifact.ritualSections ?? []

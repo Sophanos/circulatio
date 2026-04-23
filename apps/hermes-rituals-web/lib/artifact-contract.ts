@@ -79,6 +79,22 @@ export type PresentationScene = {
   endMs?: number
 }
 
+export type PresentationVideoProvider = "youtube" | "direct"
+
+export type PresentationVideoPlaybackMode = "ambient_loop" | "transport_synced"
+
+export type PresentationVideoPresentation = "stage_card" | "full_background"
+
+export type PresentationVideoSource = {
+  provider: PresentationVideoProvider
+  url: string
+  title?: string
+  posterImageUrl?: string
+  playbackMode?: PresentationVideoPlaybackMode
+  presentation?: PresentationVideoPresentation
+  startAtSeconds?: number
+}
+
 export type PresentationArtifact = {
   id: string
   mode: ArtifactMode
@@ -89,6 +105,7 @@ export type PresentationArtifact = {
   journeyId?: string
   audioUrl?: string
   videoUrl?: string
+  stageVideo?: PresentationVideoSource
   coverImageUrl?: string
   transcript?: string
   transcriptAlignment?: TranscriptAlignment

@@ -16,7 +16,12 @@ import {
   ScrubBarTimeLabel,
   ScrubBarTrack
 } from "@/components/ui/scrub-bar"
-import type { PresentationArtifact, RitualSection, CaptionCue } from "@/lib/artifact-contract"
+import type {
+  CaptionCue,
+  PresentationArtifact,
+  PresentationVideoSource,
+  RitualSection
+} from "@/lib/artifact-contract"
 import { makeSilentWavBlobUrl } from "@/lib/mock-media"
 
 export type RitualPlayerHandle = {
@@ -34,6 +39,79 @@ function formatTimestamp(value: number) {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
+function resolveStageVideo(artifact: PresentationArtifact): PresentationVideoSource | undefined {
+  if (artifact.stageVideo) {
+    return artifact.stageVideo
+  }
+
+  if (artifact.videoUrl && !artifact.videoUrl.startsWith("mock://")) {
+    return {
+      provider: "direct",
+      url: artifact.videoUrl,
+      title: artifact.title,
+      posterImageUrl: artifact.coverImageUrl,
+      playbackMode: "transport_synced",
+      presentation: "stage_card"
+    }
+  }
+
+  return undefined
+}
+
+function extractYoutubeVideoId(url: string) {
+  try {
+    const parsed = new URL(url)
+
+    if (parsed.hostname.includes("youtu.be")) {
+      return parsed.pathname.split("/").filter(Boolean)[0] ?? null
+    }
+
+    if (parsed.pathname.startsWith("/embed/")) {
+      return parsed.pathname.split("/")[2] ?? null
+    }
+
+    return parsed.searchParams.get("v")
+  } catch {
+    return null
+  }
+}
+
+function buildYoutubeEmbedUrl(source: PresentationVideoSource) {
+  if (source.provider !== "youtube") return null
+
+  const videoId = extractYoutubeVideoId(source.url)
+  if (!videoId) return null
+
+  const params = new URLSearchParams({
+    autoplay: "1",
+    controls: "0",
+    loop: "1",
+    modestbranding: "1",
+    mute: "1",
+    playsinline: "1",
+    playlist: videoId,
+    rel: "0"
+  })
+
+  if (source.startAtSeconds) {
+    params.set("start", String(source.startAtSeconds))
+  }
+
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`
+}
+
+function stageLabel(stageLens: RitualStageLens, videoSource?: PresentationVideoSource) {
+  if (stageLens === "breath") return "Breath"
+  if (stageLens === "meditation") return "Meditation"
+  if (stageLens === "cinema" && videoSource?.provider === "youtube") return "Cinema / YouTube"
+  if (stageLens === "cinema" && videoSource?.provider === "direct") return "Cinema / Video"
+  return stageLens === "cinema" ? "Cinema" : "Photo"
+}
+
+function isFullStageVideo(stageLens: RitualStageLens, videoSource?: PresentationVideoSource) {
+  return stageLens === "cinema" && videoSource?.presentation === "full_background"
 }
 
 function VisualStage({
@@ -54,8 +132,34 @@ function VisualStage({
     (scene) => currentMs >= (scene.startMs ?? 0) && currentMs < (scene.endMs ?? Infinity)
   )
   const activeId = activeScene?.id
-  const hasRealVideo = Boolean(artifact.videoUrl && !artifact.videoUrl.startsWith("mock://"))
+  const videoSource = resolveStageVideo(artifact)
+  const youtubeEmbedUrl = videoSource ? buildYoutubeEmbedUrl(videoSource) : null
+  const directVideoSource = videoSource?.provider === "direct" ? videoSource : undefined
+  const directPlaybackMode = directVideoSource?.playbackMode
+  const directVideoRef = useRef<HTMLVideoElement>(null)
   const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
+
+  useEffect(() => {
+    const video = directVideoRef.current
+    if (!video || directPlaybackMode !== "transport_synced") return
+
+    if (isPlaying) {
+      void video.play().catch(() => {})
+      return
+    }
+
+    video.pause()
+  }, [directPlaybackMode, isPlaying])
+
+  useEffect(() => {
+    const video = directVideoRef.current
+    if (!video || directPlaybackMode !== "transport_synced") return
+
+    const nextTime = currentMs / 1000
+    if (Math.abs(video.currentTime - nextTime) > 0.8) {
+      video.currentTime = nextTime
+    }
+  }, [currentMs, directPlaybackMode])
 
   if (stageLens === "breath") {
     return (
@@ -79,29 +183,61 @@ function VisualStage({
     )
   }
 
-  if (stageLens === "cinema" && hasRealVideo) {
+  if (stageLens === "cinema" && (youtubeEmbedUrl || directVideoSource?.url)) {
+    const fullStageVideo = isFullStageVideo(stageLens, videoSource)
+
     return (
       <motion.div
         key="cinema-video"
-        className="relative h-full w-full overflow-hidden rounded-3xl shadow-2xl"
+        className={[
+          "relative h-full w-full overflow-hidden bg-black/30 shadow-2xl",
+          fullStageVideo ? "rounded-[2rem] border border-white/10" : "rounded-3xl"
+        ].join(" ")}
         layout
         initial={{ opacity: 0, scale: 0.985 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 1.01 }}
         transition={SPRING}
       >
-        <video
-          src={artifact.videoUrl}
-          className="h-full w-full object-cover"
-          playsInline
-          muted
-          loop
-          autoPlay
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_34%),linear-gradient(180deg,rgba(16,19,23,0.1)_0%,rgba(16,19,23,0.7)_100%)]" />
-        <div className="absolute left-4 top-4 rounded-full bg-black/20 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-300 backdrop-blur-xl">
-          Cinema
+        {youtubeEmbedUrl ? (
+          <div className="pointer-events-none absolute inset-0">
+            <iframe
+              src={youtubeEmbedUrl}
+              title={videoSource?.title ?? artifact.title}
+              className="h-full w-full scale-[1.03]"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          </div>
+        ) : (
+          <video
+            ref={directVideoRef}
+            src={directVideoSource?.url}
+            poster={directVideoSource?.posterImageUrl ?? artifact.coverImageUrl}
+            className="h-full w-full object-cover"
+            playsInline
+            muted
+            loop={directPlaybackMode !== "transport_synced"}
+            autoPlay={directPlaybackMode !== "transport_synced"}
+          />
+        )}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_32%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.34)_48%,rgba(16,19,23,0.82)_100%)]" />
+        <div className="absolute left-4 top-4 rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-300 backdrop-blur-xl">
+          {stageLabel(stageLens, videoSource)}
         </div>
+        <div className="absolute right-4 top-4 rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400 backdrop-blur-xl">
+          {videoSource?.playbackMode === "transport_synced" ? "Synced" : "Ambient"}
+        </div>
+        {(videoSource?.title || activeScene?.title) && (
+          <div className="absolute bottom-4 left-4 rounded-2xl bg-black/35 px-4 py-2.5 text-sm text-silver-100 backdrop-blur-xl">
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
+              Ritual stage
+            </p>
+            <p className="mt-1 font-medium text-silver-100">
+              {videoSource?.title ?? activeScene?.title}
+            </p>
+          </div>
+        )}
       </motion.div>
     )
   }
@@ -211,11 +347,15 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   onPlayingChange?: (playing: boolean) => void
 }>(function RitualPlayer({ artifact, sections, stageLens, playerMode = "full", immersive, onTimeUpdate, onPlayingChange }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const animationFrameRef = useRef<number | null>(null)
+  const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
   const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
   const durationSeconds = durationMs / 1000
   const [audioUrl, setAudioUrl] = useState("")
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
+  const stageVideoSource = resolveStageVideo(artifact)
+  const fullStageVideo = isFullStageVideo(stageLens, stageVideoSource)
 
   useImperativeHandle(ref, () => ({
     seek: (ms: number) => {
@@ -223,6 +363,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (!audio) return
       const seconds = ms / 1000
       audio.currentTime = seconds
+      if (!audio.paused && !audio.ended) {
+        playbackAnchorRef.current = { audioSeconds: seconds, startedAtMs: performance.now() }
+      }
       setCurrentTime(seconds)
       onTimeUpdate?.(ms)
     }
@@ -238,23 +381,78 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     const audio = audioRef.current
     if (!audio) return
 
+    const stopFrameClock = () => {
+      if (animationFrameRef.current === null) return
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+
+    const readClockSeconds = () => {
+      const audioSeconds = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
+      const anchor = playbackAnchorRef.current
+      if (!anchor || audio.paused || audio.ended) {
+        return Math.min(Math.max(audioSeconds, 0), durationSeconds)
+      }
+      const elapsedSeconds = (performance.now() - anchor.startedAtMs) / 1000
+      const fallbackSeconds = anchor.audioSeconds + elapsedSeconds
+      return Math.min(Math.max(audioSeconds, fallbackSeconds, 0), durationSeconds)
+    }
+
     const syncTime = () => {
-      setCurrentTime(audio.currentTime)
-      onTimeUpdate?.(audio.currentTime * 1000)
+      const nextSeconds = readClockSeconds()
+      setCurrentTime(nextSeconds)
+      onTimeUpdate?.(nextSeconds * 1000)
+      return nextSeconds
     }
-    const handlePlay = () => {
-      setIsPlaying(true)
-      onPlayingChange?.(true)
-    }
-    const handlePause = () => {
-      setIsPlaying(false)
-      onPlayingChange?.(false)
-    }
-    const handleEnded = () => {
+
+    const finishPlayback = () => {
+      playbackAnchorRef.current = null
+      stopFrameClock()
       setIsPlaying(false)
       onPlayingChange?.(false)
       setCurrentTime(0)
       onTimeUpdate?.(0)
+    }
+
+    const tick = () => {
+      const nextSeconds = syncTime()
+      if (nextSeconds >= durationSeconds) {
+        audio.pause()
+        audio.currentTime = 0
+        finishPlayback()
+        return
+      }
+      if (!audio.paused && !audio.ended) {
+        animationFrameRef.current = requestAnimationFrame(tick)
+        return
+      }
+      animationFrameRef.current = null
+    }
+
+    const startFrameClock = () => {
+      playbackAnchorRef.current = {
+        audioSeconds: readClockSeconds(),
+        startedAtMs: performance.now()
+      }
+      stopFrameClock()
+      animationFrameRef.current = requestAnimationFrame(tick)
+    }
+
+    const handlePlay = () => {
+      startFrameClock()
+      syncTime()
+      setIsPlaying(true)
+      onPlayingChange?.(true)
+    }
+    const handlePause = () => {
+      syncTime()
+      playbackAnchorRef.current = null
+      stopFrameClock()
+      setIsPlaying(false)
+      onPlayingChange?.(false)
+    }
+    const handleEnded = () => {
+      finishPlayback()
     }
 
     audio.addEventListener("timeupdate", syncTime)
@@ -263,12 +461,13 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     audio.addEventListener("ended", handleEnded)
 
     return () => {
+      stopFrameClock()
       audio.removeEventListener("timeupdate", syncTime)
       audio.removeEventListener("play", handlePlay)
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("ended", handleEnded)
     }
-  }, [onTimeUpdate])
+  }, [durationSeconds, onPlayingChange, onTimeUpdate])
 
   const activeSection = sections.find(
     (s) => currentTime * 1000 >= s.startMs && currentTime * 1000 < s.endMs
@@ -287,6 +486,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const handleScrub = (time: number) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time
+      if (!audioRef.current.paused && !audioRef.current.ended) {
+        playbackAnchorRef.current = { audioSeconds: time, startedAtMs: performance.now() }
+      }
       setCurrentTime(time)
       onTimeUpdate?.(time * 1000)
     }
@@ -298,7 +500,10 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
       {/* Scene / Video Stage */}
       <motion.div
-        className="relative z-10 flex w-full max-w-lg flex-1 items-center justify-center"
+        className={[
+          "relative z-10 flex w-full flex-1 items-center justify-center",
+          fullStageVideo ? "max-w-5xl" : "max-w-lg"
+        ].join(" ")}
         layout
       >
         <AnimatePresence initial={false} mode="wait">
