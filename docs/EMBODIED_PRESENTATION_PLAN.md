@@ -4,9 +4,48 @@
 
 Circulatio should not be framed as adding generic multimodal features. The right frame is an **Embodied Presentation & Ritual Media Layer**.
 
+Product-facing, this can be understood as **Hermes Rituals**:
+- **Rituals** for guided sessions
+- **Broadcasts** for podcast / daily myth weather
+- **Cinema** for audiovisual renderings
+
 Circulatio does not only answer. It can speak, pause, breathe, invite, and create symbolic interaction containers.
 
 This layer exists to support individuation work, not to turn Circulatio into a wellness app, frontend animation system, or notification engine.
+
+These should not be treated as separate products stitched together later. They are three presentation families rendered from the same symbolic backend:
+- **Rituals** are the experiential container
+- **Broadcasts** are the serialized or periodic companion voice
+- **Cinema** is the audiovisual rendering surface
+
+The backend remains responsible for symbolic context, timing, consent, and evidence-bound framing. Hosts remain responsible for rendering and delivery.
+
+## Product Frame
+
+The clean external story is not:
+
+```text
+Circulatio adds TTS, visuals, and maybe podcasts
+```
+
+It is:
+
+```text
+Hermes Rituals turns dreams, body states, recurring symbols, and emerging life threads into guided rituals, symbolic broadcasts, and cinematic renderings.
+```
+
+Operationally:
+- intake gives the system fresh symbolic material
+- thread-awareness determines what is actually alive
+- ritual mode selection determines what kind of container is appropriate
+- presentation rendering determines whether the artifact becomes a spoken ritual, a journey broadcast, or a cinematic piece
+
+This keeps the architecture coherent:
+- **Rituals** answer: what kind of experience should this become?
+- **Broadcasts** answer: what ongoing voice should accompany the user across days or weeks?
+- **Cinema** answers: how should the same symbolic material be rendered beautifully and legibly?
+
+The key architectural point is that these are not separate intelligence systems. They are different host renderings of shared derived context.
 
 ## Core Rule
 
@@ -24,6 +63,8 @@ Hosts render:
 - audio
 - animation
 - interactive cards
+- subtitles
+- video compositions
 - notifications
 - dashboard surfaces
 - CLI or app delivery
@@ -57,6 +98,13 @@ Why:
 ### Product-facing
 
 Prefer:
+- Hermes Rituals
+- rituals
+- broadcasts
+- cinema
+- journeycast
+- dream cinema
+- myth weather
 - spoken rhythmic invitation
 - breath container
 - somatic visual guide
@@ -68,6 +116,9 @@ Prefer:
 
 Avoid:
 - multimodal output
+- content verticals
+- podcast feature
+- video mode
 - wellness animation
 - word-association test
 - guided meditation product
@@ -122,12 +173,15 @@ PresentationArtifact
 - id
 - userId
 - sourceType:
+    ritual_session
     interpretation
     practice
     rhythmic_brief
+    journey_broadcast
     weekly_review
     alive_today
     threshold_invitation
+    cinema_render
 - text
 - voiceScript?
 - speechMarkup?
@@ -440,6 +494,8 @@ Start with:
 - spoken rhythmic invitation
 - active imagination voice script
 - breath container media spec
+- first ritual session templates
+- first broadcast template for daily myth weather / journeycast
 
 ### Stage 3: Association Circle
 Build:
@@ -465,6 +521,11 @@ Hermes, cron, MCP, CLI, or standalone runtime calls it. Circulatio should not ow
 ### Stage 6: MCP / Universal Agent Output
 Expose presentation artifacts as structured tool output.
 
+This is the point where the host can start treating a single symbolic result as one of several render families:
+- ritual
+- broadcast
+- cinema
+
 ### Stage 7: Standalone Runtime
 Later host/runtime work can render:
 - text
@@ -472,6 +533,8 @@ Later host/runtime work can render:
 - CLI breath timing
 - simple local notifications
 - association sessions
+- journey broadcasts
+- dream cinema / subtitle-driven audiovisual pieces
 
 ## Final Boundary
 
@@ -496,4 +559,4 @@ but not into:
 
 The best summary is:
 
-> Circulatio remains backend-pure, LLM-first, consent-bound, and evidence-bound. It learns when a moment should be read, spoken, breathed, held in silence, or explored through association.
+> Circulatio remains backend-pure, LLM-first, consent-bound, and evidence-bound. Through Hermes Rituals, it learns when a moment should become a guided ritual, a companion broadcast, a cinematic rendering, be spoken plainly, breathed with, held in silence, or explored through association.
