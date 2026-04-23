@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
 
 import { CompactChannelMixer, type ChannelName } from "@/components/ritual/CompactChannelMixer"
+import { RitualQueue } from "@/components/ritual/RitualQueue"
 import { RitualSectionList, type SectionMuteHandler } from "@/components/ritual/RitualSectionList"
 import { RitualTranscript } from "@/components/ritual/RitualTranscript"
 import type {
@@ -12,7 +13,7 @@ import type {
   RitualSection
 } from "@/lib/artifact-contract"
 
-export type RailTab = "sections" | "transcript" | "channels"
+export type RailTab = "sections" | "transcript" | "channels" | "queue"
 
 const TAB_CONTENT = {
   initial: { opacity: 0, y: 8 },
@@ -47,11 +48,19 @@ export function RitualRail({
   const [internalTab, setInternalTab] = useState<RailTab>("sections")
   const tab = activeTab ?? internalTab
   const setTab = onTabChange ?? setInternalTab
+  const activeSectionId = sections.find(
+    (section) => currentMs >= section.startMs && currentMs < section.endMs
+  )?.id
 
   return (
     <div className="flex h-full flex-col">
       {/* Tabs */}
       <div className="mb-3 flex items-center gap-1 rounded-2xl p-1">
+        {artifact.musicQueue && (
+          <TabButton active={tab === "queue"} onClick={() => setTab("queue")}>
+            Queue
+          </TabButton>
+        )}
         <TabButton active={tab === "sections"} onClick={() => setTab("sections")}>
           Sections
         </TabButton>
@@ -66,6 +75,14 @@ export function RitualRail({
       {/* Content — animated transitions between tabs */}
       <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl px-3 py-3">
         <AnimatePresence mode="wait" initial={false}>
+          {tab === "queue" && (
+            <motion.div key="queue" {...TAB_CONTENT}>
+              <RitualQueue
+                queue={artifact.musicQueue}
+                activeSectionId={activeSectionId}
+              />
+            </motion.div>
+          )}
           {tab === "sections" && (
             <motion.div key="sections" {...TAB_CONTENT}>
               <RitualSectionList
@@ -85,13 +102,15 @@ export function RitualRail({
               />
             </motion.div>
           )}
-        {tab === "channels" && (
-          <CompactChannelMixer
-            channels={channels}
-            onToggle={(name, muted) => onToggleChannelMute?.(name, muted)}
-            onGainChange={(name, gain) => onChannelGainChange?.(name, gain)}
-          />
-        )}
+          {tab === "channels" && (
+            <motion.div key="channels" {...TAB_CONTENT}>
+              <CompactChannelMixer
+                channels={channels}
+                onToggle={(name, muted) => onToggleChannelMute?.(name, muted)}
+                onGainChange={(name, gain) => onChannelGainChange?.(name, gain)}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </div>

@@ -79,6 +79,43 @@ export type PresentationScene = {
   endMs?: number
 }
 
+export type PresentationVideoProvider = "youtube" | "direct"
+
+export type PresentationVideoPlaybackMode = "ambient_loop" | "transport_synced"
+
+export type PresentationVideoPresentation = "stage_card" | "full_background"
+
+export type PresentationVideoSource = {
+  provider: PresentationVideoProvider
+  url: string
+  title?: string
+  posterImageUrl?: string
+  playbackMode?: PresentationVideoPlaybackMode
+  presentation?: PresentationVideoPresentation
+  startAtSeconds?: number
+}
+
+export type RitualMusicService = "apple_music" | "host_curated" | "local_render"
+
+export type RitualQueueTrack = {
+  id: string
+  title: string
+  artist: string
+  album?: string
+  artworkUrl?: string
+  durationLabel?: string
+  sectionId?: string
+}
+
+export type RitualMusicQueue = {
+  title: string
+  subtitle?: string
+  mixNote?: string
+  service?: RitualMusicService
+  artworkUrl?: string
+  tracks: RitualQueueTrack[]
+}
+
 export type PresentationArtifact = {
   id: string
   mode: ArtifactMode
@@ -89,6 +126,7 @@ export type PresentationArtifact = {
   journeyId?: string
   audioUrl?: string
   videoUrl?: string
+  stageVideo?: PresentationVideoSource
   coverImageUrl?: string
   transcript?: string
   transcriptAlignment?: TranscriptAlignment
@@ -97,6 +135,7 @@ export type PresentationArtifact = {
   breathCycle?: BreathCycle
   scenes?: PresentationScene[]
   ritualSections?: RitualSection[]
+  musicQueue?: RitualMusicQueue
 }
 
 export type SessionPhase = "hold" | "rendering" | "playback" | "review"

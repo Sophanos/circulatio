@@ -32,6 +32,8 @@ Hosts render:
 - interactive cards
 - subtitles
 - video compositions
+- external video embeds or hosted render URLs
+- soundtrack queues or music-service links
 - notifications
 - dashboard surfaces
 
@@ -187,6 +189,7 @@ Notes:
 - `narrativeMode=breath_only` means the host wants a reduced ritual container centered on breath timing, minimal captioning, and little or no narrative script.
 - `authorshipMode=host_written` or `user_supplied` means the host can pass its own words through `scriptSeed`; Circulatio should normalize structure, pacing, contraindications, and provenance rather than replacing the text blindly.
 - `requestedLenses[]` expresses the host rendering options, not a backend obligation to generate all media immediately.
+- `mediaSpecs[]` may point either to generated renders or to temporary host-managed assets such as a YouTube embed URL or a soundtrack queue while a native render pipeline is still maturing.
 
 ### Breath Request Shape (planned)
 

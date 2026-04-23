@@ -27,6 +27,7 @@ For embedded integrations, Circulatio is a backend tool surface, not the router.
 
 - Python 3.11+. Virtual env at `.venv/`.
 - Install: `pip install -e ".[dev]"`
+- Frontend/package-manager work under `apps/hermes-rituals-web/` uses `bun` / `bunx`, not `npm` / `npx`.
 - No Docker, no Makefile, no CI.
 
 ## Commands
@@ -44,6 +45,13 @@ ruff format src tests
 
 # Typecheck (circulatio only; plugin excluded)
 mypy src/circulatio
+
+# Frontend app
+cd apps/hermes-rituals-web && bun install
+cd apps/hermes-rituals-web && bun run dev
+cd apps/hermes-rituals-web && bun run typecheck
+cd apps/hermes-rituals-web && bun run build
+cd apps/hermes-rituals-web && bunx eslint .
 ```
 
 ## Code Style

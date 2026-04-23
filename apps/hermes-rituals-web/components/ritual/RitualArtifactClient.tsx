@@ -256,7 +256,11 @@ export function RitualArtifactClient({
   const [currentMs, setCurrentMs] = useState(0)
   const [railOpen, setRailOpen] = useState(false)
   const [railTab, setRailTab] = useState<RailTab>("sections")
-  const [stageLens, setStageLens] = useState<RitualStageLens>("breath")
+  const [stageLens, setStageLens] = useState<RitualStageLens>(() =>
+    artifact.stageVideo || (artifact.videoUrl && !artifact.videoUrl.startsWith("mock://"))
+      ? "cinema"
+      : "breath"
+  )
   const [masterVolume, setMasterVolume] = useState(0.75)
   const [sections, setSections] = useState<RitualSection[]>(
     artifact.ritualSections ?? []
@@ -264,6 +268,18 @@ export function RitualArtifactClient({
   const [channels, setChannels] = useState<ArtifactChannels>(
     artifact.channels ?? {}
   )
+  const backgroundImageUrl = artifact.stageVideo?.posterImageUrl ?? artifact.coverImageUrl
+  const immersiveStage = artifact.stageVideo?.presentation === "full_background"
+  const [immersiveUiVisible, setImmersiveUiVisible] = useState(immersiveStage)
+
+  const revealImmersiveUi = useCallback(() => {
+    if (!immersiveStage) return
+    setImmersiveUiVisible(true)
+  }, [immersiveStage])
+
+  useEffect(() => {
+    setImmersiveUiVisible(immersiveStage)
+  }, [immersiveStage])
 
   useEffect(() => {
     if (!railOpen) return
@@ -282,6 +298,16 @@ export function RitualArtifactClient({
       document.removeEventListener("pointerdown", handlePointerDownOutside, true)
     }
   }, [railOpen])
+
+  useEffect(() => {
+    if (!immersiveStage || railOpen || !immersiveUiVisible) return
+
+    const timeout = window.setTimeout(() => {
+      setImmersiveUiVisible(false)
+    }, 2200)
+
+    return () => window.clearTimeout(timeout)
+  }, [immersiveStage, immersiveUiVisible, railOpen, stageLens])
 
   const handleToggleSectionMute = useCallback(
     (sectionId: string, muted: boolean) => {
@@ -334,13 +360,23 @@ export function RitualArtifactClient({
   }, [])
 
   return (
-    <div className="page-shell relative flex h-[100dvh] flex-col overflow-hidden bg-graphite-950 text-silver-50">
+    <div
+      className={[
+        "relative flex h-[100dvh] flex-col overflow-hidden bg-graphite-950 text-silver-50",
+        immersiveStage ? "" : "page-shell"
+      ].join(" ")}
+      onPointerMove={immersiveStage ? revealImmersiveUi : undefined}
+      onPointerDown={immersiveStage ? revealImmersiveUi : undefined}
+      onTouchStart={immersiveStage ? revealImmersiveUi : undefined}
+      onKeyDown={immersiveStage ? revealImmersiveUi : undefined}
+      tabIndex={immersiveStage ? 0 : -1}
+    >
       {/* Full-bleed artwork background */}
-      {artifact.coverImageUrl && (
+      {!immersiveStage && backgroundImageUrl && (
         <div
           className="pointer-events-none absolute inset-0"
           style={{
-            backgroundImage: `url(${artifact.coverImageUrl})`,
+            backgroundImage: `url(${backgroundImageUrl})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
             filter: "blur(80px) saturate(0.6) brightness(0.35)",
@@ -348,45 +384,102 @@ export function RitualArtifactClient({
           }}
         />
       )}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,19,23,0.4),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(16,19,23,0.5),transparent_50%)]" />
+      {!immersiveStage && (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,19,23,0.4),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(16,19,23,0.5),transparent_50%)]" />
+      )}
 
       {/* Top chrome */}
-      <header className="relative z-10 flex items-start justify-between gap-4 px-4 py-3 md:px-6">
-        <div className="flex items-start gap-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white/80 backdrop-blur-sm transition-colors hover:bg-white/20"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
-          <div className="flex flex-col gap-2 pt-0.5">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-silver-400">
-                {artifact.mode}
-              </span>
-              <span className="max-w-[40vw] truncate text-sm font-medium text-silver-100">
-                {artifact.title}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-600">
-                Lens
-              </span>
-              <RitualLensSwitch activeLens={stageLens} onChange={setStageLens} />
+      {!immersiveStage && (
+        <header className="relative z-10 flex items-start justify-between gap-4 px-4 py-3 md:px-6">
+          <div className="flex items-start gap-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white/80 backdrop-blur-sm transition-colors hover:bg-white/20"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="size-4" />
+            </button>
+            <div className="flex flex-col gap-2 pt-0.5">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-silver-400">
+                  {artifact.mode}
+                </span>
+                <span className="max-w-[40vw] truncate text-sm font-medium text-silver-100">
+                  {artifact.title}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-600">
+                  Lens
+                </span>
+                <RitualLensSwitch activeLens={stageLens} onChange={setStageLens} />
+              </div>
             </div>
           </div>
-        </div>
 
-        <LiquidMixer
-          channels={channels}
-          masterVolume={masterVolume}
-          onMasterChange={setMasterVolume}
-          onChannelToggle={handleQuickChannelToggle}
-          onChannelGainChange={handleQuickChannelGain}
-        />
-      </header>
+          <LiquidMixer
+            channels={channels}
+            masterVolume={masterVolume}
+            onMasterChange={setMasterVolume}
+            onChannelToggle={handleQuickChannelToggle}
+            onChannelGainChange={handleQuickChannelGain}
+          />
+        </header>
+      )}
+
+      {immersiveStage && (
+        <AnimatePresence>
+          {immersiveUiVisible && (
+            <motion.header
+              className="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 py-4 md:px-6"
+              initial={{ opacity: 0, y: -18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={SPRING}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="pointer-events-auto flex items-start gap-3 rounded-[1.75rem] border border-white/10 bg-black/35 px-3 py-3 backdrop-blur-2xl">
+                  <button
+                    type="button"
+                    onClick={() => router.back()}
+                    className="flex size-9 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
+                    aria-label="Go back"
+                  >
+                    <ArrowLeft className="size-4" />
+                  </button>
+                  <div className="flex min-w-0 flex-col gap-2 pt-0.5">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-silver-500">
+                        {artifact.mode}
+                      </span>
+                      <span className="max-w-[52vw] truncate text-sm font-medium text-silver-100">
+                        {artifact.title}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-600">
+                        Lens
+                      </span>
+                      <RitualLensSwitch activeLens={stageLens} onChange={setStageLens} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pointer-events-auto">
+                  <LiquidMixer
+                    channels={channels}
+                    masterVolume={masterVolume}
+                    onMasterChange={setMasterVolume}
+                    onChannelToggle={handleQuickChannelToggle}
+                    onChannelGainChange={handleQuickChannelGain}
+                  />
+                </div>
+              </div>
+            </motion.header>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Main layout — spring-driven shared flex space */}
       <motion.main
@@ -404,6 +497,7 @@ export function RitualArtifactClient({
             sections={sections}
             stageLens={stageLens}
             playerMode={stageLens === "breath" ? "minimal" : "full"}
+            immersiveUiVisible={immersiveUiVisible}
             onTimeUpdate={setCurrentMs}
           />
         </motion.section>
@@ -418,7 +512,6 @@ export function RitualArtifactClient({
           transition={SPRING}
         >
           <div className="flex h-full w-[420px] flex-col">
-            {/* Rail content */}
             <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4">
               <RitualRail
                 artifact={artifact}
@@ -438,32 +531,64 @@ export function RitualArtifactClient({
       </motion.main>
 
       {/* Bottom-right toggle buttons */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-5 pb-5 md:px-8 md:pb-8">
-        <div ref={toggleRef} className="pointer-events-auto flex items-center gap-2 rounded-full bg-black/40 p-1.5 backdrop-blur-xl">
-          <button
-            type="button"
-            onClick={() => setRailOpen(!railOpen)}
-            className={[
-              "flex size-10 items-center justify-center rounded-full transition-colors",
-              railOpen
-                ? "bg-white/20 text-white"
-                : "bg-transparent text-silver-400 hover:text-silver-100"
-            ].join(" ")}
-            aria-label="Toggle transcript and sections"
-          >
-            <MessageSquareText className="size-4.5" />
-          </button>
-          <div className="h-5 w-px bg-white/15" />
-          <button
-            type="button"
-            disabled
-            className="flex size-10 cursor-default items-center justify-center rounded-full bg-transparent text-silver-600"
-            aria-label="Playlist (coming soon)"
-          >
-            <ListMusic className="size-4.5" />
-          </button>
-        </div>
-      </div>
+      {(!immersiveStage || immersiveUiVisible) && (
+        <motion.div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-5 pb-5 md:px-8 md:pb-8"
+          initial={immersiveStage ? { opacity: 0, y: 18 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 18 }}
+          transition={SPRING}
+        >
+          <div ref={toggleRef} className="pointer-events-auto flex items-center gap-2 rounded-full bg-black/40 p-1.5 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => {
+                if (!railOpen) {
+                  setRailTab((prev) => (prev === "queue" ? "sections" : prev))
+                  setRailOpen(true)
+                  setImmersiveUiVisible(true)
+                  return
+                }
+
+                if (railTab === "queue") {
+                  setRailTab("sections")
+                  setImmersiveUiVisible(true)
+                  return
+                }
+
+                setRailOpen(false)
+              }}
+              className={[
+                "flex size-10 items-center justify-center rounded-full transition-colors",
+                railOpen && railTab !== "queue"
+                  ? "bg-white/20 text-white"
+                  : "bg-transparent text-silver-400 hover:text-silver-100"
+              ].join(" ")}
+              aria-label="Toggle transcript and sections"
+            >
+              <MessageSquareText className="size-4.5" />
+            </button>
+            <div className="h-5 w-px bg-white/15" />
+            <button
+              type="button"
+              onClick={() => {
+                setRailTab("queue")
+                setRailOpen(true)
+                setImmersiveUiVisible(true)
+              }}
+              className={[
+                "flex size-10 items-center justify-center rounded-full transition-colors",
+                railOpen && railTab === "queue"
+                  ? "bg-white/20 text-white"
+                  : "bg-transparent text-silver-400 hover:text-silver-100"
+              ].join(" ")}
+              aria-label="Open ritual queue"
+            >
+              <ListMusic className="size-4.5" />
+            </button>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }
