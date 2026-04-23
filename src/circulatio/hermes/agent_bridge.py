@@ -721,8 +721,15 @@ class CirculatioAgentBridge:
             if isinstance(packet_result, dict)
             else deepcopy(command_result.get("analysisPacket"))
         )
+        packet_record = command_result.get("analysisPacket")
         if isinstance(packet, dict):
             result["analysisPacket"] = packet
+        if isinstance(packet_record, dict):
+            result["packetId"] = packet_record["id"]
+        elif isinstance(packet_result, dict):
+            packet_id = self._optional_string(packet_result.get("id"))
+            if packet_id:
+                result["packetId"] = packet_id
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
@@ -1309,6 +1316,13 @@ class CirculatioAgentBridge:
             window_end=str(payload["windowEnd"]),
         )
         review = command_result.get("review")
+        result: dict[str, object] = {
+            "command": command_result["command"],
+            "windowStart": payload["windowStart"],
+            "windowEnd": payload["windowEnd"],
+        }
+        if isinstance(review, dict):
+            result["reviewId"] = review["id"]
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
@@ -1317,11 +1331,7 @@ class CirculatioAgentBridge:
                 message=command_result["message"],
                 review_result=review.get("result") if isinstance(review, dict) else None,
             ),
-            result={
-                "command": command_result["command"],
-                "windowStart": payload["windowStart"],
-                "windowEnd": payload["windowEnd"],
-            },
+            result=result,
         )
 
     async def discovery(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
@@ -2373,9 +2383,18 @@ class CirculatioAgentBridge:
         summary: dict[str, object] = {
             "label": self._optional_string(journey.get("label")) or "Journey",
         }
+        journey_id = self._optional_string(journey.get("id"))
+        if journey_id:
+            summary["id"] = journey_id
+        status = self._optional_string(journey.get("status"))
+        if status:
+            summary["status"] = status
         current_question = self._optional_string(journey.get("currentQuestion"))
         if current_question:
             summary["currentQuestion"] = current_question
+        next_review_due_at = self._optional_string(journey.get("nextReviewDueAt"))
+        if next_review_due_at:
+            summary["nextReviewDueAt"] = next_review_due_at
         return summary
 
     def _journey_section_label(self, title: str) -> str:
@@ -2396,9 +2415,15 @@ class CirculatioAgentBridge:
         summary: dict[str, object] = {
             "materialType": str(material.get("materialType") or "material"),
         }
+        material_id = self._optional_string(material.get("id"))
+        if material_id:
+            summary["id"] = material_id
         title = self._optional_string(material.get("title"))
         if title:
             summary["title"] = title
+        text = self._optional_string(material.get("text"))
+        if text:
+            summary["text"] = text
         material_summary = self._optional_string(material.get("summary"))
         if material_summary:
             summary["summary"] = material_summary
@@ -2648,7 +2673,6 @@ class CirculatioAgentBridge:
                 message=sanitized.get("message", ""),
                 review_result=None,
             )
-            result.pop("reviewId", None)
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.review.threshold":
@@ -2657,7 +2681,6 @@ class CirculatioAgentBridge:
                 message=sanitized.get("message", ""),
                 review_result=None,
             )
-            sanitized["result"] = {}
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.review.living_myth":
@@ -2666,7 +2689,6 @@ class CirculatioAgentBridge:
                 message=sanitized.get("message", ""),
                 review_result=None,
             )
-            sanitized["result"] = {}
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.packet.analysis":
@@ -2675,7 +2697,11 @@ class CirculatioAgentBridge:
                 sanitized.get("message", ""),
                 packet,
             )
-            sanitized["result"] = self._analysis_packet_host_result(packet)
+            packet_result = self._analysis_packet_host_result(packet)
+            packet_id = self._optional_string(result.get("packetId"))
+            if packet_id:
+                packet_result["packetId"] = packet_id
+            sanitized["result"] = packet_result
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.proposals.list_pending":
@@ -2836,14 +2862,15 @@ class CirculatioAgentBridge:
                 ],
             )
         if isinstance(exc, ConflictError):
+            message = str(exc) or "Circulatio could not complete this request right now."
             return self._response(
                 request=request,
                 status="conflict",
-                message="Circulatio could not complete this request right now.",
+                message=message,
                 errors=[
                     self._error(
                         "conflict",
-                        "Circulatio could not complete this request right now.",
+                        message,
                         retryable=False,
                     )
                 ],

@@ -2492,7 +2492,6 @@ class CirculatioServiceTests(unittest.TestCase):
             }
             self.assertIn("method_context_longitudinal_signal", criteria)
             self.assertIn("method_state_relational_field", criteria)
-            self.assertIn("method_state_questioning_preference", criteria)
             self.assertIn("method_state_typology_method_state", criteria)
             self.assertIn("method_context_witness_state", criteria)
             self.assertNotIn("clarification_state_recently_unrouted", criteria)

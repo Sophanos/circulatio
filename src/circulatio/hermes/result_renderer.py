@@ -15,6 +15,9 @@ class CirculatioResultRenderer:
             message_text = str(response["message"]).strip()
             if fallback_text and fallback_text not in message_text:
                 lines.extend(self._render_journey_page(journey_page))
+        journey_page_summary = result.get("journeyPageSummary")
+        if isinstance(journey_page_summary, dict) and not isinstance(journey_page, dict):
+            lines.extend(self._render_journey_page_summary(journey_page_summary))
         discovery = result.get("discovery")
         if isinstance(discovery, dict):
             fallback_text = str(discovery.get("fallbackText") or "").strip()
@@ -205,6 +208,40 @@ class CirculatioResultRenderer:
                 ]
                 if labels:
                     lines.append("Actions: " + ", ".join(labels))
+        return lines
+
+    def _render_journey_page_summary(self, summary: dict[str, object]) -> list[str]:
+        lines = [str(summary.get("title") or "Journey page")]
+        window_start = summary.get("windowStart")
+        window_end = summary.get("windowEnd")
+        if window_start and window_end:
+            lines.append(f"Window: {window_start} -> {window_end}")
+        alive_today = str(summary.get("aliveToday") or "").strip()
+        if alive_today:
+            lines.append("")
+            lines.append("Alive today:")
+            lines.append(alive_today)
+        weekly_reflection = str(summary.get("weeklyReflection") or "").strip()
+        if weekly_reflection:
+            lines.append("")
+            lines.append("Weekly review is available:")
+            lines.append(weekly_reflection)
+        practice_follow_up = str(summary.get("practiceFollowUp") or "").strip()
+        if practice_follow_up:
+            lines.append("")
+            lines.append("Practice follow-up:")
+            lines.append(practice_follow_up)
+        invitation_count = summary.get("rhythmicInvitationCount")
+        if invitation_count:
+            lines.append("")
+            lines.append(f"Rhythmic invitations: {invitation_count}")
+        preview_sections = summary.get("analysisPreviewSections")
+        if isinstance(preview_sections, list) and preview_sections:
+            visible = [str(item).strip() for item in preview_sections if str(item).strip()]
+            if visible:
+                lines.append("")
+                lines.append("Analysis preview:")
+                lines.append(", ".join(visible[:4]))
         return lines
 
     def _render_discovery(self, discovery: dict[str, object]) -> list[str]:
