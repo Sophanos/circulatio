@@ -82,6 +82,103 @@ class JourneyFamiliesServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_anchored_body_note_links_body_state_to_journey_without_interpretation(self) -> None:
+        async def run() -> None:
+            repository, service, _ = build_service_fixture()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Chest thread",
+                    "currentQuestion": "What tightens when this returns?",
+                }
+            )
+
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "journey_body_anchor_1",
+                    "source": "body_note",
+                    "responseText": "My chest tightens as soon as I come back to this thread.",
+                    "anchorRefs": {"journeyId": journey["id"]},
+                    "expectedTargets": ["body_state"],
+                }
+            )
+
+            journeys = await repository.list_journeys("user_1")
+            body_states = await repository.list_body_states("user_1")
+            runs = await repository.list_interpretation_runs("user_1")
+
+            self.assertEqual(result["captureRun"]["status"], "completed")
+            self.assertEqual(len(body_states), 1)
+            self.assertIn(body_states[0]["id"], journeys[0]["relatedBodyStateIds"])
+            self.assertEqual(runs, [])
+
+        asyncio.run(run())
+
+    def test_dismissal_cooldown_suppresses_journey_linked_followthrough_brief(self) -> None:
+        async def run() -> None:
+            repository, service, _ = build_service_fixture()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Practice thread",
+                    "currentQuestion": "What happens if I return softly?",
+                }
+            )
+            await repository.create_practice_session(
+                {
+                    "id": "practice_1",
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "reason": "Track what returned without forcing it.",
+                    "instructions": ["Write for five minutes."],
+                    "durationMinutes": 5,
+                    "contraindicationsChecked": ["none"],
+                    "requiresConsent": False,
+                    "status": "completed",
+                    "followUpPrompt": "What changed after staying with it?",
+                    "nextFollowUpDueAt": "2026-04-19T00:00:00Z",
+                    "followUpCount": 0,
+                    "relatedJourneyIds": [journey["id"]],
+                    "createdAt": "2026-04-18T00:00:00Z",
+                    "updatedAt": "2026-04-18T00:00:00Z",
+                    "completedAt": "2026-04-18T00:00:00Z",
+                }
+            )
+
+            first = await service.generate_rhythmic_briefs(
+                {
+                    "userId": "user_1",
+                    "source": "manual",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                }
+            )
+            self.assertEqual(len(first["briefs"]), 1)
+            self.assertEqual(first["briefs"][0]["relatedJourneyIds"], [journey["id"]])
+
+            await service.respond_rhythmic_brief(
+                {
+                    "userId": "user_1",
+                    "briefId": first["briefs"][0]["id"],
+                    "action": "dismissed",
+                }
+            )
+            second = await service.generate_rhythmic_briefs(
+                {
+                    "userId": "user_1",
+                    "source": "manual",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                }
+            )
+
+            self.assertFalse(
+                any(journey["id"] in brief["relatedJourneyIds"] for brief in second["briefs"])
+            )
+
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()

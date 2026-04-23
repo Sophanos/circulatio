@@ -16,11 +16,13 @@ from ..domain.proactive import (
     RhythmicBriefSeed,
 )
 from ..domain.reviews import DashboardSummary
+from ..domain.timestamps import parse_iso_datetime
 from ..domain.types import (
     CoachCaptureContract,
     CoachLoopKind,
     CoachMoveKind,
     Id,
+    JourneyFollowthroughSummary,
     MethodContextSnapshot,
     ResourceInvitationSummary,
     ThreadDigest,
@@ -44,6 +46,7 @@ class ProactiveEngine:
         recent_practices: list[PracticeSessionRecord],
         journeys: list[JourneyRecord],
         existing_briefs: list[ProactiveBriefRecord],
+        journey_followthrough: list[JourneyFollowthroughSummary] | None = None,
         adaptation_profile: UserAdaptationProfileSummary | None = None,
         source: RhythmBriefSource,
         now: str,
@@ -53,6 +56,12 @@ class ProactiveEngine:
             method_context=method_context,
             adaptation_profile=adaptation_profile,
         )
+        followthrough = [item for item in journey_followthrough or [] if isinstance(item, dict)]
+        followthrough_journey_ids = {
+            str(item.get("journeyId") or "").strip()
+            for item in followthrough
+            if str(item.get("journeyId") or "").strip()
+        }
         seeds: list[RhythmicBriefSeed] = []
         if source != "manual":
             seeds.extend(
@@ -63,12 +72,22 @@ class ProactiveEngine:
                         else None
                     ),
                     existing_briefs=existing_briefs,
+                    suppress_journey_ids=followthrough_journey_ids,
                     source=source,
                     now=now,
                 )
             )
         seeds.extend(self._practice_followup_seeds(recent_practices=recent_practices, now=now))
-        seeds.extend(self._journey_seeds(journeys=journeys, now=now))
+        if followthrough:
+            seeds.extend(
+                self._journey_followthrough_seeds(
+                    journey_followthrough=followthrough,
+                    journeys=journeys,
+                    now=now,
+                )
+            )
+        else:
+            seeds.extend(self._journey_seeds(journeys=journeys, now=now))
         seeds.extend(
             self._series_seeds(
                 method_context=method_context,
@@ -171,6 +190,22 @@ class ProactiveEngine:
             and item.get("cooldownUntil")
             and self._parse_datetime(item["cooldownUntil"]) > now_dt
         }
+        active_journey_ids = {
+            str(journey_id)
+            for item in existing_briefs
+            if item.get("status") in {"candidate", "shown"}
+            for journey_id in item.get("relatedJourneyIds", [])
+            if str(journey_id).strip()
+        }
+        suppressed_journey_ids = {
+            str(journey_id)
+            for item in existing_briefs
+            if item.get("status") in {"dismissed", "acted_on"}
+            and item.get("cooldownUntil")
+            and self._parse_datetime(item["cooldownUntil"]) > now_dt
+            for journey_id in item.get("relatedJourneyIds", [])
+            if str(journey_id).strip()
+        }
         if source == "scheduled":
             shown_today = [
                 item
@@ -198,6 +233,20 @@ class ProactiveEngine:
                 or trigger_key in suppressed_trigger_keys
                 or (coach_loop_key and coach_loop_key in active_coach_loop_keys)
                 or (coach_loop_key and coach_loop_key in suppressed_coach_loop_keys)
+                or active_journey_ids.intersection(
+                    {
+                        str(journey_id)
+                        for journey_id in seed.get("relatedJourneyIds", [])
+                        if str(journey_id).strip()
+                    }
+                )
+                or suppressed_journey_ids.intersection(
+                    {
+                        str(journey_id)
+                        for journey_id in seed.get("relatedJourneyIds", [])
+                        if str(journey_id).strip()
+                    }
+                )
             ):
                 continue
             due.append(seed)
@@ -401,6 +450,8 @@ class ProactiveEngine:
             reverse=True,
         )
         for practice in sorted_practices:
+            if practice.get("relatedJourneyIds"):
+                continue
             if practice.get("status") not in {"recommended", "accepted"}:
                 continue
             due_at = practice.get("nextFollowUpDueAt")
@@ -442,6 +493,7 @@ class ProactiveEngine:
         *,
         coach_state: dict[str, object] | None,
         existing_briefs: list[ProactiveBriefRecord],
+        suppress_journey_ids: set[str],
         source: RhythmBriefSource,
         now: str,
     ) -> list[RhythmicBriefSeed]:
@@ -456,6 +508,11 @@ class ProactiveEngine:
                 continue
             loop_key = str(loop.get("loopKey") or "").strip()
             if not loop_key:
+                continue
+            related_journey_ids = [
+                str(item) for item in loop.get("relatedJourneyIds", []) if str(item).strip()
+            ]
+            if suppress_journey_ids.intersection(related_journey_ids):
                 continue
             move_kind = str(loop.get("moveKind") or "").strip()
             kind = str(loop.get("kind") or "").strip()
@@ -481,9 +538,7 @@ class ProactiveEngine:
                 "titleHint": str(loop.get("titleHint") or "Coach loop"),
                 "summaryHint": str(loop.get("summaryHint") or "A live thread may be ready."),
                 "priority": int(loop.get("priority", 0) or 0),
-                "relatedJourneyIds": [
-                    str(item) for item in loop.get("relatedJourneyIds", []) if str(item).strip()
-                ],
+                "relatedJourneyIds": related_journey_ids,
                 "relatedMaterialIds": [
                     str(item) for item in loop.get("relatedMaterialIds", []) if str(item).strip()
                 ],
@@ -527,6 +582,121 @@ class ProactiveEngine:
                 if isinstance(resource, dict) and str(resource.get("id") or "").strip():
                     seed["relatedResourceIds"] = [str(resource["id"])]
             seeds.append(seed)
+        return seeds
+
+    def _journey_followthrough_seeds(
+        self,
+        *,
+        journey_followthrough: list[JourneyFollowthroughSummary],
+        journeys: list[JourneyRecord],
+        now: str,
+    ) -> list[RhythmicBriefSeed]:
+        journeys_by_id = {
+            str(journey.get("id") or "").strip(): journey
+            for journey in journeys
+            if str(journey.get("id") or "").strip()
+        }
+        seeds: list[RhythmicBriefSeed] = []
+        for summary in journey_followthrough:
+            readiness = str(summary.get("readiness") or "").strip()
+            journey_id = str(summary.get("journeyId") or "").strip()
+            if readiness != "ready" or not journey_id:
+                continue
+            last_touched_at = str(summary.get("lastTouchedAt") or now).strip()
+            last_briefed_at = str(summary.get("lastBriefedAt") or "").strip()
+            if last_briefed_at and self._parse_datetime(last_touched_at) <= self._parse_datetime(
+                last_briefed_at
+            ):
+                continue
+            journey = journeys_by_id.get(journey_id, {})
+            family = str(summary.get("family") or "cross_family").strip()
+            move_kind = str(summary.get("recommendedMoveKind") or "").strip()
+            reasons = [str(item) for item in summary.get("reasons", []) if str(item).strip()]
+            related_practice_session_ids = [
+                str(item)
+                for item in summary.get("relatedPracticeSessionIds", [])
+                if str(item).strip()
+            ]
+            brief_type: ProactiveBriefType = "journey_checkin"
+            title_hint = "Journey check-in"
+            summary_hint = "An active journey may be ready for a bounded check-in."
+            suggested_action = "You can simply note what shifted, or leave it untouched."
+            bucket = self._week_bucket(last_touched_at or now)
+            if family == "practice_reentry" and "journey_return_after_absence" in reasons:
+                brief_type = "return_invitation"
+                title_hint = "Gentle return"
+                summary_hint = "A journey thread may be ready for a gentle return."
+                suggested_action = "You can return to the thread lightly, or leave it for later."
+                bucket = self._day_bucket(last_touched_at or now)
+            elif family == "practice_reentry" and "journey_practice_followup_due" in reasons:
+                brief_type = "practice_followup"
+                title_hint = "Practice follow-up"
+                summary_hint = "A journey-linked practice may be ready for a light follow-up."
+                suggested_action = (
+                    "You can note what happened after the practice, or simply leave it for later."
+                )
+                bucket = self._day_bucket(last_touched_at or now)
+            elif family == "practice_reentry" and "journey_practice_repeated_skips" in reasons:
+                brief_type = "journey_checkin"
+                title_hint = "Gentler re-entry"
+                summary_hint = "Repeated skips suggest a softer journey check-in, not more pressure."
+                suggested_action = "You can return gently, or leave it alone."
+                bucket = self._day_bucket(last_touched_at or now)
+            elif move_kind == "offer_resource":
+                title_hint = "Grounding support"
+                summary_hint = "A gentler resource may fit this journey better than another push."
+                suggested_action = "You can try a gentler resource, or simply leave it alone."
+                bucket = self._day_bucket(last_touched_at or now)
+            elif move_kind == "ask_body_checkin":
+                title_hint = "Body check-in"
+                summary_hint = "This journey can be met body-first without forcing interpretation."
+                suggested_action = "You can note what the body is carrying, or leave it untouched."
+                bucket = self._day_bucket(last_touched_at or now)
+            elif move_kind == "ask_relational_scene":
+                title_hint = "Relational scene"
+                summary_hint = "A relational thread may be ready for a careful scene-first check-in."
+            elif move_kind == "ask_goal_tension":
+                title_hint = "Goal tension"
+                summary_hint = "A live tension may be ready to be named without forcing resolution."
+            seeds.append(
+                {
+                    "briefType": brief_type,
+                    "triggerKey": (
+                        f"journey_followthrough:{brief_type}:{journey_id}:{bucket}"
+                    ),
+                    "titleHint": title_hint,
+                    "summaryHint": summary_hint,
+                    "suggestedActionHint": suggested_action,
+                    "priority": int(summary.get("priority", 0) or 0),
+                    "relatedJourneyIds": [journey_id],
+                    "relatedMaterialIds": [
+                        str(item)
+                        for item in journey.get("relatedMaterialIds", [])
+                        if str(item).strip()
+                    ][:3],
+                    "relatedSymbolIds": [
+                        str(item)
+                        for item in journey.get("relatedSymbolIds", [])
+                        if str(item).strip()
+                    ][:3],
+                    "relatedPracticeSessionIds": related_practice_session_ids,
+                    "evidenceIds": [
+                        str(item)
+                        for item in summary.get("relatedGoalTensionIds", [])
+                        if str(item).strip()
+                    ],
+                    "reason": (
+                        reasons[0]
+                        if reasons
+                        else f"journey_followthrough:{family or 'cross_family'}"
+                    ),
+                    **(
+                        {"coachMoveKind": cast(CoachMoveKind, move_kind)}
+                        if move_kind
+                        else {}
+                    ),
+                }
+            )
         return seeds
 
     def _journey_seeds(self, *, journeys: list[JourneyRecord], now: str) -> list[RhythmicBriefSeed]:
@@ -1094,15 +1264,7 @@ class ProactiveEngine:
         return f"{year}-W{week:02d}"
 
     def _parse_datetime(self, value: str | None) -> datetime:
-        if not value:
-            return datetime.now(UTC)
-        candidate = value.strip()
-        if candidate.endswith("Z"):
-            candidate = candidate[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(candidate)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
+        return parse_iso_datetime(value, default=datetime.now(UTC))
 
     def _related_refs_for_entity(
         self,
@@ -1275,108 +1437,3 @@ class ProactiveEngine:
             sanitized = sanitized[:start].rstrip(" ,.;:") + sanitized[end:]
             lowered = sanitized.lower()
         return " ".join(sanitized.split()).strip() or text
-
-    def _merge_adaptation_preferences(
-        self,
-        *,
-        runtime_policy: dict[str, object],
-        adaptation_profile: UserAdaptationProfileSummary | None,
-    ) -> None:
-        communication_preferences = self._adaptation_scope(
-            adaptation_profile,
-            explicit_scope="communication",
-            learned_scope="communicationPolicy",
-        )
-        interpretation_preferences = self._adaptation_scope(
-            adaptation_profile,
-            explicit_scope="interpretation",
-            learned_scope="interpretationPolicy",
-        )
-        interpretation_stats = self._adaptation_nested(adaptation_profile, "interpretationStats")
-        interaction_feedback = self._adaptation_nested(
-            adaptation_profile, "interactionFeedbackStats"
-        )
-        tone = str(communication_preferences.get("tone") or "").strip()
-        if tone and not runtime_policy.get("witnessTone"):
-            runtime_policy["witnessTone"] = tone
-        question_style = str(communication_preferences.get("questioningStyle") or "").strip()
-        question_style_map = {
-            "soma_first": "body_first",
-            "image_first": "image_first",
-            "feeling_first": "relational_first",
-            "reflective": "reflection_first",
-        }
-        mapped_style = question_style_map.get(question_style)
-        if mapped_style and not runtime_policy.get("questionStyle"):
-            runtime_policy["questionStyle"] = mapped_style
-        depth_preference = str(interpretation_preferences.get("depthPreference") or "").strip()
-        if depth_preference == "brief_pattern_notes" and not runtime_policy.get("depthLevel"):
-            runtime_policy["depthLevel"] = "gentle"
-        preferred_voice = self._last_string(interpretation_stats.get("preferredWitnessVoice"))
-        if preferred_voice and not runtime_policy.get("witnessVoice"):
-            runtime_policy["witnessVoice"] = preferred_voice
-        rejected_patterns = self._strings(interpretation_stats.get("rejectedPhrasingPatterns"))
-        if rejected_patterns and not runtime_policy.get("avoidPhrasingPatterns"):
-            runtime_policy["avoidPhrasingPatterns"] = rejected_patterns[:5]
-        interpretation_feedback = (
-            interaction_feedback.get("interpretation")
-            if isinstance(interaction_feedback.get("interpretation"), dict)
-            else {}
-        )
-        recent_locale = self._last_string(interpretation_feedback.get("recentLocales"))
-        if recent_locale and not runtime_policy.get("recentLocale"):
-            runtime_policy["recentLocale"] = recent_locale
-
-    def _adaptation_scope(
-        self,
-        adaptation_profile: UserAdaptationProfileSummary | None,
-        *,
-        explicit_scope: str,
-        learned_scope: str,
-    ) -> dict[str, object]:
-        if not isinstance(adaptation_profile, dict):
-            return {}
-        explicit_preferences = (
-            adaptation_profile.get("explicitPreferences")
-            if isinstance(adaptation_profile.get("explicitPreferences"), dict)
-            else {}
-        )
-        learned_signals = (
-            adaptation_profile.get("learnedSignals")
-            if isinstance(adaptation_profile.get("learnedSignals"), dict)
-            else {}
-        )
-        result: dict[str, object] = {}
-        explicit = explicit_preferences.get(explicit_scope)
-        learned = learned_signals.get(learned_scope)
-        if isinstance(learned, dict):
-            result.update(learned)
-        if isinstance(explicit, dict):
-            result.update(explicit)
-        return result
-
-    def _adaptation_nested(
-        self,
-        adaptation_profile: UserAdaptationProfileSummary | None,
-        key: str,
-    ) -> dict[str, object]:
-        if not isinstance(adaptation_profile, dict):
-            return {}
-        learned_signals = (
-            adaptation_profile.get("learnedSignals")
-            if isinstance(adaptation_profile.get("learnedSignals"), dict)
-            else {}
-        )
-        nested = learned_signals.get(key)
-        return dict(nested) if isinstance(nested, dict) else {}
-
-    def _strings(self, value: object) -> list[str]:
-        if not isinstance(value, list):
-            return []
-        return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
-
-    def _last_string(self, value: object) -> str:
-        if not isinstance(value, list):
-            return ""
-        values = [str(item).strip() for item in value if str(item).strip()]
-        return values[-1] if values else ""

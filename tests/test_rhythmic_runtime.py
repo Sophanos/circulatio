@@ -82,11 +82,12 @@ class RhythmicRuntimeTests(unittest.TestCase):
             repository, service = self._service()
             await self._seed_practice_followup(repository)
             first = await service.generate_rhythmic_briefs({"userId": "user_1"})
+            trigger_key = first["briefs"][0]["triggerKey"]
             await service.respond_rhythmic_brief(
                 {"userId": "user_1", "briefId": first["briefs"][0]["id"], "action": "dismissed"}
             )
             second = await service.generate_rhythmic_briefs({"userId": "user_1"})
-            self.assertEqual(second["briefs"], [])
+            self.assertFalse(any(brief["triggerKey"] == trigger_key for brief in second["briefs"]))
 
         asyncio.run(run())
 

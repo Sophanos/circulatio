@@ -134,7 +134,18 @@ Disallowed language: "You are a thinking type.", "This proves your inferior func
 
 ---
 
-## 5. Demo Script
+## 5. Journey Followthrough Guardrails
+
+- No streaks, backlog counters, overdue debt, quota language, or hidden task semantics.
+- Repeated practice skips should soften or quiet the next invitation rather than escalating pressure.
+- Dismissal creates cooldown on the brief path; it does not create a missed-state or failure-state on the journey.
+- Journey-linked body-state persistence requires an explicit journey anchor or explicit related practice/brief context. Do not link body states to journeys from loose temporal coincidence alone.
+- If there is no fresh signal since the last journey-linked brief, do not surface a new “just checking in” reminder merely because time passed.
+- Successful stabilization should increase silence. Followthrough exists to support volition and continuity, not engagement pressure.
+
+---
+
+## 6. Demo Script
 
 Goal: show Hermes-Circulatio as a longitudinal individuation backend, not a one-off interpreter.
 
@@ -206,7 +217,7 @@ Do not demo: deterministic typology, diagnostic language, graph visualization, u
 
 ---
 
-## 6. Self-Evolution Guardrails
+## 7. Self-Evolution Guardrails
 
 The self-evolution tooling is development infrastructure. It is not part of the live runtime loop.
 

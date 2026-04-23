@@ -39,6 +39,7 @@ from ..domain.types import (
     Id,
     InterpretationOptions,
     InterpretationResult,
+    JourneyFollowthroughSummary,
     LifeContextSnapshot,
     LivingMythReviewResult,
     MaterialType,
@@ -108,6 +109,7 @@ class SurfaceContextBundle(TypedDict, total=False):
     continuity: Required[ThreadAwareContinuityBundle]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
     threadDigests: Required[list[ThreadDigest]]
+    journeyFollowthrough: NotRequired[list[JourneyFollowthroughSummary]]
     typologyEvidenceDigest: NotRequired[TypologyEvidenceDigest]
     dashboard: NotRequired[DashboardSummary]
     memorySnapshot: NotRequired[MemoryKernelSnapshot]

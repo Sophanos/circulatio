@@ -10,6 +10,7 @@ from ..adapters.context_adapter import BuildContextInput, BuildPracticeContextIn
 from ..core.adaptation_engine import AdaptationEngine
 from ..core.circulatio_core import CirculatioCore
 from ..core.coach_engine import CoachEngine
+from ..core.journey_followthrough_engine import JourneyFollowthroughEngine
 from ..core.method_state_policy import derive_runtime_method_state_policy
 from ..core.practice_engine import PracticeEngine
 from ..core.proactive_engine import ProactiveEngine
@@ -56,6 +57,7 @@ from ..domain.records import DeletionMode
 from ..domain.reviews import DashboardSummary, WeeklyReviewRecord
 from ..domain.soma import BodyStateRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
+from ..domain.timestamps import format_iso_datetime, parse_iso_datetime, try_parse_iso_datetime
 from ..domain.types import (
     AdaptationPreferenceScope,
     AmplificationSourceSummary,
@@ -72,6 +74,7 @@ from ..domain.types import (
     InterpretationInteractionFeedback,
     InterpretationOptions,
     InterpretationResult,
+    JourneyFollowthroughSummary,
     LifeContextSnapshot,
     LivingMythReviewInput,
     MaterialInterpretationInput,
@@ -197,6 +200,7 @@ class CirculatioService:
         practice_engine: PracticeEngine | None = None,
         proactive_engine: ProactiveEngine | None = None,
         coach_engine: CoachEngine | None = None,
+        journey_followthrough_engine: JourneyFollowthroughEngine | None = None,
         resource_engine: ResourceEngine | None = None,
         method_state_llm: CirculatioMethodStateLlmPort | None = None,
         trusted_amplification_sources: list[AmplificationSourceSummary] | None = None,
@@ -208,6 +212,9 @@ class CirculatioService:
         self._practice_engine = practice_engine or PracticeEngine()
         self._proactive_engine = proactive_engine or ProactiveEngine()
         self._coach_engine = coach_engine or CoachEngine()
+        self._journey_followthrough_engine = (
+            journey_followthrough_engine or JourneyFollowthroughEngine()
+        )
         self._resource_engine = resource_engine or ResourceEngine()
         self._method_state_llm = method_state_llm
         self._trusted_amplification_sources = deepcopy(trusted_amplification_sources or [])
@@ -229,22 +236,27 @@ class CirculatioService:
         payload.setdefault("source", "hermes_ui")
         material = await self.create_material(payload)
         warnings: list[str] = []
-        try:
-            window_start, window_end = self._resolve_window(
-                anchor=str(material.get("materialDate") or material.get("createdAt") or ""),
-            )
-        except Exception:
-            LOGGER.exception(
-                "Post-store intake window resolution failed for material %s",
-                material["id"],
-            )
+        material_date = material.get("materialDate")
+        if material_date and try_parse_iso_datetime(material_date) is None:
             warnings.append("intake_window_fallback")
             window_start, window_end = self._resolve_window(
                 anchor=str(material.get("createdAt") or now_iso()),
             )
+        else:
+            try:
+                window_start, window_end = self._resolve_window(
+                    anchor=str(material.get("materialDate") or material.get("createdAt") or ""),
+                )
+            except Exception:
+                LOGGER.exception(
+                    "Post-store intake window resolution failed for material %s",
+                    material["id"],
+                )
+                warnings.append("intake_window_fallback")
+                window_start, window_end = self._resolve_window(
+                    anchor=str(material.get("createdAt") or now_iso()),
+                )
         method_context: MethodContextSnapshot | None = None
-        dashboard: DashboardSummary | None = None
-        thread_digests: list[ThreadDigest] = []
         try:
             method_snapshot = await self._repository.build_method_context_snapshot_from_records(
                 material["userId"],
@@ -264,6 +276,8 @@ class CirculatioService:
                 material["id"],
             )
             warnings.append("method_context_unavailable")
+        dashboard: DashboardSummary | None = None
+        thread_digests: list[ThreadDigest] = []
         coach_loop_digests = self._build_coach_loop_thread_digests(method_context)
         try:
             thread_digests = await self._repository.build_thread_digests_from_records(
@@ -956,6 +970,12 @@ class CirculatioService:
             },
             success=feedback in {"good_fit", "helpful"},
         )
+        if practice.get("relatedJourneyIds"):
+            await self._touch_related_journeys(
+                user_id=user_id,
+                journey_ids=self._normalize_id_list(practice.get("relatedJourneyIds")),
+                touched_at=timestamp,
+            )
         return stored
 
     async def get_witness_state(
@@ -1010,10 +1030,13 @@ class CirculatioService:
         journeys: list[JourneyRecord] | None = None,
         dashboard: DashboardSummary | None = None,
         adaptation_profile: UserAdaptationProfileSummary | None = None,
+        journey_followthrough: list[JourneyFollowthroughSummary] | None = None,
+        runtime_now: str | None = None,
         safety_context: SafetyContext | None = None,
     ) -> MethodContextSnapshot:
         enriched: MethodContextSnapshot = deepcopy(snapshot)
         runtime_policy = derive_runtime_method_state_policy(enriched)
+        effective_now = str(runtime_now or enriched.get("windowEnd") or window_end or now_iso())
         try:
             enriched["witnessState"] = self._build_witness_state_summary(
                 method_context=enriched,
@@ -1038,15 +1061,16 @@ class CirculatioService:
                 existing_briefs=existing_briefs or [],
                 recent_practices=recent_practices or [],
                 journeys=journeys or [],
+                journey_followthrough=journey_followthrough or [],
                 dashboard=dashboard,
                 adaptation_profile=adaptation_profile,
-                now=str(enriched.get("windowEnd") or window_end or now_iso()),
+                now=effective_now,
             )
             enriched["coachState"] = self._attach_resource_invitations_to_coach_state(
                 coach_state=coach_state,
                 runtime_policy=runtime_policy,
                 safety_context=safety_context,
-                now=str(enriched.get("windowEnd") or window_end or now_iso()),
+                now=effective_now,
             )
         except Exception:
             enriched["witnessState"] = self._build_witness_state_summary(
@@ -1054,7 +1078,7 @@ class CirculatioService:
                 runtime_policy=runtime_policy,
             )
             enriched["coachState"] = {
-                "generatedAt": str(enriched.get("windowEnd") or window_end or now_iso()),
+                "generatedAt": effective_now,
                 "surface": cast(
                     Literal[
                         "generic",
@@ -1106,6 +1130,8 @@ class CirculatioService:
         journeys: list[JourneyRecord] | None = None,
         dashboard: DashboardSummary | None = None,
         adaptation_profile: UserAdaptationProfileSummary | None = None,
+        journey_followthrough: list[JourneyFollowthroughSummary] | None = None,
+        runtime_now: str | None = None,
         safety_context: SafetyContext | None = None,
     ) -> MethodContextSnapshot:
         prepared = self._prepare_method_context_snapshot(
@@ -1123,6 +1149,8 @@ class CirculatioService:
             journeys=journeys,
             dashboard=dashboard,
             adaptation_profile=adaptation_profile,
+            journey_followthrough=journey_followthrough,
+            runtime_now=runtime_now,
             safety_context=safety_context,
         )
 
@@ -1369,7 +1397,9 @@ class CirculatioService:
             for key, ref_key in (
                 ("journeys", "relatedJourneyIds"),
                 ("materials", "relatedMaterialIds"),
+                ("goals", "relatedGoalIds"),
                 ("symbols", "relatedSymbolIds"),
+                ("bodyStates", "relatedBodyStateIds"),
                 ("practiceSessions", "relatedPracticeSessionIds"),
             ):
                 values = [
@@ -1531,6 +1561,7 @@ class CirculatioService:
         explicit_question: str | None = None,
         safety_context: SafetyContext | None = None,
         sync_longitudinal: bool = False,
+        runtime_now: str | None = None,
     ) -> SurfaceContextBundle:
         prepared_payload = (
             deepcopy(payload)
@@ -1548,6 +1579,7 @@ class CirculatioService:
             include_dashboard=include_dashboard,
         )
         dashboard = cast(DashboardSummary | None, coach_runtime.get("dashboard"))
+        effective_runtime_now = str(runtime_now or window_end or now_iso())
         method_context = self._prepare_method_context_snapshot(
             cast(MethodContextSnapshot | None, prepared_payload.get("methodContextSnapshot")),
             window_start=window_start,
@@ -1578,6 +1610,18 @@ class CirculatioService:
         if updated_typology_state is not None:
             method_state["typologyMethodState"] = deepcopy(updated_typology_state)
             method_context["methodState"] = cast(dict[str, object], method_state)
+        journey_followthrough = self._journey_followthrough_engine.build_summaries(
+            method_context=method_context,
+            thread_digests=record_thread_digests,
+            journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
+            existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+            dashboard=dashboard,
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+            now=effective_runtime_now,
+        )
         method_context = self._finalize_method_context_snapshot(
             method_context,
             window_end=window_end,
@@ -1589,6 +1633,8 @@ class CirculatioService:
             adaptation_profile=cast(
                 UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
             ),
+            journey_followthrough=journey_followthrough,
+            runtime_now=effective_runtime_now,
             safety_context=safety_context,
         )
         thread_digests = self._merge_thread_digests(
@@ -1634,6 +1680,7 @@ class CirculatioService:
         }
         if method_context is not None:
             bundle["methodContextSnapshot"] = method_context
+        bundle["journeyFollowthrough"] = deepcopy(journey_followthrough)
         if typology_digest is not None:
             bundle["typologyEvidenceDigest"] = deepcopy(typology_digest)
         if dashboard is not None:
@@ -1814,6 +1861,16 @@ class CirculatioService:
             event_type="goal_upserted",
             signals={"goalId": record["id"], "status": record["status"]},
         )
+        journey_ids = await self._linked_active_journey_ids_for_goal_ids(
+            user_id=input_data["userId"],
+            goal_ids=[record["id"]],
+        )
+        if journey_ids:
+            await self._touch_related_journeys(
+                user_id=input_data["userId"],
+                journey_ids=journey_ids,
+                touched_at=timestamp,
+            )
         return record
 
     async def upsert_goal_tension(
@@ -1858,6 +1915,16 @@ class CirculatioService:
             event_type="goal_tension_upserted",
             signals={"tensionId": record["id"], "status": record["status"]},
         )
+        journey_ids = await self._linked_active_journey_ids_for_goal_ids(
+            user_id=input_data["userId"],
+            goal_ids=[str(item) for item in record.get("goalIds", []) if str(item).strip()],
+        )
+        if journey_ids:
+            await self._touch_related_journeys(
+                user_id=input_data["userId"],
+                journey_ids=journey_ids,
+                touched_at=timestamp,
+            )
         return record
 
     async def create_journey(self, input_data: CreateJourneyInput) -> JourneyRecord:
@@ -1893,6 +1960,7 @@ class CirculatioService:
                 input_data["userId"],
                 input_data.get("relatedGoalIds"),
             ),
+            "relatedBodyStateIds": [],
             "createdAt": timestamp,
             "updatedAt": timestamp,
         }
@@ -2049,14 +2117,56 @@ class CirculatioService:
         status = self._validate_journey_status(str(input_data["status"]), allow_deleted=False)
         if journey.get("status") == status:
             return journey
-        return await self._repository.update_journey(
+        timestamp = now_iso()
+        updated = await self._repository.update_journey(
             input_data["userId"],
             journey["id"],
             {
                 "status": status,
-                "updatedAt": now_iso(),
+                "updatedAt": timestamp,
             },
         )
+        if status in {"paused", "completed", "archived"}:
+            await self._retire_related_open_briefs(
+                user_id=input_data["userId"],
+                journey_ids=[journey["id"]],
+                retired_at=timestamp,
+            )
+        return updated
+
+    async def _retire_related_open_briefs(
+        self,
+        *,
+        user_id: Id,
+        journey_ids: list[Id],
+        retired_at: str,
+    ) -> None:
+        target_ids = {
+            candidate
+            for candidate in self._normalize_id_list(journey_ids)
+            if candidate
+        }
+        if not target_ids:
+            return
+        open_briefs = await self._repository.list_proactive_briefs(
+            user_id,
+            statuses=["candidate", "shown"],
+            include_deleted=False,
+            limit=200,
+        )
+        for brief in open_briefs:
+            related_ids = set(self._normalize_id_list(brief.get("relatedJourneyIds")))
+            if not related_ids.intersection(target_ids):
+                continue
+            await self._repository.update_proactive_brief(
+                user_id,
+                brief["id"],
+                {
+                    "status": "deleted",
+                    "updatedAt": retired_at,
+                    "deletedAt": str(brief.get("deletedAt") or retired_at),
+                },
+            )
 
     async def capture_reality_anchors(
         self,
@@ -4041,6 +4151,9 @@ class CirculatioService:
         recent_practices = bundle["recentPractices"]
         journeys = bundle["journeys"]
         existing_briefs = bundle["existingBriefs"]
+        journey_followthrough = cast(
+            list[JourneyFollowthroughSummary], bundle.get("journeyFollowthrough", [])
+        )
         weekly_reviews = bundle.get("weeklyReviews", [])
         profile = bundle.get("profile")
         cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
@@ -4055,6 +4168,7 @@ class CirculatioService:
             recent_practices=recent_practices,
             journeys=journeys,
             existing_briefs=existing_briefs,
+            journey_followthrough=journey_followthrough,
             adaptation_profile=adaptation_summary,
             source="manual",
             now=generated_at,
@@ -4085,6 +4199,7 @@ class CirculatioService:
         practice_container = self._build_journey_practice_container(
             recent_practices=recent_practices,
             practice_suggestion=summary.get("practiceSuggestion"),
+            journey_followthrough=journey_followthrough,
             window_start=resolved_start,
             window_end=resolved_end,
             now=generated_at,
@@ -4520,6 +4635,13 @@ class CirculatioService:
         practice_input["practiceHints"] = deepcopy(practice_hints)
         practice_input["adaptationHints"] = deepcopy(practice_hints)
         llm_result = await self._core.generate_practice(practice_input)
+        related_journey_ids = await self._resolve_related_journey_ids_for_practice(
+            user_id=input_data["userId"],
+            trigger=cast(dict[str, object], trigger),
+            practice=llm_result.get("practiceRecommendation"),
+        )
+        if related_journey_ids:
+            llm_result["practiceRecommendation"]["relatedJourneyIds"] = list(related_journey_ids)
         practice_session: PracticeSessionRecord | None = None
         if input_data.get("persist", True):
             practice_session = await self._store_practice_plan(
@@ -4640,6 +4762,12 @@ class CirculatioService:
             success=event.get("success"),
             sample_weight=event.get("sampleWeight"),
         )
+        if updated.get("relatedJourneyIds"):
+            await self._touch_related_journeys(
+                user_id=input_data["userId"],
+                journey_ids=self._normalize_id_list(updated.get("relatedJourneyIds")),
+                touched_at=timestamp,
+            )
         return await self._materialize_practice_mutation_result(
             user_id=input_data["userId"],
             practice=updated,
@@ -4748,6 +4876,12 @@ class CirculatioService:
                 success=event.get("success"),
                 sample_weight=event.get("sampleWeight"),
             )
+        if practice.get("relatedJourneyIds"):
+            await self._touch_related_journeys(
+                user_id=user_id,
+                journey_ids=self._normalize_id_list(practice.get("relatedJourneyIds")),
+                touched_at=timestamp,
+            )
         return await self._materialize_practice_mutation_result(
             user_id=user_id,
             practice=practice,
@@ -4791,6 +4925,9 @@ class CirculatioService:
         recent_practices = bundle["recentPractices"]
         journeys = bundle["journeys"]
         existing_briefs = bundle["existingBriefs"]
+        journey_followthrough = cast(
+            list[JourneyFollowthroughSummary], bundle.get("journeyFollowthrough", [])
+        )
         profile = bundle.get("profile")
         cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
         adaptation_summary = bundle.get("adaptationSummary")
@@ -4815,6 +4952,7 @@ class CirculatioService:
             recent_practices=recent_practices,
             journeys=journeys,
             existing_briefs=existing_briefs,
+            journey_followthrough=journey_followthrough,
             adaptation_profile=adaptation_summary,
             source=source,  # type: ignore[arg-type]
             now=now,
@@ -4832,6 +4970,7 @@ class CirculatioService:
             if skipped_reasons:
                 result["skippedReasons"] = skipped_reasons
             return result
+        due_seeds = due_seeds[:1]
         existing_ids = {item["id"] for item in existing_briefs}
         persisted: list[ProactiveBriefRecord] = []
         for seed in due_seeds:
@@ -4938,13 +5077,13 @@ class CirculatioService:
             input_data["briefId"],
             updates,
         )
-        if action == "shown":
-            for journey_id in updated.get("relatedJourneyIds", []):
-                await self._repository.update_journey(
-                    input_data["userId"],
-                    journey_id,
-                    {"lastBriefedAt": timestamp, "updatedAt": timestamp},
-                )
+        if action in {"shown", "acted_on"} and updated.get("relatedJourneyIds"):
+            await self._touch_related_journeys(
+                user_id=input_data["userId"],
+                journey_ids=self._normalize_id_list(updated.get("relatedJourneyIds")),
+                touched_at=timestamp,
+                last_briefed_at=timestamp,
+            )
         if action != "deleted":
             await self._record_adaptation_signal(
                 user_id=input_data["userId"],
@@ -8520,11 +8659,20 @@ class CirculatioService:
         *,
         recent_practices: list[PracticeSessionRecord],
         practice_suggestion: PracticePlan | None,
+        journey_followthrough: list[JourneyFollowthroughSummary] | None,
         window_start: str,
         window_end: str,
         now: str,
     ) -> JourneyPracticeContainer:
         now_dt = self._parse_datetime(now)
+        prioritized_practice_ids = [
+            str(practice_id)
+            for summary in journey_followthrough or []
+            if isinstance(summary, dict)
+            for practice_id in summary.get("relatedPracticeSessionIds", [])
+            if str(practice_id).strip()
+        ]
+        prioritized_practice_map = {practice_id: index for index, practice_id in enumerate(prioritized_practice_ids)}
         due_practices = sorted(
             [
                 practice
@@ -8534,10 +8682,11 @@ class CirculatioService:
                 and self._parse_datetime(practice["nextFollowUpDueAt"]) <= now_dt
             ],
             key=lambda item: (
-                item.get("nextFollowUpDueAt", ""),
-                item.get("updatedAt", item.get("createdAt", "")),
+                prioritized_practice_map.get(str(item.get("id") or "").strip(), 999),
+                -self._parse_datetime(
+                    str(item.get("nextFollowUpDueAt") or item.get("updatedAt") or item.get("createdAt") or now)
+                ).timestamp(),
             ),
-            reverse=True,
         )
         if due_practices:
             practice = due_practices[0]
@@ -8566,8 +8715,12 @@ class CirculatioService:
             }
         recommended = sorted(
             [practice for practice in recent_practices if practice.get("status") == "recommended"],
-            key=lambda item: item.get("updatedAt", item.get("createdAt", "")),
-            reverse=True,
+            key=lambda item: (
+                prioritized_practice_map.get(str(item.get("id") or "").strip(), 999),
+                -self._parse_datetime(
+                    str(item.get("updatedAt") or item.get("createdAt") or now)
+                ).timestamp(),
+            ),
         )
         if recommended:
             practice = recommended[0]
@@ -10026,6 +10179,11 @@ class CirculatioService:
             )
         if anchor_refs.get("goalId"):
             anchors["goal"] = await self._repository.get_goal(user_id, str(anchor_refs["goalId"]))
+        if anchor_refs.get("journeyId"):
+            anchors["journey"] = await self._repository.get_journey(
+                user_id,
+                str(anchor_refs["journeyId"]),
+            )
         return anchors
 
     def _resolve_expected_capture_targets(
@@ -10293,6 +10451,15 @@ class CirculatioService:
                     "privacyClass": response_material.get("privacyClass", "user_private"),
                 }
             )
+            anchored_journey = anchors.get("journey") if isinstance(anchors.get("journey"), dict) else {}
+            if anchored_journey.get("id"):
+                await self._touch_related_journeys(
+                    user_id=user_id,
+                    journey_ids=[cast(Id, str(anchored_journey["id"]))],
+                    touched_at=str(payload.get("observedAt") or observed_at),
+                    explicit_anchor=True,
+                    add_body_state_ids=[cast(Id, str(stored["bodyState"]["id"]))],
+                )
             return {
                 "appliedEntityRef": {
                     "entityType": "BodyState",
@@ -10437,6 +10604,28 @@ class CirculatioService:
                 },
             )
             practice = practice_result["practiceSession"]
+            anchored_journey = anchors.get("journey") if isinstance(anchors.get("journey"), dict) else {}
+            anchored_journey_id = str(anchored_journey.get("id") or "").strip()
+            if anchored_journey_id:
+                related_journey_ids = self._merge_ids(
+                    self._normalize_id_list(practice.get("relatedJourneyIds")),
+                    [cast(Id, anchored_journey_id)],
+                )
+                if related_journey_ids != self._normalize_id_list(practice.get("relatedJourneyIds")):
+                    practice = await self._repository.update_practice_session(
+                        user_id,
+                        practice["id"],
+                        {
+                            "relatedJourneyIds": related_journey_ids,
+                            "updatedAt": observed_at,
+                        },
+                    )
+                await self._touch_related_journeys(
+                    user_id=user_id,
+                    journey_ids=[cast(Id, anchored_journey_id)],
+                    touched_at=observed_at,
+                    explicit_anchor=True,
+                )
             return {
                 "appliedEntityRef": {
                     "entityType": "PracticeSession",
@@ -11013,6 +11202,145 @@ class CirculatioService:
             trigger={"triggerType": "weekly_review"},
         )
 
+    async def _resolve_related_journey_ids_for_practice(
+        self,
+        *,
+        user_id: Id,
+        trigger: dict[str, object],
+        practice: PracticePlan | None,
+    ) -> list[Id]:
+        explicit_journey_id = self._optional_str(trigger.get("journeyId"))
+        if explicit_journey_id:
+            journey = await self._resolve_journey_reference(
+                user_id=user_id,
+                journey_id=explicit_journey_id,
+                journey_label=None,
+            )
+            return [journey["id"]]
+        brief_id = self._optional_str(trigger.get("briefId"))
+        if brief_id:
+            brief = await self._repository.get_proactive_brief(
+                user_id,
+                brief_id,
+                include_deleted=True,
+            )
+            related_journey_ids = self._normalize_id_list(brief.get("relatedJourneyIds"))
+            if related_journey_ids:
+                return related_journey_ids
+        prior_practice_id = self._optional_str(trigger.get("practiceSessionId"))
+        if prior_practice_id:
+            prior_practice = await self._repository.get_practice_session(
+                user_id,
+                prior_practice_id,
+                include_deleted=True,
+            )
+            related_journey_ids = self._normalize_id_list(prior_practice.get("relatedJourneyIds"))
+            if related_journey_ids:
+                return related_journey_ids
+        material_id = self._optional_str(trigger.get("materialId")) or self._optional_str(
+            practice.get("materialId") if isinstance(practice, dict) else None
+        )
+        if material_id:
+            matches = [
+                journey["id"]
+                for journey in await self._repository.list_journeys(user_id, include_deleted=False)
+                if str(journey.get("status") or "").strip() == "active"
+                and material_id in journey.get("relatedMaterialIds", [])
+            ]
+            if len(matches) == 1:
+                return matches
+        return []
+
+    async def _touch_related_journeys(
+        self,
+        *,
+        user_id: Id,
+        journey_ids: list[Id],
+        touched_at: str,
+        explicit_anchor: bool = False,
+        last_briefed_at: str | None = None,
+        add_body_state_ids: list[Id] | None = None,
+    ) -> None:
+        normalized_journey_ids = self._normalize_id_list(journey_ids)
+        if not normalized_journey_ids:
+            return
+        body_state_ids = self._normalize_id_list(add_body_state_ids)
+        for journey_id in normalized_journey_ids:
+            try:
+                journey = await self._repository.get_journey(
+                    user_id,
+                    journey_id,
+                    include_deleted=True,
+                )
+            except EntityNotFoundError:
+                continue
+            status = str(journey.get("status") or "active").strip()
+            if status in {"archived", "completed", "deleted"}:
+                continue
+            if explicit_anchor:
+                if status not in {"active", "paused"}:
+                    continue
+            elif status != "active":
+                continue
+            updates: dict[str, object] = {"updatedAt": touched_at}
+            if body_state_ids:
+                updates["relatedBodyStateIds"] = self._merge_ids(
+                    list(journey.get("relatedBodyStateIds", [])),
+                    body_state_ids,
+                )
+            if last_briefed_at:
+                updates["lastBriefedAt"] = last_briefed_at
+            await self._repository.update_journey(user_id, journey_id, updates)
+
+    async def _retire_related_open_briefs(
+        self,
+        *,
+        user_id: Id,
+        journey_ids: list[Id],
+        retired_at: str,
+    ) -> None:
+        normalized_journey_ids = set(self._normalize_id_list(journey_ids))
+        if not normalized_journey_ids:
+            return
+        briefs = await self._repository.list_proactive_briefs(
+            user_id,
+            include_deleted=False,
+            limit=200,
+        )
+        for brief in briefs:
+            if str(brief.get("status") or "").strip() not in {"candidate", "shown"}:
+                continue
+            if not normalized_journey_ids.intersection(
+                set(self._normalize_id_list(brief.get("relatedJourneyIds")))
+            ):
+                continue
+            await self._repository.update_proactive_brief(
+                user_id,
+                brief["id"],
+                {
+                    "status": "deleted",
+                    "updatedAt": retired_at,
+                    "deletedAt": retired_at,
+                },
+            )
+
+    async def _linked_active_journey_ids_for_goal_ids(
+        self,
+        *,
+        user_id: Id,
+        goal_ids: list[Id],
+    ) -> list[Id]:
+        normalized_goal_ids = set(self._normalize_id_list(goal_ids))
+        if not normalized_goal_ids:
+            return []
+        matches = [
+            journey["id"]
+            for journey in await self._repository.list_journeys(user_id, include_deleted=False)
+            if str(journey.get("status") or "").strip() == "active"
+            and normalized_goal_ids.intersection(set(journey.get("relatedGoalIds", [])))
+        ]
+        return matches if len(matches) == 1 else []
+
     async def _store_practice_plan(
         self,
         *,
@@ -11027,6 +11355,15 @@ class CirculatioService:
             created_at=timestamp,
             trigger=trigger,  # type: ignore[arg-type]
         )
+        related_journey_ids = self._normalize_id_list(plan.get("relatedJourneyIds"))
+        if not related_journey_ids:
+            related_journey_ids = await self._resolve_related_journey_ids_for_practice(
+                user_id=user_id,
+                trigger=trigger,
+                practice=plan,
+            )
+        if related_journey_ids:
+            plan["relatedJourneyIds"] = list(related_journey_ids)
         record: PracticeSessionRecord = {
             "id": str(plan.get("id") or create_id("practice_session")),
             "userId": user_id,
@@ -11089,7 +11426,16 @@ class CirculatioService:
                 related_resource_ids = [str(resource["id"])]
         if related_resource_ids:
             record["relatedResourceIds"] = cast(list[Id], related_resource_ids)
-        return await self._repository.create_practice_session(record)
+        if related_journey_ids:
+            record["relatedJourneyIds"] = cast(list[Id], related_journey_ids)
+        stored = await self._repository.create_practice_session(record)
+        if related_journey_ids:
+            await self._touch_related_journeys(
+                user_id=user_id,
+                journey_ids=related_journey_ids,
+                touched_at=timestamp,
+            )
+        return stored
 
     async def _store_rhythmic_brief(
         self,
@@ -11150,7 +11496,29 @@ class CirculatioService:
                 related_resource_ids = [str(resource["id"])]
         if related_resource_ids:
             record["relatedResourceIds"] = cast(list[Id], related_resource_ids)
-        return await self._repository.create_proactive_brief(record)
+        stored = await self._repository.create_proactive_brief(record)
+        if (
+            str(stored.get("briefType") or "").strip() == "practice_followup"
+            and stored.get("relatedPracticeSessionIds")
+        ):
+            for practice_session_id in self._normalize_id_list(stored.get("relatedPracticeSessionIds")):
+                try:
+                    practice = await self._repository.get_practice_session(
+                        user_id,
+                        practice_session_id,
+                    )
+                except EntityNotFoundError:
+                    continue
+                await self._repository.update_practice_session(
+                    user_id,
+                    practice_session_id,
+                    {
+                        "followUpCount": int(practice.get("followUpCount", 0) or 0) + 1,
+                        "lastFollowUpBriefId": stored["id"],
+                        "updatedAt": created_at,
+                    },
+                )
+        return stored
 
     async def _store_interpretation_run(
         self,
@@ -11257,9 +11625,6 @@ class CirculatioService:
 
     def _decision_status(self, run: InterpretationRunRecord, proposal_id: Id) -> str:
         return self._decision_status_from_records(run.get("proposalDecisions", []), proposal_id)
-
-    def _review_decision_status(self, review: LivingMythReviewRecord, proposal_id: Id) -> str:
-        return self._decision_status_from_records(review.get("proposalDecisions", []), proposal_id)
 
     def _decision_status_from_records(
         self,
@@ -11653,15 +12018,7 @@ class CirculatioService:
         )
 
     def _parse_datetime(self, value: str | None) -> datetime:
-        if not value:
-            return datetime.now(UTC)
-        candidate = value.strip()
-        if candidate.endswith("Z"):
-            candidate = candidate[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(candidate)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
+        return parse_iso_datetime(value, default=datetime.now(UTC))
 
     def _format_datetime(self, value: datetime) -> str:
-        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        return format_iso_datetime(value)

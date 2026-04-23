@@ -364,6 +364,7 @@ class PracticeSessionSummary(TypedDict, total=False):
     coachLoopKind: NotRequired[CoachLoopKind]
     coachMoveKind: NotRequired[CoachMoveKind]
     relatedResourceIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
     createdAt: Required[ISODateString]
     completedAt: NotRequired[ISODateString]
@@ -566,6 +567,35 @@ class JourneySummary(TypedDict, total=False):
     relatedPatternIds: Required[list[Id]]
     relatedDreamSeriesIds: Required[list[Id]]
     relatedGoalIds: Required[list[Id]]
+    relatedBodyStateIds: NotRequired[list[Id]]
+
+
+JourneyFamilyKind = Literal[
+    "embodied_recurrence",
+    "symbol_body_life_pressure",
+    "thought_loop_typology_restraint",
+    "relational_scene_recurrence",
+    "practice_reentry",
+    "cross_family",
+]
+
+
+class JourneyFollowthroughSummary(TypedDict, total=False):
+    journeyId: Required[Id]
+    family: Required[JourneyFamilyKind]
+    readiness: Required[Literal["quiet", "available", "ready"]]
+    recommendedSurface: Required[CoachSurface | Literal["none"]]
+    recommendedMoveKind: NotRequired[CoachMoveKind]
+    bodyFirst: Required[bool]
+    priority: Required[int]
+    reasons: Required[list[str]]
+    blockedEscalations: Required[list[str]]
+    relatedPracticeSessionIds: Required[list[Id]]
+    relatedBodyStateIds: Required[list[Id]]
+    relatedGoalTensionIds: Required[list[Id]]
+    lastTouchedAt: Required[ISODateString]
+    lastBriefedAt: NotRequired[ISODateString]
+    cooldownUntil: NotRequired[ISODateString]
 
 
 LongitudinalSignalType = Literal[
@@ -1620,6 +1650,7 @@ class PracticeTriggerSummary(TypedDict, total=False):
     reviewId: NotRequired[Id]
     briefId: NotRequired[Id]
     practiceSessionId: NotRequired[Id]
+    journeyId: NotRequired[Id]
     reason: NotRequired[str]
 
 
@@ -1784,6 +1815,7 @@ class PracticePlan(TypedDict, total=False):
     resourceInvitationId: NotRequired[Id]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
     relatedResourceIds: NotRequired[list[Id]]
+    relatedJourneyIds: NotRequired[list[Id]]
 
 
 class PersonalSymbolWritePayload(TypedDict, total=False):

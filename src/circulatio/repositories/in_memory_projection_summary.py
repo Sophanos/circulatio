@@ -175,6 +175,8 @@ def _project_practice_session_summary(record: PracticeSessionRecord) -> Practice
         result["outcomeEvidenceIds"] = list(record["outcomeEvidenceIds"])
     if record.get("relatedResourceIds"):
         result["relatedResourceIds"] = list(record["relatedResourceIds"])
+    if record.get("relatedJourneyIds"):
+        result["relatedJourneyIds"] = list(record["relatedJourneyIds"])
     if isinstance(record.get("resourceInvitation"), dict):
         result["resourceInvitation"] = deepcopy(record["resourceInvitation"])
     return result
@@ -437,6 +439,8 @@ def _project_journey_summary(record: JourneyRecord) -> JourneySummary:
         "relatedDreamSeriesIds": list(record.get("relatedDreamSeriesIds", [])),
         "relatedGoalIds": list(record.get("relatedGoalIds", [])),
     }
+    if record.get("relatedBodyStateIds"):
+        result["relatedBodyStateIds"] = list(record["relatedBodyStateIds"])
     _copy_if_present(result, record, "currentQuestion")
     return result
 

@@ -1787,6 +1787,7 @@ def _thread_entity_refs(
     material_ids: list[Id] | None = None,
     symbol_ids: list[Id] | None = None,
     pattern_ids: list[Id] | None = None,
+    body_state_ids: list[Id] | None = None,
     goal_ids: list[Id] | None = None,
     dream_series_ids: list[Id] | None = None,
     journey_ids: list[Id] | None = None,
@@ -1801,6 +1802,8 @@ def _thread_entity_refs(
         refs["symbols"] = list(dict.fromkeys(symbol_ids))
     if pattern_ids:
         refs["patterns"] = list(dict.fromkeys(pattern_ids))
+    if body_state_ids:
+        refs["bodyStates"] = list(dict.fromkeys(body_state_ids))
     if goal_ids:
         refs["goals"] = list(dict.fromkeys(goal_ids))
     if dream_series_ids:
@@ -1915,6 +1918,7 @@ def _journey_ids_for_entity_refs(
     material_ids = set(entity_refs.get("materials", []))
     symbol_ids = set(entity_refs.get("symbols", []))
     pattern_ids = set(entity_refs.get("patterns", []))
+    body_state_ids = set(entity_refs.get("bodyStates", []))
     goal_ids = set(entity_refs.get("goals", []))
     dream_series_ids = set(entity_refs.get("dreamSeries", []))
     entity_ids = set(entity_refs.get("entities", []))
@@ -1924,12 +1928,14 @@ def _journey_ids_for_entity_refs(
         explicit_ids = set(journey.get("relatedMaterialIds", []))
         explicit_ids.update(journey.get("relatedSymbolIds", []))
         explicit_ids.update(journey.get("relatedPatternIds", []))
+        explicit_ids.update(journey.get("relatedBodyStateIds", []))
         explicit_ids.update(journey.get("relatedGoalIds", []))
         explicit_ids.update(journey.get("relatedDreamSeriesIds", []))
         if (
             material_ids.intersection(journey.get("relatedMaterialIds", []))
             or symbol_ids.intersection(journey.get("relatedSymbolIds", []))
             or pattern_ids.intersection(journey.get("relatedPatternIds", []))
+            or body_state_ids.intersection(journey.get("relatedBodyStateIds", []))
             or goal_ids.intersection(journey.get("relatedGoalIds", []))
             or dream_series_ids.intersection(journey.get("relatedDreamSeriesIds", []))
             or entity_ids.intersection(explicit_ids)
@@ -2013,6 +2019,9 @@ def build_thread_digests_locked(
             ),
             symbol_ids=list(record.get("relatedSymbolIds", summary.get("relatedSymbolIds", []))),
             pattern_ids=list(record.get("relatedPatternIds", summary.get("relatedPatternIds", []))),
+            body_state_ids=list(
+                record.get("relatedBodyStateIds", summary.get("relatedBodyStateIds", []))
+            ),
             goal_ids=list(record.get("relatedGoalIds", summary.get("relatedGoalIds", []))),
             dream_series_ids=list(
                 record.get("relatedDreamSeriesIds", summary.get("relatedDreamSeriesIds", []))
