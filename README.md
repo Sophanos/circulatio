@@ -2,8 +2,6 @@
 
 Circulatio is a symbolic-memory backend for Hermes.
 
-**Hold first, interpret later, approve before writing symbolic memory.**
-
 Every app captures. Almost none help you become.
 
 Circulatio is a companion system for inner work. It holds your dreams, body states, reflections, and charged events — not as data to warehouse, but as living material for meaning.
