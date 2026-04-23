@@ -78,7 +78,7 @@ def _fallback_clarification_intent(
     return {
         "refKey": ref_key,
         "questionText": question_text,
-        "expectedTargets": [],
+        "expectedTargets": ["personal_amplification"],
         "anchorRefs": {"runId": run_id, "materialId": material_id},
         "consentScopes": [],
         "storagePolicy": "no_storage_without_confirmation",
@@ -97,11 +97,12 @@ def _fallback_clarification_plan(
         "questionText": question_text,
         "questionKey": ref_key,
         "intent": "personal_association",
-        "captureTarget": "answer_only",
+        "captureTarget": "personal_amplification",
         "expectedAnswerKind": "free_text",
         "routingHints": {
             "source": "fallback_collaborative_opening",
             "continuationMode": "interpretation_context_only",
+            "expectedTargets": ["personal_amplification"],
             "anchorRefs": {"runId": run_id, "materialId": material_id},
         },
         "anchorRefs": {"runId": run_id, "materialId": material_id},

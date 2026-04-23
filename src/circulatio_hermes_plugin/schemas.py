@@ -154,7 +154,7 @@ DASHBOARD_SUMMARY_TOOL_SCHEMA = _schema(
 
 DISCOVERY_TOOL_SCHEMA = _schema(
     "circulatio_discovery",
-    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings. Use this as the single bounded recovery read when a cross-material typology, function-dynamics, or system-recognition request needs more evidence after a thin or fallback-shaped analysis packet. Preserve the same `analyticLens` used on the packet when recovering typology/function-dynamics requests. Answer from this digest rather than from raw material listings.",
+    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings. Use this as the single bounded recovery read when a cross-material typology, function-dynamics, system-recognition, overcompensation, problem-function, or inferior-under-stress request needs more evidence after a thin or fallback-shaped analysis packet. Preserve the same `analyticLens` used on the packet when recovering typology/function-dynamics requests. Answer from this digest rather than from raw material listings.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -285,7 +285,10 @@ INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
     "Open or continue collaborative interpretation when the user asks what material "
     "means. This also covers evidence-bound typology reading on a specific material, "
-    "such as foreground/background function dynamics or tension among thinking, feeling, intuition, and sensation. Prefer storing first. A valid first response may be a single question, "
+    "including prompts like 'read this exact material typologically' or questions "
+    "about foreground/background function dynamics or tension among thinking, "
+    "feeling, intuition, and sensation. Prefer storing first. A valid first "
+    "response may be a single question, "
     "amplification prompt, or method gate. Keep host replies to usually 1-3 "
     "sentences with exactly one question. If gated, wait for new input. If the "
     "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
@@ -460,7 +463,7 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht' and 'Was wirkt hier führend, was kompensatorisch?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
+    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, overcompensation, problem function, inferior-under-stress dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht', 'Was wirkt hier führend, was kompensatorisch?', and 'Wo übersteuert Denken hier, und welche Funktion kippt kompensatorisch oder als Problemfunktion?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -840,7 +843,7 @@ RESPOND_PRACTICE_TOOL_SCHEMA = _schema(
 
 RECORD_INTERPRETATION_FEEDBACK_TOOL_SCHEMA = _schema(
     "circulatio_record_interpretation_feedback",
-    "Record explicit user feedback on a Circulatio interpretation run without parsing free-text notes. Use this only when the target interpretation run is already anchored in context or has been explicitly resolved first; do not guess a synthetic run id.",
+    "Record explicit user feedback on a Circulatio interpretation run without parsing free-text notes. This includes same-session corrections to a just-given typology reading. Use this only when the target interpretation run is already anchored in context or has been explicitly resolved first; do not guess a synthetic run id.",
     {
         "runId": {"type": "string"},
         "feedback": {

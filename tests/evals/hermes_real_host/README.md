@@ -26,6 +26,8 @@ Use this dataset family to catch:
 - `schema/host_case.schema.json`: human-facing schema reference
 - `baseline.jsonl`: representative routing and multi-turn anchored-flow checks
 - `redteam.jsonl`: explicit leak and retry-loop probes
+- `typology_journeys.jsonl`: story-based typology QA suite with resumable
+  turn-by-turn cases
 
 ## Run
 
@@ -73,4 +75,5 @@ It is the operator-grade conversational complement to those layers.
 
 - Keep prompts synthetic or operator-authored. Do not paste private user sessions into JSONL.
 - Prefer stable expectations: required tools, forbidden tools, leak bans, and bounded reply shape.
-- Use session labels for multi-turn flows that must resume the same conversation.
+- Legacy multi-turn cases still use `turns` + `sessionLabel`.
+- Flat story-turn cases can resume by earlier `caseId` via `resumeFromCaseId`.

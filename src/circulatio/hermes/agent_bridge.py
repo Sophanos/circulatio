@@ -1680,6 +1680,7 @@ class CirculatioAgentBridge:
             status="ok",
             message="Loaded a compact journey overview for the requested window.",
             result={
+                "journeyPage": page,
                 "windowStart": page["windowStart"],
                 "windowEnd": page["windowEnd"],
                 "journeyPageSummary": self._journey_page_summary(page),
@@ -2684,6 +2685,8 @@ class CirculatioAgentBridge:
                         else result.get("journeyPageSummary")
                     ),
                 }
+                if isinstance(page, dict):
+                    sanitized_result["journeyPage"] = page
                 if isinstance(continuity_summary, dict):
                     sanitized_result["continuitySummary"] = continuity_summary
                 sanitized["result"] = sanitized_result
