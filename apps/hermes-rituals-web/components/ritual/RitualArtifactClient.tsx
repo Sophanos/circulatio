@@ -25,7 +25,13 @@ const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8
 const MORPH = { type: "spring" as const, stiffness: 450, damping: 28, mass: 0.5 }
 
 const CHANNEL_ORDER = ["voice", "ambient", "breath", "pulse", "music"] as const
-const RITUAL_LENS_OPTIONS: RitualStageLens[] = ["cinema", "photo", "breath"]
+const RITUAL_LENS_OPTIONS: RitualStageLens[] = ["cinema", "photo", "breath", "meditation"]
+const RITUAL_LENS_LABELS: Record<RitualStageLens, string> = {
+  cinema: "cinema",
+  photo: "photo",
+  breath: "breath",
+  meditation: "med"
+}
 type ChannelName = (typeof CHANNEL_ORDER)[number]
 
 function formatTimestamp(value: number) {
@@ -241,7 +247,7 @@ function RitualLensSwitch({
                 active ? "text-silver-100" : "text-silver-500"
               ].join(" ")}
             >
-              {lens}
+              {RITUAL_LENS_LABELS[lens]}
             </span>
           </button>
         )
@@ -523,7 +529,7 @@ export function RitualArtifactClient({
             artifact={artifact}
             sections={sections}
             stageLens={stageLens}
-            playerMode={stageLens === "breath" ? "minimal" : "full"}
+            playerMode={stageLens === "breath" || stageLens === "meditation" ? "minimal" : "full"}
             immersive={immersive}
             onTimeUpdate={setCurrentMs}
             onPlayingChange={setIsPlaying}

@@ -5,6 +5,7 @@ import { Pause, Play } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 
 import { BreathStage } from "@/components/ritual/BreathStage"
+import { MeditationStage } from "@/components/ritual/MeditationStage"
 import { CaptionStack } from "@/components/ritual/CaptionStack"
 import { MatrixField } from "@/components/ritual/MatrixField"
 import { ScrollingWaveform } from "@/components/ui/waveform"
@@ -22,7 +23,7 @@ export type RitualPlayerHandle = {
   seek: (ms: number) => void
 }
 
-export type RitualStageLens = "cinema" | "photo" | "breath"
+export type RitualStageLens = "cinema" | "photo" | "breath" | "meditation"
 export type PlayerMode = "full" | "minimal"
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
@@ -64,6 +65,16 @@ function VisualStage({
         isPlaying={isPlaying}
         immersive={immersive}
         totalDurationMs={durationMs}
+      />
+    )
+  }
+
+  if (stageLens === "meditation") {
+    return (
+      <MeditationStage
+        cycle={artifact.breathCycle}
+        currentMs={currentMs}
+        durationMs={durationMs}
       />
     )
   }

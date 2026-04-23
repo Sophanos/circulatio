@@ -2,12 +2,12 @@
 
 import { motion } from "motion/react"
 
+import { BreathPacer } from "@/components/ritual/BreathPacer"
 import {
-  BreathRing,
   DEFAULT_BREATH_CYCLE,
-  getBreathPhase
+  getBreathPhase,
+  type BreathPhase
 } from "@/components/ritual/BreathRing"
-import { BreathConvergence } from "@/components/ritual/BreathConvergence"
 import type { BreathCycle, BreathVisualForm } from "@/lib/artifact-contract"
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
@@ -194,17 +194,12 @@ function BreathHorizon({
 function BreathVisual({
   cycle,
   currentMs,
-  isPlaying,
-  immersive,
-  totalDurationMs
+  phase
 }: {
   cycle: BreathCycle
   currentMs: number
-  isPlaying: boolean
-  immersive?: boolean
-  totalDurationMs?: number
+  phase: BreathPhase
 }) {
-  const phase = getBreathPhase(cycle, currentMs)
   const intensity =
     phase.label === "Inhale"
       ? 24 + phase.progress * 48
@@ -214,18 +209,6 @@ function BreathVisual({
           ? 62 - phase.progress * 34
           : 18 + phase.progress * 12
   const form: BreathVisualForm = cycle.visualForm ?? "orb"
-
-  // In immersive mode, always use convergence orbs regardless of form setting
-  if (immersive) {
-    return (
-      <BreathConvergence
-        cycle={cycle}
-        currentMs={currentMs}
-        isPlaying={isPlaying}
-        totalDurationMs={totalDurationMs}
-      />
-    )
-  }
 
   if (form === "wave") {
     return <BreathWave currentMs={currentMs} intensity={intensity} />
@@ -237,22 +220,14 @@ function BreathVisual({
     return <BreathHorizon currentMs={currentMs} intensity={intensity} />
   }
 
-  return (
-    <BreathRing
-      cycle={cycle}
-      currentMs={currentMs}
-      isPlaying={isPlaying}
-      showLabel={false}
-    />
-  )
+  return <BreathPacer currentMs={currentMs} phase={phase} />
 }
 
 export function BreathStage({
   cycle,
   currentMs,
   isPlaying,
-  immersive,
-  totalDurationMs = 60000,
+  immersive
 }: {
   cycle?: BreathCycle
   currentMs: number
@@ -268,7 +243,6 @@ export function BreathStage({
   const visualForm = breathCycle.visualForm ?? DEFAULT_BREATH_CYCLE.visualForm ?? "orb"
 
   if (immersive) {
-    // Immersive mode: orbs fill the space, phase instruction floats at bottom
     return (
       <motion.div
         className="relative flex h-full w-full flex-col items-center justify-center"
@@ -279,20 +253,13 @@ export function BreathStage({
         transition={SPRING}
       >
         <div className="flex flex-1 items-center justify-center">
-          <BreathVisual
-            cycle={breathCycle}
-            currentMs={currentMs}
-            isPlaying={isPlaying}
-            immersive={immersive}
-            totalDurationMs={totalDurationMs}
-          />
+          <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
         </div>
 
-        {/* Active instruction — anchored at bottom, very subtle */}
         <motion.div
           className="flex flex-col items-center gap-1 pb-8"
           initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: isPlaying ? 1 : 0.72, y: 0 }}
           transition={{ delay: 0.3, ...SPRING }}
         >
           <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
@@ -306,7 +273,6 @@ export function BreathStage({
     )
   }
 
-  // Non-immersive: keep the card container
   return (
     <motion.div
       className="relative flex h-full w-full overflow-hidden rounded-3xl bg-white/[0.03]"
@@ -336,16 +302,9 @@ export function BreathStage({
         </div>
 
         <div className="flex flex-1 items-center justify-center px-4 py-4">
-          <BreathVisual
-            cycle={breathCycle}
-            currentMs={currentMs}
-            isPlaying={isPlaying}
-            immersive={immersive}
-            totalDurationMs={totalDurationMs}
-          />
+          <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
         </div>
 
-        {/* Active instruction */}
         <div className="flex flex-col items-center gap-1">
           <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
             {phase.label}
