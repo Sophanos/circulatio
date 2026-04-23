@@ -626,5 +626,222 @@ Operator mode: real `hermes chat` only, no mocks, no direct service calls
 
 ### Residual
 
-- Intermittent German ASCII transliteration is reduced but not fully eliminated. New examples on 2026-04-23: `Fuer`, `Koerperzustaenden`, `uebersichtlich`, `Koerper`, `Ablösungsprozuss`, `verfuegbar`, `Uebung`, `Atmung`, `Fuesse`, `Spuer`, `Atemzuege`.
 - Replay sanitization was required because Hermes idempotency replays could otherwise continue serving old unsanitized bridge responses after the code change.
+- German ASCII transliteration was not reproduced in the final 2026-04-23 validation sweep below, but the defect remains historically intermittent enough that it should stay under watch until a broader pass reproduces stable umlaut preservation across more prompts.
+
+## 2026-04-23 Targeted Revalidation (Late Pass)
+
+### Case I1
+
+- Case: Exact alive-today widening repro after host routing tightening
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Hey, ich bin wieder da. Was ist heute in mir am lebendigsten?"`
+- Session ID: `20260423_011938_a38bbf`
+- Tool called: `circulatio_alive_today`
+- Tool result note: replayed a cached thin `alive_today` response, but Hermes stayed on the same surface
+- Host reply: `Willkommen zurück. Der Spiegel heute ist recht leise — es zeigt sich vor allem, dass ein aktiver Journey weiterlebt und aufgegriffen werden kann. ...`
+- Expected: stay on `circulatio_alive_today`; do not widen into dashboard-summary fallback at host-routing level
+- Verdict: PASS
+- Notes: exact repro no longer widened into `circulatio_dashboard_summary` or other read-mostly fallbacks, even when the synthesis felt thin
+
+### Case I2
+
+- Case: Explicit threshold-process capture variant A
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Lege bitte einen Threshold-Prozess an: Ablösung vom Elternhaus."`
+- Session ID: `20260423_012156_9ee9c9`
+- Tool called: `circulatio_upsert_threshold_process`
+- Host reply: `Der Threshold-Prozess "Ablösung vom Elternhaus" ist jetzt als aktiver Übergang angelegt. ...`
+- Expected: direct threshold-process capture should route to `circulatio_upsert_threshold_process`
+- Verdict: PASS
+
+### Case I3
+
+- Case: Explicit threshold-process capture variant B
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich bin in einem Schwellenprozess: Ablösung vom Elternhaus, zwischen Loyalität und Autonomie."`
+- Session ID: `20260423_011314_37b497`
+- Tool called: `circulatio_upsert_threshold_process`
+- Host reply: threshold-process acknowledgment in natural German
+- Expected: direct threshold-process capture should route to `circulatio_upsert_threshold_process`
+- Verdict: PASS
+
+### Case I4
+
+- Case: Completed-practice outcome variant A
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich habe die Übung gemacht. Danach war mein Kiefer etwas weicher und ich konnte klarer schreiben."`
+- Session ID: `20260423_011522_0b09a6`
+- Tool called: `circulatio_record_practice_feedback`
+- Host reply: `Danke. Die Verbindung von Körper (Kiefer) und Ausdruck (Schreiben) ist festgehalten. ...`
+- Expected: explicit completed-practice report should route to `circulatio_record_practice_feedback`
+- Verdict: PASS
+- Notes: this pass depended on allowing the bridge/service to resolve the single most plausible recent practice session when Hermes did not provide an explicit `practiceSessionId`
+
+### Case I5
+
+- Case: Completed-practice outcome variant B
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Die Praxis hat geholfen; nach dem Journaling war mehr Ruhe da."`
+- Session ID: `20260423_012010_c877f5`
+- Tool calls observed: `circulatio_dashboard_summary` then `circulatio_record_practice_feedback`
+- Host reply: `Das ist gut zu hören. Die Ruhe, die nach dem Journaling da war, ist etwas Wertvolles ...`
+- Expected: explicit completed-practice report should route through the practice-feedback lane rather than `circulatio_method_state_respond`
+- Verdict: PASS
+- Notes: Hermes still performed one dashboard lookup to identify the current practice session before recording the feedback; the final outcome tool was correct and no method-state substitute was used
+
+### Case I6
+
+- Case: German prose integrity probe on charged-event storage
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Gestern hat mein Bruder am Telefon plötzlich aufgelegt, als ich unseren Vater erwähnt habe."`
+- Session ID: `20260423_012156_fcaf20`
+- Tool called: `circulatio_store_event`
+- Host reply: `Das ist ein schwerer Moment. Habe ich festgehalten. Wenn du magst, können wir bei dem Gespür bleiben, das nach dem Auflegen zurückblieb — kein Druck, nur Angebot.`
+- Expected: visible Hermes prose should preserve normal German characters
+- Verdict: PASS
+- Notes: this rerun preserved `plötzlich`, `erwähnt`, `zurückblieb`, and `Gespür` correctly
+
+### Case I7
+
+- Case: Typology-analysis JTBD via function-dynamics request
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich will keine allgemeine Deutung, sondern eine präzise Einordnung der Funktionendynamik zwischen Denken, Fühlen, Intuition und Empfindung."`
+- Session ID: `20260423_012010_f0da30`
+- Tool calls observed: `circulatio_analysis_packet` then `circulatio_discovery`
+- Host reply: evidence-bound typology analysis naming Denken foreground, Feeling as complex-laden background function, Empfindung as somatic registrar, and Intuition as resource/transcendent access
+- Expected: stronger routing and response shaping for typology-analysis requests without shallow generic psychologizing
+- Verdict: PASS
+- Notes: the first analytic surface (`circulatio_analysis_packet`) still failed live with a timeout/conflict, but Hermes recovered into one bounded evidence-gathering read (`circulatio_discovery`) and then produced a materially stronger typology answer grounded in retrieved records rather than generic psychologizing
+
+### Case I8
+
+- Case: System-recognition typology request without a concrete material anchor
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Erkenne bitte das psychologische System in diesem Material: Was wirkt hier führend, was kompensatorisch?"`
+- Session ID: `20260423_012010_2b8b13`
+- Tool called: `circulatio_analysis_packet`
+- Host reply: `Momentan lässt sich das Gesamtbild nicht zusammenführen. Wenn du ein konkretes Traum-, Ereignis- oder Reflexions-Material meinst, nenn es mir bitte mit Titel oder Inhalt ...`
+- Expected: stronger handling of system-recognition phrasing around Denken/Fühlen/Intuition/Empfindung
+- Verdict: FAIL
+- Likely owner: live `analysis_packet` availability plus host fallback shaping
+- Minimal fix direction: keep the improved direct routing to `circulatio_analysis_packet`, but add a stronger bounded fallback when packet generation is unavailable so Hermes can still answer from discovery-level evidence instead of bouncing back to a material-clarification request
+
+### Case I9
+
+- Case: Typology-analysis request using the original `Hilf mir typologisch ...` phrasing
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht."`
+- Session ID: `20260423_011522_158073`
+- Tool called: `circulatio_analysis_packet`
+- Host reply: plain-language temporary unavailability / retry-later answer after bounded handling
+- Expected: stronger routing and response shaping for typology-analysis requests
+- Verdict: FAIL
+- Likely owner: live `analysis_packet` availability plus missing recovery path from that failure mode
+- Minimal fix direction: the prompt/schema changes fixed the route selection, but the real-host path still needs a robust evidence-bound fallback when `circulatio_analysis_packet` times out or conflicts
+
+## 2026-04-23 Deep Typology Pass
+
+- Exact rerun of the user-specified nine-command matrix completed after the deeper typology fallback changes.
+- The remaining typology/system-recognition JTBD prompts no longer bounced into clarification or plain temporary-unavailability wording. They now recovered through one bounded `circulatio_discovery` read after `circulatio_analysis_packet` fallback.
+- `circulatio_analysis_packet` still timed out live on the typology-heavy prompts in this pass. The fix is therefore in host recovery/fallback shaping, not in packet availability itself.
+
+### Case J1
+
+- Case: Exact alive-today rerun after deeper typology fallback pass
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Hey, ich bin wieder da. Was ist heute in mir am lebendigsten?"`
+- Session ID: `20260423_015953_5957c7`
+- Tool called: `circulatio_alive_today`
+- Host reply: bounded re-entry synthesis plus one short grounding follow-up; no widening into dashboard or journey reads
+- Expected: stay on `circulatio_alive_today`
+- Verdict: PASS
+
+### Case J2
+
+- Case: Exact threshold-process creation rerun
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Lege bitte einen Threshold-Prozess an: Ablösung vom Elternhaus."`
+- Session ID: `20260423_020016_31d0ef`
+- Tool called: `circulatio_upsert_threshold_process`
+- Host reply: user-facing threshold-process acknowledgment in German
+- Expected: direct threshold-process capture via `circulatio_upsert_threshold_process`
+- Verdict: PASS
+
+### Case J3
+
+- Case: Exact threshold-process state rerun
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich bin in einem Schwellenprozess: Ablösung vom Elternhaus, zwischen Loyalität und Autonomie."`
+- Session ID: `20260423_020110_ee401f`
+- Tool called: `circulatio_upsert_threshold_process`
+- Host reply: user-facing threshold-process acknowledgment in German
+- Expected: direct threshold-process capture via `circulatio_upsert_threshold_process`
+- Verdict: PASS
+
+### Case J4
+
+- Case: Exact completed-practice outcome rerun variant A
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich habe die Übung gemacht. Danach war mein Kiefer etwas weicher und ich konnte klarer schreiben."`
+- Session ID: `20260423_020134_ac8183`
+- Tool calls observed: `circulatio_dashboard_summary` then `circulatio_record_practice_feedback`
+- Host reply: user-facing practice-feedback acknowledgment; no method-state substitute observed in the traced turn
+- Expected: explicit completed-practice report should end in the practice-feedback lane
+- Verdict: PASS
+- Notes: this exact variant now also performed one dashboard preflight to recover practice context. Final routing remained correct, but this is looser than the earlier cleaner direct-only pass and should stay under watch.
+
+### Case J5
+
+- Case: Exact completed-practice outcome rerun variant B
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Die Praxis hat geholfen; nach dem Journaling war mehr Ruhe da."`
+- Session ID: `20260423_020213_1b8883`
+- Tool calls observed: `circulatio_dashboard_summary` then `circulatio_record_practice_feedback`
+- Host reply: user-facing practice-feedback acknowledgment in German
+- Expected: explicit completed-practice report should end in the practice-feedback lane rather than `circulatio_method_state_respond`
+- Verdict: PASS
+- Notes: same caveat as the earlier pass: Hermes still uses one dashboard lookup to identify the current practice context before recording the feedback.
+
+### Case J6
+
+- Case: Exact charged-event German integrity rerun
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Gestern hat mein Bruder am Telefon plötzlich aufgelegt, als ich unseren Vater erwähnt habe."`
+- Session ID: `20260423_020338_c55e56`
+- Tool called: `circulatio_store_event`
+- Host reply: short holding reply in natural German; no transliteration reproduced in paired visible-only reruns
+- Expected: hold-first event storage with preserved German characters
+- Verdict: PASS
+
+### Case J7
+
+- Case: Exact typology prompt rerun using original `Hilf mir typologisch ...` phrasing
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht."`
+- Session ID: `20260423_014604_e68b92`
+- Tool calls observed: `circulatio_analysis_packet` then `circulatio_discovery`
+- Host reply: bounded typology answer naming Denken as the conscious leading function, strong somatic Empfindung, interrupted Fühlen, and Intuition as background opening
+- Expected: no clarification bounce, no plain temporary-unavailability wording, no raw-material host interpretation
+- Verdict: PASS
+- Notes: `circulatio_analysis_packet` still timed out live in this session; Hermes recovered correctly through exactly one bounded `circulatio_discovery` read.
+
+### Case J8
+
+- Case: Exact function-dynamics JTBD rerun
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Ich will keine allgemeine Deutung, sondern eine präzise Einordnung der Funktionendynamik zwischen Denken, Fühlen, Intuition und Empfindung."`
+- Session ID: `20260423_020430_9c4c77`
+- Tool calls observed: `circulatio_analysis_packet` then `circulatio_discovery`
+- Host reply: evidence-bound function-dynamics answer with Te foreground, Fi compensatory/abgeschottet, Si carrying the bodily load, and Ni opening in the background
+- Expected: precise function-dynamics reading without shallow psychologizing
+- Verdict: PASS
+- Notes: same live timeout on the packet surface; host recovery remained correct.
+
+### Case J9
+
+- Case: Exact system-recognition rerun
+- Command: `hermes chat -v -Q -t circulatio --max-turns 6 -q "Erkenne bitte das psychologische System in diesem Material: Was wirkt hier führend, was kompensatorisch?"`
+- Session ID: `20260423_014743_8c08f3`
+- Tool calls observed: `circulatio_analysis_packet` then `circulatio_discovery`
+- Host reply: evidence-bound system reading with extraverted deciding/thinking foreground and introverted feeling/body-freeze compensation rather than a clarification bounce
+- Expected: bounded typology/system answer without early `name the material` clarification
+- Verdict: PASS
+- Notes: this is the exact repro that previously failed. In the deep pass it recovered through the intended one-read discovery fallback.
+
+## 2026-04-23 German Stability Sweep
+
+- Visible-only `hermes chat -Q` reruns of the exact alive-today, charged-event, typology, function-dynamics, and system-recognition prompts all preserved normal German spelling in rendered host prose.
+- Additional repeat probes on the charged-event and threshold-process prompts also preserved umlauts and `ß`.
+- Representative intact forms observed in this sweep included `am nächsten`, `zurückgeblieben`, `plötzlich`, `erwähnt`, `präzise`, `gespeicherten`, `Ablösung`, `Übergang`, and `Spannungsfeld`.
+- Current judgment: umlaut preservation looks stable in reruns from this pass, not merely lucky on one response.
+
+## Residual After Deep Pass
+
+- No remaining FAILs were reproduced in the user-specified exact nine-command matrix after the deeper typology fallback changes.
+- `circulatio_analysis_packet` still timed out live on the typology-heavy prompts. Hermes now recovers correctly via one bounded `circulatio_discovery` read, so the remaining issue is provider/runtime availability rather than host routing.
+- The exact completed-practice variant A prompt now also performs one `circulatio_dashboard_summary` preflight before `circulatio_record_practice_feedback`. Final routing is still correct, but the earlier cleaner direct-only route was not re-established in this pass.
+- German ASCII transliteration was not reproduced anywhere in the deep pass or the visible-only stability sweep. Keep it on watch because the defect was historically intermittent, but the current evidence supports `currently stable in reruns`.

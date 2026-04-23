@@ -16,6 +16,7 @@ from ..domain.proactive import ProactiveBriefRecord
 from ..domain.reviews import WeeklyReviewRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
+    AnalysisPacketResult,
     FeedbackValue,
     Id,
     InterpretationResult,
@@ -35,6 +36,7 @@ class HermesCommandResult(TypedDict, total=False):
     review: NotRequired[WeeklyReviewRecord]
     livingMythReview: NotRequired[LivingMythReviewRecord]
     analysisPacket: NotRequired[AnalysisPacketRecord]
+    analysisPacketResult: NotRequired[AnalysisPacketResult]
     individuationRecord: NotRequired[IndividuationRecord]
     practiceSession: NotRequired[PracticeSessionRecord]
     practiceRecommendation: NotRequired[PracticePlan]
@@ -155,6 +157,7 @@ class HermesCirculationCommandRouter:
             "status": "ok",
             "message": workflow["result"]["userFacingResponse"],
             "analysisPacket": workflow.get("packet"),
+            "analysisPacketResult": workflow["result"],
             "affectedEntityIds": affected,
         }
 
