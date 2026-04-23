@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal, NotRequired, Required, TypedDict
 
 from ..adapters.context_adapter import LifeOsWindow
+from ..domain.adaptation import UserAdaptationProfileRecord
 from ..domain.clarifications import (
     ClarificationAnswerRecord,
     ClarificationCaptureTarget,
@@ -26,7 +27,7 @@ from ..domain.patterns import PatternHistoryEntry, PatternRecord
 from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import ProactiveBriefRecord, RhythmBriefSource
 from ..domain.records import DeletionMode, MaterialSource
-from ..domain.reviews import DashboardSummary
+from ..domain.reviews import DashboardSummary, WeeklyReviewRecord
 from ..domain.soma import BodyActivation, BodyStateRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
@@ -89,6 +90,7 @@ class MaterialWorkflowResult(TypedDict, total=False):
     pendingClarificationPrompts: NotRequired[list[ClarificationPromptRecord]]
     contextSnapshot: NotRequired[ContextSnapshot]
     practiceSession: NotRequired[PracticeSessionRecord]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
 
 
 class ThreadAwareContinuityBundle(TypedDict, total=False):
@@ -109,9 +111,9 @@ class SurfaceContextBundle(TypedDict, total=False):
     recentPractices: NotRequired[list[PracticeSessionRecord]]
     journeys: NotRequired[list[JourneyRecord]]
     existingBriefs: NotRequired[list[ProactiveBriefRecord]]
-    profile: NotRequired[dict[str, object]]
+    profile: NotRequired[UserAdaptationProfileRecord | None]
     adaptationSummary: NotRequired[UserAdaptationProfileSummary]
-    weeklyReviews: NotRequired[list[dict[str, object]]]
+    weeklyReviews: NotRequired[list[WeeklyReviewRecord]]
 
 
 IntakeContextVisibility = Literal["host_only"]

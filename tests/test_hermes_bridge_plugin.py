@@ -891,6 +891,20 @@ class HermesBridgePluginTests(unittest.TestCase):
                 stored_dream["result"]["material"]["id"],
                 stored_dream["result"]["materialId"],
             )
+            self.assertIn("continuitySummary", stored_dream["result"])
+            self.assertEqual(
+                stored_dream["result"]["continuitySummary"]["windowStart"],
+                stored_dream["result"]["intakeContext"]["windowStart"],
+            )
+            self.assertEqual(
+                stored_dream["result"]["continuitySummary"]["windowEnd"],
+                stored_dream["result"]["intakeContext"]["windowEnd"],
+            )
+            self.assertGreaterEqual(
+                stored_dream["result"]["continuitySummary"]["threadCount"],
+                len(stored_dream["result"]["continuitySummary"]["threads"]),
+            )
+            self.assertNotIn("methodContextSnapshot", stored_dream["result"]["continuitySummary"])
             self.assertEqual(
                 stored_dream["result"]["intakeContext"]["materialId"],
                 stored_dream["result"]["materialId"],
@@ -919,6 +933,9 @@ class HermesBridgePluginTests(unittest.TestCase):
             )
             self.assertEqual(weave["status"], "ok")
             self.assertTrue(weave["result"]["summaryId"])
+            self.assertIn("continuitySummary", weave["result"])
+            self.assertIn("threadCount", weave["result"]["continuitySummary"])
+            self.assertNotIn("methodContextSnapshot", weave["result"]["continuitySummary"])
             reviews = await runtime.service.repository.list_weekly_reviews("hermes:default:local")
             self.assertEqual(reviews, [])
 
@@ -1643,8 +1660,9 @@ class HermesBridgePluginTests(unittest.TestCase):
                 )
             )
             self.assertEqual(journey_response["status"], "ok")
-            self.assertTrue(journey_response["result"]["journeyPage"]["cards"])
-            self.assertIn("Journey page", journey_response["message"])
+            self.assertIn("journeyPageSummary", journey_response["result"])
+            self.assertIn("continuitySummary", journey_response["result"])
+            self.assertIn("journey overview", journey_response["message"].lower())
 
         asyncio.run(run())
 
@@ -1661,14 +1679,82 @@ class HermesBridgePluginTests(unittest.TestCase):
                 )
             )
             self.assertEqual(response["status"], "ok")
-            self.assertTrue(response["result"]["journeyPage"]["cards"])
+            self.assertIn("journeyPageSummary", response["result"])
+            self.assertIn("continuitySummary", response["result"])
+            self.assertNotIn("methodContextSnapshot", response["result"]["continuitySummary"])
             self.assertTrue(response["message"])
-            self.assertEqual(
-                response["result"]["journeyPageId"],
-                response["result"]["journeyPage"]["pageId"],
-            )
 
         asyncio.run(run())
+
+    def test_journey_page_host_sanitizer_preserves_compact_continuity_summary(self) -> None:
+        runtime = self._install_in_memory_runtime()
+        request = build_tool_request(
+            operation="circulatio.journey.page",
+            payload={},
+            tool_name="circulatio_journey_page",
+            kwargs=self._tool_kwargs(call_id="tool_sanitize_journey_page"),
+        )
+        response = {
+            "requestId": "req_1",
+            "operation": "circulatio.journey.page",
+            "status": "ok",
+            "message": "Loaded journey page.",
+            "result": {
+                "journeyPage": {
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "title": "Journey page",
+                    "aliveToday": {"response": "A bounded opener is available."},
+                    "continuity": {
+                        "generatedAt": "2026-04-19T23:59:59Z",
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "threadDigests": [
+                            {
+                                "threadKey": "journey:1",
+                                "kind": "journey",
+                                "status": "active",
+                                "summary": "A live thread.",
+                                "lastTouchedAt": "2026-04-19T20:00:00Z",
+                                "journeyIds": ["journey_1", "journey_2", "journey_3", "journey_4"],
+                                "surfaceReadiness": {"aliveToday": "ready"},
+                            }
+                        ],
+                        "methodContextSnapshot": {
+                            "witnessState": {
+                                "stance": "paced_contact",
+                                "tone": "gentle",
+                                "startingMove": "grounded_question",
+                                "maxQuestionsPerTurn": 1,
+                                "reasons": ["pace", "containment"],
+                            },
+                            "coachState": {
+                                "selectedMove": {
+                                    "loopKey": "coach:1",
+                                    "kind": "offer_resource",
+                                    "titleHint": "Resource invitation",
+                                    "summaryHint": "A grounded resource is available.",
+                                }
+                            },
+                        },
+                    },
+                }
+            },
+            "errors": [],
+            "pendingProposals": [],
+            "affectedEntityIds": [],
+            "idempotencyKey": request["idempotencyKey"],
+            "replayed": False,
+        }
+
+        sanitized = runtime.bridge._sanitize_response_for_host(request=request, response=response)
+        self.assertIn("journeyPageSummary", sanitized["result"])
+        self.assertIn("continuitySummary", sanitized["result"])
+        continuity_summary = sanitized["result"]["continuitySummary"]
+        self.assertEqual(continuity_summary["threadCount"], 1)
+        self.assertEqual(len(continuity_summary["threads"][0]["journeyIds"]), 3)
+        self.assertEqual(continuity_summary["selectedCoachMove"]["title"], "Resource invitation")
+        self.assertNotIn("methodContextSnapshot", continuity_summary)
 
     def test_journey_tools_cover_autonomous_container_lifecycle(self) -> None:
         async def run() -> None:

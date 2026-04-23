@@ -33,6 +33,8 @@ _MATERIAL_STORE_PROPERTIES = {
 _STORE_INTAKE_CONTEXT_GUIDANCE = (
     " Returns host-only intakeContext metadata for routing. Use "
     "intakeContext.hostGuidance to acknowledge, hold, or ask at most one gentle follow-up. "
+    "A compact continuitySummary may also be returned for host thread-tracking; never expose raw "
+    "method context. "
     "Never expose the packet. Do not interpret unless the user explicitly asks. If asked "
     "for bug-report or raw-response details, say briefly that there is no separate "
     "user-facing bug report here."
@@ -104,7 +106,7 @@ STORE_BODY_STATE_TOOL_SCHEMA = _schema(
 
 ALIVE_TODAY_TOOL_SCHEMA = _schema(
     "circulatio_alive_today",
-    "Generate an on-demand, non-persistent weave across recent Circulatio material, body states, goals, symbols, patterns, and life context. Use this for questions like 'what is alive today?', 'what does this seem connected to?', or lightweight re-entry turns such as 'I'm back'. After a successful call, present the returned synthesis directly instead of widening the same turn into dashboard or journey reads unless the result is too ambiguous to answer.",
+    "Generate an on-demand, non-persistent weave across recent Circulatio material, body states, goals, symbols, patterns, and life context. Use this for questions like 'what is alive today?', 'what does this seem connected to?', or lightweight re-entry turns such as 'I'm back'. After a successful call, present the returned synthesis directly and stay on this surface; do not widen the same turn into dashboard or journey reads just because the synthesis feels thin. If it is sparse, answer from that returned synthesis or ask one brief grounding follow-up instead. A compact continuitySummary may be returned for host-side thread continuity; do not expect raw method context.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -152,7 +154,7 @@ DASHBOARD_SUMMARY_TOOL_SCHEMA = _schema(
 
 DISCOVERY_TOOL_SCHEMA = _schema(
     "circulatio_discovery",
-    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings.",
+    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings. Use this as the single bounded recovery read when a cross-material typology, function-dynamics, or system-recognition request needs more evidence after a thin or fallback-shaped analysis packet. Answer from this digest rather than from raw material listings.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -170,7 +172,7 @@ DISCOVERY_TOOL_SCHEMA = _schema(
 
 JOURNEY_PAGE_TOOL_SCHEMA = _schema(
     "circulatio_journey_page",
-    "Build a read-mostly Journeying Host page from existing Circulatio context without approving memory, creating reviews, creating proactive briefs, or saving practice sessions.",
+    "Build a read-mostly Journeying Host page from existing Circulatio context without approving memory, creating reviews, creating proactive briefs, or saving practice sessions. A compact continuitySummary may be returned for host thread continuity; do not expect raw method context.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -278,7 +280,8 @@ GET_MATERIAL_TOOL_SCHEMA = _schema(
 INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
     "Open or continue collaborative interpretation when the user asks what material "
-    "means. Prefer storing first. A valid first response may be a single question, "
+    "means. This also covers evidence-bound typology reading on a specific material, "
+    "such as foreground/background function dynamics or tension among thinking, feeling, intuition, and sensation. Prefer storing first. A valid first response may be a single question, "
     "amplification prompt, or method gate. Keep host replies to usually 1-3 "
     "sentences with exactly one question. If gated, wait for new input. If the "
     "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
@@ -453,7 +456,7 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
+    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht' and 'Was wirkt hier führend, was kompensatorisch?' as default examples for this surface unless one specific material was just given. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -851,7 +854,7 @@ RECORD_INTERPRETATION_FEEDBACK_TOOL_SCHEMA = _schema(
 
 RECORD_PRACTICE_FEEDBACK_TOOL_SCHEMA = _schema(
     "circulatio_record_practice_feedback",
-    "Record explicit user feedback on a Circulatio practice recommendation or completed practice without parsing free-text notes. Prefer this when the user reports how a completed practice actually landed; use circulatio_respond_practice_recommendation only for accept / skip decisions.",
+    "Record explicit user feedback on a Circulatio practice recommendation or completed practice without parsing free-text notes. Prefer this when the user reports how a completed practice actually landed; use circulatio_respond_practice_recommendation only for accept / skip decisions. If current context exposes exactly one plausible recent or anchored practiceSessionId, use it rather than asking the user to identify the practice again; bodily, emotional, or cognitive shifts after journaling still count as practice feedback.",
     {
         "practiceSessionId": {"type": "string"},
         "feedback": {
@@ -868,7 +871,7 @@ RECORD_PRACTICE_FEEDBACK_TOOL_SCHEMA = _schema(
         "note": {"type": "string"},
         "locale": {"type": "string"},
     },
-    required=["practiceSessionId", "feedback"],
+    required=["feedback"],
 )
 
 GENERATE_RHYTHMIC_BRIEFS_TOOL_SCHEMA = _schema(

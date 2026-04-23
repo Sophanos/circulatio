@@ -159,6 +159,20 @@ This means a future practitioner of somatic trauma work, or a contemplative drea
 
 ---
 
+## Continuity Assembly
+
+At the service layer, `ThreadAwareContinuityBundle` is an ephemeral continuity product rather than persisted state. It carries the current window, the service-enriched `MethodContextSnapshot`, and the merged `ThreadDigest[]` read model that lets hosts and downstream surfaces stay oriented without re-deriving raw context themselves.
+
+`CirculatioService._load_surface_context_bundle()` is the canonical assembler for read and post-write surfaces. It loads projection input, enriches witness and coach state, merges repository and coach-loop thread digests, hydrates the outgoing payload with continuity, and can late-sync longitudinal review fields when a surface explicitly opts in.
+
+`store_material_with_intake_context()` is the deliberate hold-first exception. It writes first, derives a host-only `intakeContext`, and returns initial continuity without interpretation, context snapshot creation, practice generation, or any other LLM-backed escalation.
+
+Explicit interpretation now follows the same canonical continuity path before the LLM call. `MaterialInterpretationInput` is hydrated through the service bundle, the interpretation runs against that hydrated payload, and the returned workflow includes a post-write continuity refresh so the next host turn can see newly written evidence, prompts, and practice links.
+
+At the Hermes boundary, the bridge exposes only a compact `continuitySummary`. Raw continuity bundles and raw method context stay inside Circulatio.
+
+---
+
 ## Builder's Mirror: The Unconscious Intent
 
 Most technology that touches inner life falls into one of three traps:

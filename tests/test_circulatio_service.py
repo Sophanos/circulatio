@@ -220,6 +220,62 @@ class CirculatioServiceTests(unittest.TestCase):
                 "personal_amplification_needed",
             )
             self.assertEqual(len(second["pendingProposals"]), len(first["pendingProposals"]))
+            self.assertIn("continuity", second)
+            self.assertTrue(second["continuity"]["threadDigests"])
+
+        asyncio.run(run())
+
+    def test_interpret_existing_material_uses_canonical_continuity_bundle(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "A snake image returned when I thought about the threshold at work.",
+                    "materialDate": "2026-04-18T08:00:00Z",
+                }
+            )
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Threshold return",
+                    "currentQuestion": "What is trying to come through carefully?",
+                    "relatedMaterialIds": [material["id"]],
+                }
+            )
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life can hold a paced reading.",
+                    "anchorSummary": "Containment is present if the pace stays gentle.",
+                    "groundingRecommendation": "pace_gently",
+                }
+            )
+
+            workflow = await service.interpret_existing_material(
+                user_id="user_1",
+                material_id=material["id"],
+                explicit_question="What does this seem connected to?",
+            )
+
+            self.assertEqual(len(llm.interpret_calls), 1)
+            interpret_input = llm.interpret_calls[0]
+            self.assertTrue(interpret_input["threadDigests"])
+            self.assertTrue(
+                any(
+                    journey["id"] in item["journeyIds"] for item in interpret_input["threadDigests"]
+                )
+            )
+            self.assertIn("witnessState", interpret_input["methodContextSnapshot"])
+            self.assertIn("continuity", workflow)
+            self.assertTrue(workflow["continuity"]["threadDigests"])
+            self.assertIn("witnessState", workflow["continuity"]["methodContextSnapshot"])
+            stored_run = await repository.get_interpretation_run("user_1", workflow["run"]["id"])
+            snapshot = await repository.get_context_snapshot(
+                "user_1", stored_run["inputSnapshotId"]
+            )
+            self.assertIn("witnessState", snapshot["methodContextSnapshot"])
 
         asyncio.run(run())
 
@@ -2679,6 +2735,147 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_threshold_review_lifts_longitudinal_fields_from_canonical_bundle(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "A threshold and a returning guide stayed with me.",
+                    "materialDate": "2026-04-18T08:00:00Z",
+                }
+            )
+            first_goal = await service.upsert_goal(
+                {
+                    "userId": "user_1",
+                    "label": "Speak directly",
+                    "status": "active",
+                    "linkedMaterialIds": [material["id"]],
+                }
+            )
+            second_goal = await service.upsert_goal(
+                {
+                    "userId": "user_1",
+                    "label": "Stay safe",
+                    "status": "active",
+                    "linkedMaterialIds": [material["id"]],
+                }
+            )
+            await service.upsert_goal_tension(
+                {
+                    "userId": "user_1",
+                    "goalIds": [first_goal["id"], second_goal["id"]],
+                    "tensionSummary": "Directness and safety are both alive.",
+                    "polarityLabels": ["directness", "safety"],
+                    "status": "active",
+                }
+            )
+            await repository.create_practice_session(
+                {
+                    "id": "practice_threshold_input",
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "reason": "Track what shifts without forcing it.",
+                    "instructions": ["Write what changed."],
+                    "durationMinutes": 8,
+                    "contraindicationsChecked": ["none"],
+                    "requiresConsent": False,
+                    "status": "completed",
+                    "activationBefore": "high",
+                    "activationAfter": "moderate",
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:05:00Z",
+                    "completedAt": "2026-04-18T09:05:00Z",
+                }
+            )
+            await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Threshold thread",
+                    "currentQuestion": "What is trying to come through carefully?",
+                    "relatedMaterialIds": [material["id"]],
+                }
+            )
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life can hold paced symbolic contact.",
+                    "anchorSummary": "Containment is present if the pace stays gentle.",
+                    "relationshipContact": "available",
+                    "groundingRecommendation": "pace_gently",
+                }
+            )
+            await repository.create_living_myth_record(
+                {
+                    "id": "threshold_wellbeing_1",
+                    "userId": "user_1",
+                    "recordType": "symbolic_wellbeing_snapshot",
+                    "status": "active",
+                    "source": "user_reported",
+                    "label": "Symbolic wellbeing",
+                    "summary": "Symbolic wellbeing snapshot.",
+                    "confidence": "medium",
+                    "evidenceIds": [],
+                    "relatedMaterialIds": [material["id"]],
+                    "relatedSymbolIds": [],
+                    "relatedGoalIds": [first_goal["id"]],
+                    "relatedDreamSeriesIds": [],
+                    "relatedIndividuationRecordIds": [],
+                    "privacyClass": "approved_summary",
+                    "details": {
+                        "capacitySummary": "Symbolic contact is present without much strain.",
+                        "groundingCapacity": "steady",
+                        "symbolicLiveliness": "steady",
+                        "somaticContact": "available",
+                        "relationalSpaciousness": "growing",
+                        "agencyTone": "measured",
+                    },
+                    "createdAt": "2026-04-18T10:00:00Z",
+                    "updatedAt": "2026-04-18T10:00:00Z",
+                }
+            )
+
+            workflow = await service.generate_threshold_review(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "persist": False,
+                }
+            )
+
+            review_input = llm.threshold_review_calls[0]
+            self.assertEqual(
+                review_input["activeGoalTension"]["goalTensionId"],
+                review_input["methodContextSnapshot"]["methodState"]["activeGoalTension"][
+                    "goalTensionId"
+                ],
+            )
+            self.assertEqual(
+                review_input["practiceLoop"]["recentOutcomeTrend"],
+                review_input["methodContextSnapshot"]["methodState"]["practiceLoop"][
+                    "recentOutcomeTrend"
+                ],
+            )
+            self.assertEqual(
+                review_input["latestSymbolicWellbeing"]["id"],
+                review_input["methodContextSnapshot"]["livingMythContext"][
+                    "latestSymbolicWellbeing"
+                ]["id"],
+            )
+            self.assertEqual(
+                review_input["witnessState"]["stance"],
+                review_input["methodContextSnapshot"]["witnessState"]["stance"],
+            )
+            self.assertTrue(review_input["threadDigests"])
+            self.assertEqual(
+                workflow["continuity"]["methodContextSnapshot"]["witnessState"]["stance"],
+                review_input["witnessState"]["stance"],
+            )
+
+        asyncio.run(run())
+
     def test_life_os_context_flows_into_llm_input_when_native_context_is_empty(self) -> None:
         async def run() -> None:
             _, service, llm = self._service()
@@ -3910,9 +4107,7 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertIn("generatedAt", continuity)
             self.assertIn("windowStart", continuity)
             self.assertIn("windowEnd", continuity)
-            store_digest_keys = {
-                d["threadKey"] for d in continuity["threadDigests"]
-            }
+            store_digest_keys = {d["threadKey"] for d in continuity["threadDigests"]}
             alive_result = await service.generate_alive_today(
                 user_id="user_1",
                 window_start="2026-04-14T00:00:00Z",
@@ -3935,7 +4130,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "text": "I was in a house with many rooms.",
                 }
             )
-            series = await repository.create_dream_series(
+            await repository.create_dream_series(
                 {
                     "id": create_id("dream_series"),
                     "userId": "user_1",
@@ -3960,10 +4155,7 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
             continuity = result["continuity"]
-            dream_digests = [
-                d for d in continuity["threadDigests"]
-                if d["kind"] == "dream_series"
-            ]
+            dream_digests = [d for d in continuity["threadDigests"] if d["kind"] == "dream_series"]
             self.assertTrue(dream_digests)
             self.assertEqual(
                 dream_digests[0]["evidenceIds"],

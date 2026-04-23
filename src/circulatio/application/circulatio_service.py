@@ -24,7 +24,7 @@ from ..domain.clarifications import (
 from ..domain.conscious_attitude import ConsciousAttitudeSnapshotRecord
 from ..domain.context import ContextSnapshot
 from ..domain.culture import CulturalFrameRecord
-from ..domain.errors import ConflictError, EntityNotFoundError, ValidationError
+from ..domain.errors import ConflictError, EntityNotFoundError, PersistenceError, ValidationError
 from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.goals import GoalRecord, GoalTensionRecord
 from ..domain.graph import GraphNodeType, GraphQuery, GraphQueryResult
@@ -898,6 +898,19 @@ class CirculatioService:
         )
         return stored
 
+    async def resolve_recent_practice_session_for_feedback(
+        self,
+        *,
+        user_id: Id,
+    ) -> PracticeSessionRecord | None:
+        recent_practices = await self._repository.list_practice_sessions(
+            user_id,
+            statuses=["recommended", "accepted", "completed"],
+            include_deleted=False,
+            limit=10,
+        )
+        return recent_practices[0] if recent_practices else None
+
     async def record_practice_feedback(
         self,
         user_id: Id,
@@ -1390,9 +1403,7 @@ class CirculatioService:
         else:
             hydrated.pop("methodContextSnapshot", None)
         thread_digests = [
-            deepcopy(item)
-            for item in continuity.get("threadDigests", [])
-            if isinstance(item, dict)
+            deepcopy(item) for item in continuity.get("threadDigests", []) if isinstance(item, dict)
         ]
         if thread_digests:
             hydrated["threadDigests"] = thread_digests
@@ -1421,6 +1432,40 @@ class CirculatioService:
             safety_context=safety_context,
         )
         return cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
+
+    async def _attach_material_workflow_continuity(
+        self,
+        workflow: MaterialWorkflowResult,
+        *,
+        user_id: Id,
+        material: MaterialRecord,
+        material_id: Id,
+        safety_context: SafetyContext | None = None,
+    ) -> MaterialWorkflowResult:
+        anchor = (
+            self._optional_str(material.get("updatedAt"))
+            or self._optional_str(material.get("materialDate"))
+            or self._optional_str(material.get("createdAt"))
+            or now_iso()
+        )
+        try:
+            continuity = await self._reload_thread_aware_continuity_bundle(
+                user_id=user_id,
+                anchor=anchor,
+                material_id=material_id,
+                surface="generic",
+                safety_context=safety_context,
+            )
+        except Exception:
+            LOGGER.exception(
+                "Continuity reload failed after interpretation workflow material_id=%s user_id=%s",
+                material_id,
+                user_id,
+            )
+            return workflow
+        enriched = cast(MaterialWorkflowResult, deepcopy(workflow))
+        enriched["continuity"] = continuity
+        return enriched
 
     async def _load_surface_context_bundle(
         self,
@@ -2488,7 +2533,13 @@ class CirculatioService:
             dream_structure=dream_structure,
         )
         if reused is not None:
-            return reused
+            return await self._attach_material_workflow_continuity(
+                reused,
+                user_id=user_id,
+                material=material,
+                material_id=material_id,
+                safety_context=safety_context,
+            )
         material_input = await self._build_material_input(
             material=material,
             session_context=session_context,
@@ -2500,6 +2551,24 @@ class CirculatioService:
             safety_context=safety_context,
             options=options,
         )
+        anchor = (
+            self._optional_str(material.get("materialDate"))
+            or self._optional_str(material.get("createdAt"))
+            or now_iso()
+        )
+        window_start, window_end = self._resolve_window(anchor=anchor)
+        bundle = await self._load_surface_context_bundle(
+            user_id=user_id,
+            window_start=window_start,
+            window_end=window_end,
+            surface="generic",
+            payload=cast(dict[str, object], material_input),
+            material_id=material_id,
+            explicit_question=explicit_question,
+            safety_context=safety_context,
+            sync_longitudinal=False,
+        )
+        material_input = cast(MaterialInterpretationInput, bundle["preparedPayload"])
         context_snapshot = await self._store_context_snapshot(
             material=material,
             material_input=material_input,
@@ -2566,7 +2635,13 @@ class CirculatioService:
                 "depthLevel": interpretation.get("methodGate", {}).get("depthLevel"),
             },
         )
-        return result
+        return await self._attach_material_workflow_continuity(
+            result,
+            user_id=user_id,
+            material=material,
+            material_id=material_id,
+            safety_context=safety_context,
+        )
 
     async def _maybe_reuse_latest_open_interpretation(
         self,
@@ -4047,6 +4122,7 @@ class CirculatioService:
             payload=cast(dict[str, object], review_input),
             explicit_question=self._optional_str(input_data.get("explicitQuestion")),
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+            sync_longitudinal=True,
         )
         review_input = cast(ThresholdReviewInput, bundle["preparedPayload"])
         continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
@@ -4299,7 +4375,16 @@ class CirculatioService:
                 "createdAt": now_iso(),
                 "updatedAt": now_iso(),
             }
-            workflow["packet"] = await self._repository.create_analysis_packet(packet_record)
+            try:
+                workflow["packet"] = await self._repository.create_analysis_packet(packet_record)
+            except (ConflictError, PersistenceError):
+                LOGGER.warning(
+                    (
+                        "Circulatio analysis packet persistence failed; "
+                        "returning transient packet result."
+                    ),
+                    exc_info=True,
+                )
         return workflow
 
     async def generate_practice_recommendation(

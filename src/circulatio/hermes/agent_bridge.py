@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 from copy import deepcopy
+from typing import cast
 
 from ..application.circulatio_service import CirculatioService
 from ..domain.errors import (
@@ -346,6 +347,9 @@ class CirculatioAgentBridge:
         stored = await self._service.store_material_with_intake_context(material_input)  # type: ignore[arg-type]
         material = stored["material"]
         intake_context = stored["intakeContext"]
+        continuity_summary = self._continuity_summary(
+            cast(dict[str, object] | None, stored.get("continuity"))
+        )
         if material_type == "reflection":
             message = "Held your reflection. Want to explore what comes up?"
         elif material_type == "charged_event":
@@ -369,6 +373,11 @@ class CirculatioAgentBridge:
                 "materialType": material["materialType"],
                 "material": deepcopy(material),
                 "intakeContext": deepcopy(intake_context),
+                **(
+                    {"continuitySummary": continuity_summary}
+                    if continuity_summary is not None
+                    else {}
+                ),
             },
             affected_entity_ids=[material["id"]],
         )
@@ -706,9 +715,14 @@ class CirculatioAgentBridge:
             payload=deepcopy(request["payload"]),
         )
         result: dict[str, object] = {"command": command_result["command"]}
-        packet = command_result.get("analysisPacket")
+        packet_result = command_result.get("analysisPacketResult")
+        packet = (
+            deepcopy(packet_result)
+            if isinstance(packet_result, dict)
+            else deepcopy(command_result.get("analysisPacket"))
+        )
         if isinstance(packet, dict):
-            result["packetTitle"] = packet["packetTitle"]
+            result["analysisPacket"] = packet
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
@@ -773,7 +787,13 @@ class CirculatioAgentBridge:
         practice_session_id = self._optional_string(payload.get("practiceSessionId"))
         feedback = self._optional_string(payload.get("feedback"))
         if practice_session_id is None:
-            raise ValidationError("practiceSessionId is required.")
+            recent_practice = await self._service.resolve_recent_practice_session_for_feedback(
+                user_id=request["userId"]
+            )
+            if recent_practice is not None:
+                practice_session_id = str(recent_practice["id"])
+            else:
+                raise ValidationError("practiceSessionId is required.")
         if feedback is None:
             raise ValidationError("feedback is required.")
         record = await self._service.record_practice_feedback(
@@ -1589,23 +1609,37 @@ class CirculatioAgentBridge:
 
     async def alive_today(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
-        summary = (
-            await self._service.generate_alive_today(
-                user_id=request["userId"],
-                window_start=self._optional_string(payload.get("windowStart")),
-                window_end=self._optional_string(payload.get("windowEnd")),
-                explicit_question=self._optional_string(payload.get("explicitQuestion")),
-            )
-        )["summary"]
+        workflow = await self._service.generate_alive_today(
+            user_id=request["userId"],
+            window_start=self._optional_string(payload.get("windowStart")),
+            window_end=self._optional_string(payload.get("windowEnd")),
+            explicit_question=self._optional_string(payload.get("explicitQuestion")),
+        )
+        summary = workflow["summary"]
+        continuity_summary = self._continuity_summary(
+            cast(dict[str, object] | None, workflow.get("continuity"))
+        )
+        message = str(summary["userFacingResponse"])
+        follow_up_question = self._optional_string(summary.get("followUpQuestion"))
+        suggested_action = self._optional_string(summary.get("suggestedAction"))
+        if follow_up_question and follow_up_question not in message and len(message) < 160:
+            message = f"{message} {follow_up_question}"
+        result: dict[str, object] = {
+            "summaryId": summary["summaryId"],
+            "windowStart": summary["windowStart"],
+            "windowEnd": summary["windowEnd"],
+        }
+        if follow_up_question:
+            result["followUpQuestion"] = follow_up_question
+        if suggested_action:
+            result["suggestedAction"] = suggested_action
+        if continuity_summary is not None:
+            result["continuitySummary"] = continuity_summary
         return self._response(
             request=request,
             status="ok",
-            message=summary["userFacingResponse"],
-            result={
-                "summaryId": summary["summaryId"],
-                "windowStart": summary["windowStart"],
-                "windowEnd": summary["windowEnd"],
-            },
+            message=message,
+            result=result,
         )
 
     async def journey_page(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
@@ -1627,6 +1661,9 @@ class CirculatioAgentBridge:
                 },
             }
         )
+        continuity_summary = self._continuity_summary(
+            cast(dict[str, object] | None, page.get("continuity"))
+        )
         return self._response(
             request=request,
             status="ok",
@@ -1635,6 +1672,11 @@ class CirculatioAgentBridge:
                 "windowStart": page["windowStart"],
                 "windowEnd": page["windowEnd"],
                 "journeyPageSummary": self._journey_page_summary(page),
+                **(
+                    {"continuitySummary": continuity_summary}
+                    if continuity_summary is not None
+                    else {}
+                ),
             },
         )
 
@@ -2251,6 +2293,82 @@ class CirculatioAgentBridge:
                 ]
         return summary
 
+    def _continuity_summary(
+        self,
+        continuity: dict[str, object] | None,
+        *,
+        max_threads: int = 5,
+    ) -> dict[str, object] | None:
+        if not isinstance(continuity, dict):
+            return None
+        summary: dict[str, object] = {}
+        for key in ("generatedAt", "windowStart", "windowEnd"):
+            value = self._optional_string(continuity.get(key))
+            if value is not None:
+                summary[key] = value
+        thread_digests = [
+            item for item in continuity.get("threadDigests", []) if isinstance(item, dict)
+        ]
+        summary["threadCount"] = len(thread_digests)
+        threads: list[dict[str, object]] = []
+        for digest in thread_digests[: max(max_threads, 0)]:
+            compact: dict[str, object] = {}
+            for key in ("threadKey", "kind", "status", "summary", "lastTouchedAt"):
+                value = self._optional_string(digest.get(key))
+                if value is not None:
+                    compact[key] = value
+            surface_readiness = digest.get("surfaceReadiness")
+            if isinstance(surface_readiness, dict):
+                compact["surfaceReadiness"] = deepcopy(surface_readiness)
+            journey_ids = [
+                value
+                for value in (
+                    self._optional_string(item) for item in digest.get("journeyIds", [])[:3]
+                )
+                if value is not None
+            ]
+            if journey_ids:
+                compact["journeyIds"] = journey_ids
+            if compact:
+                threads.append(compact)
+        summary["threads"] = threads
+        method_context = continuity.get("methodContextSnapshot")
+        if isinstance(method_context, dict):
+            witness_state = method_context.get("witnessState")
+            if isinstance(witness_state, dict):
+                witness_summary = self._witness_state_summary(witness_state)
+                max_questions = witness_state.get("maxQuestionsPerTurn")
+                if isinstance(max_questions, int):
+                    witness_summary["maxQuestionsPerTurn"] = max_questions
+                reasons = witness_state.get("reasons")
+                if isinstance(reasons, list):
+                    visible_reasons = [str(item).strip() for item in reasons if str(item).strip()]
+                    if visible_reasons:
+                        witness_summary["reasons"] = visible_reasons[:3]
+                if witness_summary:
+                    summary["witnessState"] = witness_summary
+            coach_state = method_context.get("coachState")
+            selected_move = (
+                coach_state.get("selectedMove") if isinstance(coach_state, dict) else None
+            )
+            if isinstance(selected_move, dict):
+                selected_summary: dict[str, object] = {}
+                loop_key = self._optional_string(selected_move.get("loopKey"))
+                if loop_key:
+                    selected_summary["loopKey"] = loop_key
+                kind = self._optional_string(selected_move.get("kind"))
+                if kind:
+                    selected_summary["kind"] = kind
+                title = self._optional_string(selected_move.get("titleHint"))
+                if title:
+                    selected_summary["title"] = title
+                selected_move_summary = self._optional_string(selected_move.get("summaryHint"))
+                if selected_move_summary:
+                    selected_summary["summary"] = selected_move_summary
+                if selected_summary:
+                    summary["selectedCoachMove"] = selected_summary
+        return summary
+
     def _journey_summary(self, journey: dict[str, object]) -> dict[str, object]:
         summary: dict[str, object] = {
             "label": self._optional_string(journey.get("label")) or "Journey",
@@ -2272,6 +2390,76 @@ class CirculatioAgentBridge:
     def _plain_practice_follow_up(self, summary: str) -> str:
         if "interpretation model is unavailable" in summary.lower():
             return "Bleib vorerst nah am Material und in deinen eigenen Worten."
+        return summary
+
+    def _material_summary(self, material: dict[str, object]) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "materialType": str(material.get("materialType") or "material"),
+        }
+        title = self._optional_string(material.get("title"))
+        if title:
+            summary["title"] = title
+        material_summary = self._optional_string(material.get("summary"))
+        if material_summary:
+            summary["summary"] = material_summary
+        material_date = self._optional_string(material.get("materialDate"))
+        if material_date:
+            summary["materialDate"] = material_date
+        tags = material.get("tags")
+        if isinstance(tags, list):
+            visible_tags = [str(item).strip() for item in tags if str(item).strip()]
+            if visible_tags:
+                summary["tags"] = visible_tags[:5]
+        return summary
+
+    def _analysis_packet_host_result(self, packet: object) -> dict[str, object]:
+        if not isinstance(packet, dict):
+            return {}
+        summary: dict[str, object] = {}
+        packet_title = self._optional_string(packet.get("packetTitle"))
+        if packet_title:
+            summary["packetTitle"] = packet_title
+        source = self._optional_string(packet.get("source"))
+        if source:
+            summary["source"] = source
+        sections = packet.get("sections")
+        if isinstance(sections, list):
+            preview_sections: list[dict[str, object]] = []
+            for section in sections[:4]:
+                if not isinstance(section, dict):
+                    continue
+                title = self._optional_string(section.get("title")) or "Section"
+                preview: dict[str, object] = {"title": title}
+                item_lines: list[str] = []
+                items = section.get("items")
+                if isinstance(items, list):
+                    for item in items[:3]:
+                        if not isinstance(item, dict):
+                            continue
+                        label = self._optional_string(item.get("label"))
+                        item_summary = self._optional_string(item.get("summary"))
+                        if label and item_summary:
+                            item_lines.append(f"{label}: {item_summary}")
+                        elif item_summary:
+                            item_lines.append(item_summary)
+                        elif label:
+                            item_lines.append(label)
+                if item_lines:
+                    preview["items"] = item_lines
+                else:
+                    purpose = self._optional_string(section.get("purpose"))
+                    if purpose:
+                        preview["summary"] = purpose
+                preview_sections.append(preview)
+            if preview_sections:
+                summary["sectionPreview"] = preview_sections
+        if source == "bounded_fallback":
+            summary["recoveryHint"] = (
+                "If the user's request is still too open for a foreground/background answer, "
+                "do one bounded circulatio_discovery read over the same window and explicit "
+                "question before answering. Do not fall back to raw material listing or "
+                "host-authored interpretation."
+            )
         return summary
 
     def _witness_state_summary(self, snapshot: dict[str, object]) -> dict[str, object]:
@@ -2303,7 +2491,8 @@ class CirculatioAgentBridge:
             ),
             "threshold_review": (
                 "A threshold reflection is not available for this window right now. "
-                "Offer a plain weekly reflection or a concise evidence summary instead, without speculating about why."
+                "Offer a plain weekly reflection or a concise evidence summary "
+                "instead, without speculating about why."
             ),
             "living_myth_review": (
                 "A living-myth reflection is not available right now. "
@@ -2321,15 +2510,32 @@ class CirculatioAgentBridge:
                 return fallback_messages.get(kind, message)
             return message
         lowered = message.lower()
-        if "model path" not in lowered and "speicherkonflikt" not in lowered and "storage conflict" not in lowered:
+        if (
+            "model path" not in lowered
+            and "speicherkonflikt" not in lowered
+            and "storage conflict" not in lowered
+        ):
             return message
         return fallback_messages.get(kind, message)
 
     def _analysis_packet_message(self, message: str, packet: object) -> str:
-        if isinstance(packet, dict) and self._optional_string(packet.get("source")) == "bounded_fallback":
-            return "A concise evidence summary is available from material that is already here."
+        if (
+            isinstance(packet, dict)
+            and self._optional_string(packet.get("source")) == "bounded_fallback"
+        ):
+            return (
+                "A concise cross-material evidence digest is available from material that is "
+                "already here. If that is still too thin for a foreground/background answer, "
+                "do one bounded read across the same window before answering rather than asking "
+                "for clarification or listing raw materials."
+            )
         if "bounded packet" in message.lower():
-            return "A concise evidence summary is available from material that is already here."
+            return (
+                "A concise cross-material evidence digest is available from material that is "
+                "already here. If that is still too thin for a foreground/background answer, "
+                "do one bounded read across the same window before answering rather than asking "
+                "for clarification or listing raw materials."
+            )
         return message
 
     def _pending_proposals_message(self, *, count: int, capture_run: bool, review: bool) -> str:
@@ -2366,15 +2572,47 @@ class CirculatioAgentBridge:
         if not isinstance(result, dict):
             result = {}
             sanitized["result"] = result
+        if operation == "circulatio.material.list":
+            materials = result.get("materials")
+            if isinstance(materials, list):
+                sanitized["result"] = {
+                    "materials": [
+                        self._material_summary(item) for item in materials if isinstance(item, dict)
+                    ],
+                    "materialCount": result.get("materialCount", len(materials)),
+                }
+                sanitized["affectedEntityIds"] = []
+            return sanitized
         if operation == "circulatio.journey.page":
             page = result.get("journeyPage")
-            if isinstance(page, dict):
+            continuity = (
+                page.get("continuity") if isinstance(page, dict) else result.get("continuity")
+            )
+            continuity_summary = result.get("continuitySummary")
+            if not isinstance(continuity_summary, dict):
+                continuity_summary = self._continuity_summary(
+                    cast(dict[str, object] | None, continuity)
+                )
+            if isinstance(page, dict) or "journeyPageSummary" in result:
                 sanitized["message"] = "Loaded a compact journey overview for the requested window."
-                sanitized["result"] = {
-                    "windowStart": page.get("windowStart"),
-                    "windowEnd": page.get("windowEnd"),
-                    "journeyPageSummary": self._journey_page_summary(page),
+                sanitized_result: dict[str, object] = {
+                    "windowStart": (
+                        page.get("windowStart")
+                        if isinstance(page, dict)
+                        else result.get("windowStart")
+                    ),
+                    "windowEnd": (
+                        page.get("windowEnd") if isinstance(page, dict) else result.get("windowEnd")
+                    ),
+                    "journeyPageSummary": (
+                        self._journey_page_summary(page)
+                        if isinstance(page, dict)
+                        else result.get("journeyPageSummary")
+                    ),
                 }
+                if isinstance(continuity_summary, dict):
+                    sanitized_result["continuitySummary"] = continuity_summary
+                sanitized["result"] = sanitized_result
                 sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.journeys.get":
@@ -2388,9 +2626,7 @@ class CirculatioAgentBridge:
             if isinstance(journeys, list):
                 sanitized["result"] = {
                     "journeys": [
-                        self._journey_summary(item)
-                        for item in journeys
-                        if isinstance(item, dict)
+                        self._journey_summary(item) for item in journeys if isinstance(item, dict)
                     ],
                     "journeyCount": result.get("journeyCount", len(journeys)),
                 }
@@ -2434,18 +2670,12 @@ class CirculatioAgentBridge:
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.packet.analysis":
+            packet = result.get("analysisPacket")
             sanitized["message"] = self._analysis_packet_message(
                 sanitized.get("message", ""),
-                {
-                    "source": result.get("source"),
-                },
+                packet,
             )
-            packet_title = result.get("packetTitle")
-            sanitized["result"] = (
-                {"packetTitle": packet_title}
-                if isinstance(packet_title, str) and packet_title.strip()
-                else {}
-            )
+            sanitized["result"] = self._analysis_packet_host_result(packet)
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.proposals.list_pending":
