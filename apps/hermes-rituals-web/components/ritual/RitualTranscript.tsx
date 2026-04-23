@@ -33,18 +33,32 @@ export function RitualTranscript({
   }, [sections, captions])
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8 py-2">
       {grouped.map(({ section, cues }) => {
         const muted = section.muted ?? false
         return (
-          <div key={section.id} className={muted ? "opacity-40" : ""}>
-            <div className="mb-2 flex items-center gap-2">
-              <span className={["size-2 rounded-full", kindColor(section.kind)].join(" ")} />
-              <span className="text-xs font-medium uppercase tracking-wider text-graphite-500">
+          <div
+            key={section.id}
+            className={[
+              "transition-opacity duration-500",
+              muted ? "opacity-30" : "opacity-100"
+            ].join(" ")}
+          >
+            {/* Section header */}
+            <div className="mb-3 flex items-center gap-2.5">
+              <span
+                className={[
+                  "size-2 rounded-full",
+                  kindColor(section.kind)
+                ].join(" ")}
+              />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-silver-400">
                 {section.title}
               </span>
             </div>
-            <div className="flex flex-col gap-2">
+
+            {/* Cues */}
+            <div className="flex flex-col gap-1">
               {cues.map((cue) => {
                 const isCurrent = currentMs >= cue.startMs && currentMs < cue.endMs
                 return (
@@ -53,10 +67,10 @@ export function RitualTranscript({
                     type="button"
                     onClick={() => onSeek?.(cue.startMs)}
                     className={[
-                      "rounded-xl px-3 py-2.5 text-left text-sm transition-colors",
+                      "rounded-2xl px-4 py-3 text-left text-base leading-relaxed transition-all duration-300",
                       isCurrent
-                        ? "bg-white/80 font-medium text-graphite-950"
-                        : "bg-transparent text-graphite-600 hover:bg-white/40"
+                        ? "bg-white/90 font-semibold text-graphite-950"
+                        : "bg-transparent text-silver-200 hover:bg-white/10 hover:text-silver-50"
                     ].join(" ")}
                   >
                     {cue.text}

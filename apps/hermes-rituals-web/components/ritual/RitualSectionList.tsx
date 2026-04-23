@@ -25,7 +25,7 @@ export function RitualSectionList({
   }, [sections, currentMs])
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1 py-1">
       {sections.map((section) => (
         <SectionRow
           key={section.id}
@@ -56,20 +56,20 @@ function SectionRow({
   return (
     <div
       className={[
-        "group relative flex items-center gap-3 rounded-2xl px-3 py-3 transition-colors",
+        "group relative flex items-center gap-3 rounded-2xl px-3 py-3 transition-all duration-300",
         isActive
-          ? "bg-white/60"
-          : "bg-transparent hover:bg-white/30",
-        muted ? "opacity-40" : "opacity-100"
+          ? "bg-white/15"
+          : "bg-transparent hover:bg-white/10",
+        muted ? "opacity-30" : "opacity-100"
       ].join(" ")}
     >
       {/* Progress indicator */}
       <div className="flex w-5 shrink-0 justify-center">
-        {isActive && !muted && (
-          <span className="block size-1.5 rounded-full bg-graphite-950" />
-        )}
-        {isActive && muted && (
-          <span className="block size-1.5 rounded-full bg-graphite-400" />
+        {isActive && (
+          <span className={[
+            "block size-1.5 rounded-full",
+            muted ? "bg-silver-500" : "bg-silver-100"
+          ].join(" ")} />
         )}
       </div>
 
@@ -87,10 +87,10 @@ function SectionRow({
         onClick={() => onSeek?.(section.startMs)}
         className="flex min-w-0 flex-1 flex-col items-start text-left"
       >
-        <span className="text-sm font-medium text-graphite-950">
+        <span className="text-sm font-medium text-silver-100">
           {section.title}
         </span>
-        <span className="text-xs text-graphite-500">
+        <span className="text-xs text-silver-500">
           {formatTime(section.startMs)} — {formatTime(section.endMs)} · {durationSec}s
         </span>
       </button>
@@ -102,8 +102,8 @@ function SectionRow({
         className={[
           "flex size-8 items-center justify-center rounded-full transition-colors",
           muted
-            ? "bg-graphite-950/5 text-graphite-400 hover:bg-graphite-950/10"
-            : "bg-graphite-950/5 text-graphite-700 hover:bg-graphite-950/10"
+            ? "bg-white/5 text-silver-500 hover:bg-white/10 hover:text-silver-300"
+            : "bg-white/10 text-silver-200 hover:bg-white/20 hover:text-white"
         ].join(" ")}
         aria-label={muted ? `Unmute ${section.title}` : `Mute ${section.title}`}
       >
