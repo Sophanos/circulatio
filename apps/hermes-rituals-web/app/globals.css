@@ -1,0 +1,128 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap");
+@import url("https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Satoshi Variable", "Satoshi", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+
+  --color-background: #fbfbfc;
+  --color-foreground: #101317;
+  --color-card: rgba(255, 255, 255, 0.82);
+  --color-card-foreground: #101317;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #101317;
+  --color-primary: #171b1f;
+  --color-primary-foreground: #f7f7f8;
+  --color-secondary: #e8ecf0;
+  --color-secondary-foreground: #20252a;
+  --color-muted: #eef1f4;
+  --color-muted-foreground: #5e6670;
+  --color-accent: #e3e7eb;
+  --color-accent-foreground: #101317;
+  --color-destructive: #9b3a2d;
+  --color-border: rgba(16, 19, 23, 0.1);
+  --color-input: rgba(16, 19, 23, 0.12);
+  --color-ring: rgba(16, 19, 23, 0.2);
+
+  --color-graphite-50: #f7f7f8;
+  --color-graphite-100: #eff1f2;
+  --color-graphite-200: #dde1e4;
+  --color-graphite-300: #c3c9ce;
+  --color-graphite-400: #88919a;
+  --color-graphite-500: #5e6670;
+  --color-graphite-600: #40474f;
+  --color-graphite-700: #2f353c;
+  --color-graphite-800: #20252a;
+  --color-graphite-900: #171b1f;
+  --color-graphite-950: #101317;
+
+  --color-silver-50: #fcfcfd;
+  --color-silver-100: #f8f8fa;
+  --color-silver-200: #f1f2f4;
+  --color-silver-300: #e4e7eb;
+  --color-silver-400: #d6dae0;
+  --color-silver-500: #c6ccd3;
+  --color-silver-600: #afb7c0;
+
+  --shadow-silver: 0 28px 80px rgba(14, 18, 24, 0.08);
+}
+
+@layer base {
+  * {
+    @apply border-graphite-950/10;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-silver-100 text-graphite-950 antialiased;
+    background-image:
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.86), transparent 38%),
+      radial-gradient(circle at bottom right, rgba(214, 218, 224, 0.55), transparent 30%),
+      linear-gradient(180deg, #fbfbfc 0%, #eef1f4 100%);
+  }
+
+  ::selection {
+    background: rgba(16, 19, 23, 0.15);
+  }
+
+  :root {
+    color-scheme: light;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply relative overflow-x-hidden;
+  }
+
+  .page-shell::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.08;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(16, 19, 23, 0.12) 0 1px, transparent 1px),
+      radial-gradient(circle at 80% 60%, rgba(16, 19, 23, 0.08) 0 1px, transparent 1px);
+    background-size: 26px 26px, 32px 32px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 88%);
+  }
+
+  .floating-nav {
+    @apply border border-white/70 bg-white/70 shadow-silver backdrop-blur-xl;
+  }
+
+  .media-card {
+    @apply relative overflow-hidden rounded-[2rem] border border-white/80 bg-white/78 shadow-silver backdrop-blur-xl;
+  }
+
+  .media-card-dark {
+    @apply relative overflow-hidden rounded-[2rem] border border-white/10 bg-graphite-950 text-silver-100 shadow-silver;
+  }
+
+  .eyebrow-link {
+    @apply text-xs font-medium tracking-[0.22em] uppercase text-graphite-500 transition-colors hover:text-graphite-900;
+  }
+
+  .caption-gradient {
+    background: linear-gradient(180deg, rgba(16, 19, 23, 0) 0%, rgba(16, 19, 23, 0.82) 100%);
+  }
+
+  .marquee-track {
+    animation: marquee 26s linear infinite;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
