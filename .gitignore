@@ -20,3 +20,8 @@ dist/
 # Local agent skill installations / state
 .agents/
 skills-lock.json
+
+# Hermes Rituals web
+apps/hermes-rituals-web/node_modules/
+apps/hermes-rituals-web/.next/
+apps/hermes-rituals-web/tsconfig.tsbuildinfo
