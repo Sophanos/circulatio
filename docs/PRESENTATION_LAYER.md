@@ -9,10 +9,10 @@ The product-facing frame is **Hermes Rituals**:
 - **Rituals** — guided sessions and symbolic containers
 - **Broadcasts** — serialized or periodic companion voice
 - **Cinema** — audiovisual renderings of the same symbolic material
-- **Breath tools** — simple respiratory pacing surfaces for inhale, hold, exhale, and rest
-- **Meditation tools** — non-respiratory settling surfaces for coherence, attention, and symbolic containment
+- **Breath surface** — simple respiratory pacing for inhale, hold, exhale, and rest
+- **Meditation surface** — non-respiratory settling for coherence, attention, and symbolic containment
 
-These are not separate intelligence systems. They are different host renderings of shared derived context.
+These are not separate intelligence systems and not separate backend tool calls. They are different host renderings of shared derived context, enabled by arguments on one presentation-planning call.
 
 ---
 
@@ -169,9 +169,9 @@ Not allowed deterministically:
 
 ## Tool Calling Contract (planned)
 
-Embodied presentation should arrive through explicit host bridge/tool calls, not through a generic "make media" ingress.
+Embodied presentation should arrive through one explicit host bridge/tool call, not through a generic "make media" ingress and not through one backend tool per visual mode.
 
-Hosts can request breath and meditation as distinct surfaces:
+The tool call plans a ritual. Its arguments decide which surfaces are available for the host to render. Breath and meditation remain semantically distinct inside the same call:
 
 ```text
 circulatio.presentation.plan_ritual
@@ -192,27 +192,33 @@ input
     meditation_only
     user_script
     hybrid
-- requestedLenses[]:
-    breath
-    meditation
-    photo
-    cinema
-- breathRequest?
-- meditationRequest?
+- requestedSurfaces:
+    breath:
+      enabled: boolean
+      request?: BreathCycleSpec
+    meditation:
+      enabled: boolean
+      request?: MeditationFieldSpec
+    photo:
+      enabled: boolean
+    cinema:
+      enabled: boolean
+    audio:
+      enabled: boolean
 - privacyClass
 - safetyContext
 - deliveryPolicy
 ```
 
-`breathRequest` asks for respiratory pacing. `meditationRequest` asks for a settling field or attention container. The host may render both in one ritual, but the tool call should keep them semantically separate so a meditation visual does not silently become a breathing instruction.
+`requestedSurfaces.breath.request` asks for respiratory pacing. `requestedSurfaces.meditation.request` asks for a settling field or attention container. The host may render both in one ritual from the same tool response, but the tool call keeps them semantically separate so a meditation visual does not silently become a breathing instruction.
 
 ### Experience Stories
 
-- A user says, "I only need help breathing for a minute." The host calls for `narrativeMode=breath_only` and renders a minimal pacer with inhale, hold, exhale, and rest labels.
-- A user brings a charged dream image but does not want interpretation yet. The host calls for `meditation_only` and renders a coherence field that settles attention without turning the image into advice.
-- A user pauses midway through a ritual because the material feels too strong. The host can switch from cinema or narration into a meditation lens, preserving the same timeline while reducing verbal density.
-- A user already has a breathing practice and names it directly. The host carries that explicit preference in `breathRequest` instead of letting Circulatio infer a technique from keywords.
-- A user wants the image, music, and breath all present. The host requests multiple lenses, but Circulatio still returns typed specs; the host decides whether to expose lens switching, queue controls, or a single focused surface.
+- A user says, "I only need help breathing for a minute." The host calls `plan_ritual` with `narrativeMode=breath_only` and `requestedSurfaces.breath.enabled=true`, then renders a minimal pacer with inhale, hold, exhale, and rest labels.
+- A user brings a charged dream image but does not want interpretation yet. The host calls the same planner with `requestedSurfaces.meditation.enabled=true` and renders a coherence field that settles attention without turning the image into advice.
+- A user pauses midway through a ritual because the material feels too strong. The host can switch from cinema or narration into a meditation surface returned by the same plan, preserving the same timeline while reducing verbal density.
+- A user already has a breathing practice and names it directly. The host carries that explicit preference in `requestedSurfaces.breath.request` instead of letting Circulatio infer a technique from keywords.
+- A user wants the image, music, and breath all present. The host enables multiple `requestedSurfaces` in one tool call, but Circulatio still returns typed specs; the host decides whether to expose lens switching, queue controls, or a single focused surface.
 
 ---
 
