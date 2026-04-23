@@ -188,6 +188,7 @@ class CoachEngineTests(unittest.TestCase):
                     "priority": 80,
                     "reasons": ["journey_embodied_recurrence_active"],
                     "blockedEscalations": ["diagnostic_or_causal_framing"],
+                    "relatedExperimentIds": ["experiment_1"],
                     "relatedPracticeSessionIds": [],
                     "relatedBodyStateIds": ["body_1"],
                     "relatedGoalTensionIds": [],
@@ -198,6 +199,7 @@ class CoachEngineTests(unittest.TestCase):
         )
 
         self.assertEqual(coach_state["selectedMove"]["kind"], "ask_body_checkin")
+        self.assertEqual(coach_state["selectedMove"]["relatedExperimentIds"], ["experiment_1"])
         selected_loop = next(
             loop
             for loop in coach_state["activeLoops"]
@@ -205,6 +207,7 @@ class CoachEngineTests(unittest.TestCase):
         )
         self.assertEqual(selected_loop["kind"], "soma")
         self.assertIn("journey_1", selected_loop["relatedJourneyIds"])
+        self.assertEqual(selected_loop["relatedExperimentIds"], ["experiment_1"])
         self.assertIn("journey_followthrough_dominant", selected_loop["reasons"])
         self.assertFalse(
             any(

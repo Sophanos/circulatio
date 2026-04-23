@@ -199,6 +199,50 @@ async def set_journey_status_tool(
     )
 
 
+async def start_journey_experiment_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.journey.experiment.start",
+        tool_name="circulatio_journey_experiment_start",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
+async def respond_journey_experiment_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.journey.experiment.respond",
+        tool_name="circulatio_journey_experiment_respond",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
+async def list_journey_experiments_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.journey.experiment.list",
+        tool_name="circulatio_journey_experiment_list",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
+async def get_journey_experiment_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.journey.experiment.get",
+        tool_name="circulatio_journey_experiment_get",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
 async def list_materials_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
     return await _dispatch_tool(
         operation="circulatio.material.list",

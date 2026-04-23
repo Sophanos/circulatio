@@ -590,6 +590,10 @@ class JourneyFollowthroughSummary(TypedDict, total=False):
     priority: Required[int]
     reasons: Required[list[str]]
     blockedEscalations: Required[list[str]]
+    relatedExperimentIds: Required[list[Id]]
+    currentExperimentStatus: NotRequired[
+        Literal["active", "quiet", "completed", "released", "archived", "deleted"]
+    ]
     relatedPracticeSessionIds: Required[list[Id]]
     relatedBodyStateIds: Required[list[Id]]
     relatedGoalTensionIds: Required[list[Id]]
@@ -1474,6 +1478,7 @@ class CoachLoopSummary(TypedDict, total=False):
     relatedMaterialIds: Required[list[Id]]
     relatedGoalIds: Required[list[Id]]
     relatedJourneyIds: Required[list[Id]]
+    relatedExperimentIds: NotRequired[list[Id]]
     relatedPracticeSessionIds: Required[list[Id]]
     relatedSymbolIds: Required[list[Id]]
     relatedBodyStateIds: Required[list[Id]]
@@ -1498,6 +1503,7 @@ class CoachMoveContract(TypedDict, total=False):
     capture: Required[CoachCaptureContract]
     blockedMoves: Required[list[str]]
     reasons: Required[list[str]]
+    relatedExperimentIds: NotRequired[list[Id]]
     relatedResourceIds: NotRequired[list[Id]]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
 
@@ -1597,6 +1603,7 @@ class MethodContextSnapshot(TypedDict, total=False):
     longitudinalSignals: NotRequired[list[LongitudinalSignalSummary]]
     adaptationProfile: NotRequired[UserAdaptationProfileSummary]
     activeJourneys: NotRequired[list[JourneySummary]]
+    activeJourneyExperiments: NotRequired[list["JourneyExperimentSummary"]]
     recentPracticeSessions: NotRequired[list[PracticeSessionSummary]]
     recentDreamDynamics: NotRequired[list[DreamDynamicsSummary]]
     methodState: NotRequired[MethodStateSummary]
@@ -1816,6 +1823,29 @@ class PracticePlan(TypedDict, total=False):
     resourceInvitation: NotRequired[ResourceInvitationSummary]
     relatedResourceIds: NotRequired[list[Id]]
     relatedJourneyIds: NotRequired[list[Id]]
+    relatedExperimentIds: NotRequired[list[Id]]
+
+
+class JourneyExperimentSummary(TypedDict, total=False):
+    id: Required[Id]
+    journeyId: Required[Id]
+    title: Required[str]
+    summary: Required[str]
+    status: Required[
+        Literal["active", "quiet", "completed", "released", "archived", "deleted"]
+    ]
+    bodyFirst: Required[bool]
+    preferredMoveKind: NotRequired[CoachMoveKind]
+    currentQuestion: NotRequired[str]
+    suggestedActionText: NotRequired[str]
+    relatedPracticeSessionIds: Required[list[Id]]
+    relatedSymbolIds: Required[list[Id]]
+    relatedGoalTensionIds: Required[list[Id]]
+    relatedBodyStateIds: Required[list[Id]]
+    relatedResourceIds: Required[list[Id]]
+    nextCheckInDueAt: NotRequired[ISODateString]
+    cooldownUntil: NotRequired[ISODateString]
+    updatedAt: Required[ISODateString]
 
 
 class PersonalSymbolWritePayload(TypedDict, total=False):

@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Literal, cast
 
+from ..domain.journey_experiments import JourneyExperimentRecord
 from ..domain.journeys import JourneyRecord
 from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import ProactiveBriefRecord
@@ -69,6 +70,7 @@ class JourneyFollowthroughEngine:
         method_context: MethodContextSnapshot | None,
         thread_digests: list[ThreadDigest] | None,
         journeys: list[JourneyRecord],
+        journey_experiments: list[JourneyExperimentRecord],
         recent_practices: list[PracticeSessionRecord],
         existing_briefs: list[ProactiveBriefRecord],
         dashboard: DashboardSummary | None,
@@ -109,6 +111,11 @@ class JourneyFollowthroughEngine:
         for brief in existing_briefs:
             for journey_id in self._ids(brief.get("relatedJourneyIds")):
                 briefs_by_journey[journey_id].append(brief)
+        experiments_by_journey: dict[Id, list[JourneyExperimentRecord]] = defaultdict(list)
+        for experiment in journey_experiments:
+            journey_id = str(experiment.get("journeyId") or "").strip()
+            if journey_id:
+                experiments_by_journey[cast(Id, journey_id)].append(experiment)
         digests_by_journey: dict[Id, list[ThreadDigest]] = defaultdict(list)
         for digest in thread_digests or []:
             if not isinstance(digest, dict):
@@ -119,6 +126,7 @@ class JourneyFollowthroughEngine:
         summaries = [
             self._build_summary(
                 journey=journey,
+                journey_experiments=experiments_by_journey.get(cast(Id, journey["id"]), []),
                 practices=practices_by_journey.get(cast(Id, journey["id"]), []),
                 briefs=briefs_by_journey.get(cast(Id, journey["id"]), []),
                 related_digests=digests_by_journey.get(cast(Id, journey["id"]), []),
@@ -146,6 +154,7 @@ class JourneyFollowthroughEngine:
         self,
         *,
         journey: JourneyRecord,
+        journey_experiments: list[JourneyExperimentRecord],
         practices: list[PracticeSessionRecord],
         briefs: list[ProactiveBriefRecord],
         related_digests: list[ThreadDigest],
@@ -172,6 +181,7 @@ class JourneyFollowthroughEngine:
             for tension in related_goal_tensions
             if str(tension.get("id") or "").strip()
         ]
+        current_experiment, experiment_reason = self._current_experiment(journey_experiments)
         practice_signal = self._practice_signal(
             practices=practices,
             practice_loop=practice_loop,
@@ -199,15 +209,30 @@ class JourneyFollowthroughEngine:
             related_goal_tension_ids=related_goal_tension_ids,
             related_digests=related_digests,
         )
+        if experiment_reason:
+            reasons.append(experiment_reason)
+        preferred_move = (
+            str(current_experiment.get("preferredMoveKind") or "").strip()
+            if isinstance(current_experiment, dict)
+            else ""
+        )
+        if preferred_move and recommended_move != "offer_resource":
+            recommended_move = cast(CoachMoveKind, preferred_move)
+            reasons.append("journey_experiment_preferred_move_applied")
         last_touched_at = self._last_touched_at(
             journey=journey,
+            current_experiment=current_experiment,
             practices=practices,
             related_body_states=related_body_states,
             related_digests=related_digests,
             fallback=now.isoformat(),
         )
         last_briefed_at = self._last_briefed_at(journey=journey, briefs=briefs)
-        cooldown_until = self._active_cooldown(briefs=briefs, now=now)
+        cooldown_until = self._active_cooldown(
+            briefs=briefs,
+            current_experiment=current_experiment,
+            now=now,
+        )
         has_open_brief = any(
             str(brief.get("status") or "").strip() in {"candidate", "shown"} for brief in briefs
         )
@@ -223,27 +248,66 @@ class JourneyFollowthroughEngine:
             related_body_states=related_body_states,
             now=now,
         )
+        base_readiness: Literal["quiet", "available", "ready"]
+        if has_open_brief:
+            base_readiness = "quiet"
+            reasons.append("journey_brief_pending")
+        elif cooldown_until is not None:
+            base_readiness = "quiet"
+            reasons.append("journey_brief_cooldown_active")
+        elif practice_signal["kind"] in {"due_followup", "repeated_skip", "return_after_absence"}:
+            base_readiness = "ready"
+        elif fresh_signal and signal_is_recent:
+            base_readiness = "ready"
+        elif fresh_signal:
+            base_readiness = "available"
+        else:
+            base_readiness = "available"
+        experiment_status = (
+            str(current_experiment.get("status") or "").strip()
+            if isinstance(current_experiment, dict)
+            else ""
+        )
+        experiment_due = (
+            str(current_experiment.get("nextCheckInDueAt") or "").strip()
+            if isinstance(current_experiment, dict)
+            else ""
+        )
+        experiment_has_linked_brief = bool(
+            current_experiment
+            and any(
+                cast(Id, current_experiment["id"]) in self._ids(brief.get("relatedExperimentIds"))
+                for brief in briefs
+                if str(brief.get("status") or "").strip() != "deleted"
+            )
+        )
         readiness: Literal["quiet", "available", "ready"]
         if status in {"paused", "completed", "archived"}:
             readiness = "quiet"
             reasons.append(f"journey_status_{status}")
-        elif has_open_brief:
+        elif experiment_status == "quiet" and not fresh_signal:
             readiness = "quiet"
-            reasons.append("journey_brief_pending")
+            reasons.append("journey_experiment_quiet")
         elif cooldown_until is not None:
             readiness = "quiet"
-            reasons.append("journey_brief_cooldown_active")
         elif stabilized and not fresh_signal:
             readiness = "quiet"
             reasons.append("journey_recent_practice_quieting")
-        elif practice_signal["kind"] in {"due_followup", "repeated_skip", "return_after_absence"}:
-            readiness = "ready"
-        elif fresh_signal and signal_is_recent:
-            readiness = "ready"
-        elif fresh_signal:
+        elif experiment_status == "active" and fresh_signal:
+            readiness = base_readiness
+        elif (
+            experiment_status == "active"
+            and experiment_due
+            and self._parse_datetime(experiment_due) <= now
+            and not experiment_has_linked_brief
+        ):
             readiness = "available"
+            reasons.append("journey_experiment_checkin_window_open")
+        elif experiment_status == "active":
+            readiness = "quiet"
+            reasons.append("journey_experiment_holding")
         else:
-            readiness = "available"
+            readiness = base_readiness
         recommended_surface = self._recommended_surface(
             readiness=readiness,
             move_kind=recommended_move,
@@ -258,6 +322,9 @@ class JourneyFollowthroughEngine:
             "priority": priority,
             "reasons": self._dedupe_strings(reasons),
             "blockedEscalations": list(_BLOCKED_ESCALATIONS[family]),
+            "relatedExperimentIds": (
+                [cast(Id, current_experiment["id"])] if current_experiment else []
+            ),
             "relatedPracticeSessionIds": [
                 cast(Id, str(item["id"]))
                 for item in practices
@@ -269,6 +336,11 @@ class JourneyFollowthroughEngine:
         }
         if recommended_move is not None and readiness != "quiet":
             summary["recommendedMoveKind"] = recommended_move
+        if experiment_status:
+            summary["currentExperimentStatus"] = cast(
+                Literal["active", "quiet", "completed", "released", "archived", "deleted"],
+                experiment_status,
+            )
         if last_briefed_at is not None:
             summary["lastBriefedAt"] = last_briefed_at
         if cooldown_until is not None:
@@ -458,6 +530,7 @@ class JourneyFollowthroughEngine:
         self,
         *,
         journey: JourneyRecord,
+        current_experiment: JourneyExperimentRecord | None,
         practices: list[PracticeSessionRecord],
         related_body_states: list[dict[str, object]],
         related_digests: list[ThreadDigest],
@@ -465,6 +538,17 @@ class JourneyFollowthroughEngine:
     ) -> str:
         timestamps = [
             str(journey.get("updatedAt") or journey.get("createdAt") or fallback),
+            *(
+                [
+                    str(
+                        current_experiment.get("updatedAt")
+                        or current_experiment.get("createdAt")
+                        or fallback
+                    )
+                ]
+                if current_experiment is not None
+                else []
+            ),
             *[
                 self._practice_timestamp(item, fallback=fallback)
                 for item in practices
@@ -506,6 +590,7 @@ class JourneyFollowthroughEngine:
         self,
         *,
         briefs: list[ProactiveBriefRecord],
+        current_experiment: JourneyExperimentRecord | None,
         now: datetime,
     ) -> str | None:
         active = [
@@ -514,7 +599,31 @@ class JourneyFollowthroughEngine:
             if str(brief.get("cooldownUntil") or "").strip()
             and self._parse_datetime(str(brief["cooldownUntil"])) > now
         ]
+        if current_experiment is not None:
+            experiment_cooldown = str(current_experiment.get("cooldownUntil") or "").strip()
+            if experiment_cooldown and self._parse_datetime(experiment_cooldown) > now:
+                active.append(experiment_cooldown)
         return max(active) if active else None
+
+    def _current_experiment(
+        self, experiments: list[JourneyExperimentRecord]
+    ) -> tuple[JourneyExperimentRecord | None, str | None]:
+        current = [
+            item
+            for item in experiments
+            if str(item.get("status") or "").strip() in {"active", "quiet"}
+        ]
+        if not current:
+            return None, None
+        current.sort(
+            key=lambda item: (
+                1 if str(item.get("status") or "").strip() == "active" else 0,
+                str(item.get("updatedAt") or item.get("createdAt") or ""),
+            ),
+            reverse=True,
+        )
+        reason = "journey_experiment_collision_resolved" if len(current) > 1 else None
+        return current[0], reason
 
     def _successful_stabilization(
         self,

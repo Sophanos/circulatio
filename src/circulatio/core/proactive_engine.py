@@ -82,6 +82,7 @@ class ProactiveEngine:
             seeds.extend(
                 self._journey_followthrough_seeds(
                     journey_followthrough=followthrough,
+                    method_context=method_context,
                     journeys=journeys,
                     now=now,
                 )
@@ -206,6 +207,22 @@ class ProactiveEngine:
             for journey_id in item.get("relatedJourneyIds", [])
             if str(journey_id).strip()
         }
+        active_experiment_ids = {
+            str(experiment_id)
+            for item in existing_briefs
+            if item.get("status") in {"candidate", "shown"}
+            for experiment_id in item.get("relatedExperimentIds", [])
+            if str(experiment_id).strip()
+        }
+        suppressed_experiment_ids = {
+            str(experiment_id)
+            for item in existing_briefs
+            if item.get("status") in {"dismissed", "acted_on"}
+            and item.get("cooldownUntil")
+            and self._parse_datetime(item["cooldownUntil"]) > now_dt
+            for experiment_id in item.get("relatedExperimentIds", [])
+            if str(experiment_id).strip()
+        }
         if source == "scheduled":
             shown_today = [
                 item
@@ -245,6 +262,20 @@ class ProactiveEngine:
                         str(journey_id)
                         for journey_id in seed.get("relatedJourneyIds", [])
                         if str(journey_id).strip()
+                    }
+                )
+                or active_experiment_ids.intersection(
+                    {
+                        str(experiment_id)
+                        for experiment_id in seed.get("relatedExperimentIds", [])
+                        if str(experiment_id).strip()
+                    }
+                )
+                or suppressed_experiment_ids.intersection(
+                    {
+                        str(experiment_id)
+                        for experiment_id in seed.get("relatedExperimentIds", [])
+                        if str(experiment_id).strip()
                     }
                 )
             ):
@@ -304,6 +335,7 @@ class ProactiveEngine:
                 "triggerKey": seed["triggerKey"],
                 "priority": seed["priority"],
                 "relatedJourneyIds": list(seed["relatedJourneyIds"]),
+                "relatedExperimentIds": list(seed.get("relatedExperimentIds", [])),
                 "relatedMaterialIds": list(seed["relatedMaterialIds"]),
                 "relatedSymbolIds": list(seed["relatedSymbolIds"]),
                 "relatedPracticeSessionIds": list(seed["relatedPracticeSessionIds"]),
@@ -318,17 +350,26 @@ class ProactiveEngine:
         deduped: list[RhythmicBriefSeed] = []
         seen_trigger_keys: set[str] = set()
         seen_loop_keys: set[str] = set()
+        seen_experiment_ids: set[str] = set()
         for seed in seeds:
             trigger_key = str(seed.get("triggerKey") or "").strip()
             coach_loop_key = str(seed.get("coachLoopKey") or "").strip()
+            experiment_ids = {
+                str(item).strip()
+                for item in seed.get("relatedExperimentIds", [])
+                if str(item).strip()
+            }
             if trigger_key and trigger_key in seen_trigger_keys:
                 continue
             if coach_loop_key and coach_loop_key in seen_loop_keys:
+                continue
+            if experiment_ids and experiment_ids.intersection(seen_experiment_ids):
                 continue
             if trigger_key:
                 seen_trigger_keys.add(trigger_key)
             if coach_loop_key:
                 seen_loop_keys.add(coach_loop_key)
+            seen_experiment_ids.update(experiment_ids)
             deduped.append(seed)
         return deduped
 
@@ -539,6 +580,11 @@ class ProactiveEngine:
                 "summaryHint": str(loop.get("summaryHint") or "A live thread may be ready."),
                 "priority": int(loop.get("priority", 0) or 0),
                 "relatedJourneyIds": related_journey_ids,
+                "relatedExperimentIds": [
+                    str(item)
+                    for item in loop.get("relatedExperimentIds", [])
+                    if str(item).strip()
+                ],
                 "relatedMaterialIds": [
                     str(item) for item in loop.get("relatedMaterialIds", []) if str(item).strip()
                 ],
@@ -588,6 +634,7 @@ class ProactiveEngine:
         self,
         *,
         journey_followthrough: list[JourneyFollowthroughSummary],
+        method_context: MethodContextSnapshot | None,
         journeys: list[JourneyRecord],
         now: str,
     ) -> list[RhythmicBriefSeed]:
@@ -595,6 +642,11 @@ class ProactiveEngine:
             str(journey.get("id") or "").strip(): journey
             for journey in journeys
             if str(journey.get("id") or "").strip()
+        }
+        experiments_by_id = {
+            str(item.get("id") or "").strip(): item
+            for item in (method_context or {}).get("activeJourneyExperiments", [])
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
         }
         seeds: list[RhythmicBriefSeed] = []
         for summary in journey_followthrough:
@@ -612,52 +664,72 @@ class ProactiveEngine:
             family = str(summary.get("family") or "cross_family").strip()
             move_kind = str(summary.get("recommendedMoveKind") or "").strip()
             reasons = [str(item) for item in summary.get("reasons", []) if str(item).strip()]
+            related_experiment_ids = [
+                str(item) for item in summary.get("relatedExperimentIds", []) if str(item).strip()
+            ]
+            current_experiment = (
+                experiments_by_id.get(related_experiment_ids[0], {})
+                if related_experiment_ids
+                else {}
+            )
             related_practice_session_ids = [
                 str(item)
                 for item in summary.get("relatedPracticeSessionIds", [])
                 if str(item).strip()
             ]
             brief_type: ProactiveBriefType = "journey_checkin"
-            title_hint = "Journey check-in"
-            summary_hint = "An active journey may be ready for a bounded check-in."
-            suggested_action = "You can simply note what shifted, or leave it untouched."
+            title_hint = str(current_experiment.get("title") or "Journey check-in")
+            summary_hint = str(
+                current_experiment.get("summary") or "An active journey may be ready for a bounded check-in."
+            )
+            suggested_action = str(
+                current_experiment.get("suggestedActionText")
+                or "You can simply note what shifted, or leave it untouched."
+            )
             bucket = self._week_bucket(last_touched_at or now)
             if family == "practice_reentry" and "journey_return_after_absence" in reasons:
                 brief_type = "return_invitation"
-                title_hint = "Gentle return"
-                summary_hint = "A journey thread may be ready for a gentle return."
-                suggested_action = "You can return to the thread lightly, or leave it for later."
+                if not current_experiment:
+                    title_hint = "Gentle return"
+                    summary_hint = "A journey thread may be ready for a gentle return."
+                    suggested_action = "You can return to the thread lightly, or leave it for later."
                 bucket = self._day_bucket(last_touched_at or now)
             elif family == "practice_reentry" and "journey_practice_followup_due" in reasons:
                 brief_type = "practice_followup"
-                title_hint = "Practice follow-up"
-                summary_hint = "A journey-linked practice may be ready for a light follow-up."
-                suggested_action = (
-                    "You can note what happened after the practice, or simply leave it for later."
-                )
+                if not current_experiment:
+                    title_hint = "Practice follow-up"
+                    summary_hint = "A journey-linked practice may be ready for a light follow-up."
+                    suggested_action = (
+                        "You can note what happened after the practice, or simply leave it for later."
+                    )
                 bucket = self._day_bucket(last_touched_at or now)
             elif family == "practice_reentry" and "journey_practice_repeated_skips" in reasons:
                 brief_type = "journey_checkin"
-                title_hint = "Gentler re-entry"
-                summary_hint = "Repeated skips suggest a softer journey check-in, not more pressure."
-                suggested_action = "You can return gently, or leave it alone."
+                if not current_experiment:
+                    title_hint = "Gentler re-entry"
+                    summary_hint = "Repeated skips suggest a softer journey check-in, not more pressure."
+                    suggested_action = "You can return gently, or leave it alone."
                 bucket = self._day_bucket(last_touched_at or now)
             elif move_kind == "offer_resource":
-                title_hint = "Grounding support"
-                summary_hint = "A gentler resource may fit this journey better than another push."
-                suggested_action = "You can try a gentler resource, or simply leave it alone."
+                if not current_experiment:
+                    title_hint = "Grounding support"
+                    summary_hint = "A gentler resource may fit this journey better than another push."
+                    suggested_action = "You can try a gentler resource, or simply leave it alone."
                 bucket = self._day_bucket(last_touched_at or now)
             elif move_kind == "ask_body_checkin":
-                title_hint = "Body check-in"
-                summary_hint = "This journey can be met body-first without forcing interpretation."
-                suggested_action = "You can note what the body is carrying, or leave it untouched."
+                if not current_experiment:
+                    title_hint = "Body check-in"
+                    summary_hint = "This journey can be met body-first without forcing interpretation."
+                    suggested_action = "You can note what the body is carrying, or leave it untouched."
                 bucket = self._day_bucket(last_touched_at or now)
             elif move_kind == "ask_relational_scene":
-                title_hint = "Relational scene"
-                summary_hint = "A relational thread may be ready for a careful scene-first check-in."
+                if not current_experiment:
+                    title_hint = "Relational scene"
+                    summary_hint = "A relational thread may be ready for a careful scene-first check-in."
             elif move_kind == "ask_goal_tension":
-                title_hint = "Goal tension"
-                summary_hint = "A live tension may be ready to be named without forcing resolution."
+                if not current_experiment:
+                    title_hint = "Goal tension"
+                    summary_hint = "A live tension may be ready to be named without forcing resolution."
             seeds.append(
                 {
                     "briefType": brief_type,
@@ -669,6 +741,7 @@ class ProactiveEngine:
                     "suggestedActionHint": suggested_action,
                     "priority": int(summary.get("priority", 0) or 0),
                     "relatedJourneyIds": [journey_id],
+                    "relatedExperimentIds": related_experiment_ids,
                     "relatedMaterialIds": [
                         str(item)
                         for item in journey.get("relatedMaterialIds", [])

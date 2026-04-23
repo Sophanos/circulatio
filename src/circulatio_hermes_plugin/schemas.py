@@ -35,6 +35,10 @@ _STORE_INTAKE_CONTEXT_GUIDANCE = (
     "intakeContext.hostGuidance to acknowledge, hold, or ask at most one gentle follow-up. "
     "A compact continuitySummary may also be returned for host thread-tracking; never expose raw "
     "method context. "
+    "On explicit capture turns, especially typology-journey storage prompts, prefer one short "
+    "holding sentence and avoid comparative or interpretive commentary. "
+    "If intakeContext.hostGuidance.maxQuestions is 0, do not ask a follow-up anyway. "
+    "On direct `store/save this` turns, prefer no follow-up question. "
     "Never expose the packet. Do not interpret unless the user explicitly asks. If asked "
     "for bug-report or raw-response details, say briefly that there is no separate "
     "user-facing bug report here."
@@ -73,7 +77,7 @@ STORE_EVENT_TOOL_SCHEMA = _schema(
 
 STORE_REFLECTION_TOOL_SCHEMA = _schema(
     "circulatio_store_reflection",
-    "Hold a reflection or daytime note in Circulatio. This is the usual hold-first lane for ambient notes. Do not interpret it yet. After the tool call, keep the reply short and invitational rather than analytical."
+    "Hold a reflection or daytime note in Circulatio. This is the usual hold-first lane for ambient notes. Do not interpret it yet. After the tool call, keep the reply short and invitational rather than analytical. On explicit `store this reflection` turns, one short holding sentence with no follow-up question is preferred."
     + _STORE_INTAKE_CONTEXT_GUIDANCE,
     _MATERIAL_STORE_PROPERTIES,
     required=["text"],
@@ -89,7 +93,7 @@ STORE_SYMBOLIC_NOTE_TOOL_SCHEMA = _schema(
 
 STORE_BODY_STATE_TOOL_SCHEMA = _schema(
     "circulatio_store_body_state",
-    "Hold a body state in Circulatio. If noteText is supplied, Circulatio also preserves the original phrase as a linked reflection tagged soma. Do not interpret it yet.",
+    "Hold a body state in Circulatio. If noteText is supplied, Circulatio also preserves the original phrase as a linked reflection tagged soma. Do not interpret it yet. When typology needs to pause because the user sounds activated, poorly slept, or destabilized, this is a preferred first hold surface before any grounded reply. In those safety-pause replies, say plainly that typology is paused for now and grounding comes first.",
     {
         "sensation": {"type": "string"},
         "observedAt": {"type": "string"},
@@ -256,6 +260,75 @@ SET_JOURNEY_STATUS_TOOL_SCHEMA = _schema(
     required=["status"],
 )
 
+JOURNEY_EXPERIMENT_START_TOOL_SCHEMA = _schema(
+    "circulatio_journey_experiment_start",
+    "Start an explicit current-tending frame for a journey from a brief, a live surface suggestion, or a manual summary. This is a user-accepted longitudinal companion state, not a task tracker.",
+    {
+        "briefId": {"type": "string"},
+        "journeyId": {"type": "string"},
+        "journeyLabel": {"type": "string"},
+        "surface": {
+            "type": "string",
+            "enum": ["journey_page", "alive_today", "rhythmic_brief", "weekly_review", "manual"],
+        },
+        "windowStart": {"type": "string"},
+        "windowEnd": {"type": "string"},
+        "source": {
+            "type": "string",
+            "enum": [
+                "manual",
+                "journey_page",
+                "alive_today",
+                "rhythmic_brief",
+                "practice_followup",
+                "weekly_review",
+            ],
+        },
+        "title": {"type": "string"},
+        "summary": {"type": "string"},
+        "bodyFirst": {"type": "boolean"},
+        "preferredMoveKind": {"type": "string"},
+        "currentQuestion": {"type": "string"},
+        "suggestedActionText": {"type": "string"},
+    },
+)
+
+JOURNEY_EXPERIMENT_RESPOND_TOOL_SCHEMA = _schema(
+    "circulatio_journey_experiment_respond",
+    "Quiet, resume, complete, release, or archive a current journey-tending frame by experiment id.",
+    {
+        "experimentId": {"type": "string"},
+        "action": {
+            "type": "string",
+            "enum": ["quiet", "resume", "complete", "release", "archive"],
+        },
+        "nextCheckInDueAt": {"type": "string"},
+    },
+    required=["experimentId", "action"],
+)
+
+JOURNEY_EXPERIMENT_LIST_TOOL_SCHEMA = _schema(
+    "circulatio_journey_experiment_list",
+    "List current or historical journey-tending frames, optionally filtered by journey or status.",
+    {
+        "journeyId": {"type": "string"},
+        "journeyLabel": {"type": "string"},
+        "statuses": {"type": "array", "items": {"type": "string"}},
+        "includeDeleted": {"type": "boolean"},
+        "limit": {"type": "integer"},
+    },
+)
+
+JOURNEY_EXPERIMENT_GET_TOOL_SCHEMA = _schema(
+    "circulatio_journey_experiment_get",
+    "Load one journey-tending frame by experiment id.",
+    {
+        "experimentId": {"type": "string"},
+        "includeDeleted": {"type": "boolean"},
+    },
+    required=["experimentId"],
+)
+
 LIST_MATERIALS_TOOL_SCHEMA = _schema(
     "circulatio_list_materials",
     "List stored Circulatio materials. Use this before asking the user to repeat a previously stored dream, reflection, event, or symbolic note. When the user says something like 'the dream about bear' or 'that reflection from yesterday', look here first, then interpret by materialId.",
@@ -291,6 +364,14 @@ INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "response may be a single question, "
     "amplification prompt, or method gate. Keep host replies to usually 1-3 "
     "sentences with exactly one question. If gated, wait for new input. If the "
+    "request is an exact-material typology question on a clearly scoped stored or just-shared "
+    "text, prefer a bounded tentative answer or bounded ambiguity answer when the returned "
+    "userFacingResponse already supports one; do not reopen with meta-method explanation or a "
+    "fresh `what feels most alive?` gate unless the tool clearly withholds even a tentative "
+    "function-dynamics read for lack of evidence. "
+    "If the user already supplied the most alive image, feeling, or focal clue inside the same "
+    "request, pass it in `userAssociations` on the first call rather than splitting the same "
+    "turn into a follow-up `circulatio_method_state_respond`. "
     "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
     "do not call this tool again with unchanged material or suggest rerunning it. "
     "Do not work around that stop condition by switching to analysis-packet, "
@@ -463,7 +544,7 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, overcompensation, problem function, inferior-under-stress dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht', 'Was wirkt hier führend, was kompensatorisch?', and 'Wo übersteuert Denken hier, und welche Funktion kippt kompensatorisch oder als Problemfunktion?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
+    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, overcompensation, problem function, inferior-under-stress dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht', 'Was wirkt hier führend, was kompensatorisch?', and 'Wo übersteuert Denken hier, und welche Funktion kippt kompensatorisch oder als Problemfunktion?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Do that recovery immediately in the same turn; do not narrate tool planning, fallback logic, internal reasoning, or recovery instructions in chat before the recovery call. If host-facing result metadata says the same-window recovery is needed, follow it silently and never repeat that instruction wording in visible chat. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -606,7 +687,7 @@ UPSERT_THRESHOLD_PROCESS_TOOL_SCHEMA = _schema(
 
 RECORD_RELATIONAL_SCENE_TOOL_SCHEMA = _schema(
     "circulatio_record_relational_scene",
-    "Store or merge a user-reported relational scene directly as a durable individuation record. Prefer this when the user is naming a repeated interpersonal scene such as going quiet when someone gets loud, shrinking, bracing, or repeating the same contact dynamic across people.",
+    "Store or merge a user-reported relational scene directly as a durable individuation record. Prefer this when the user is naming a repeated interpersonal scene such as going quiet when someone gets loud, shrinking, bracing, or repeating the same contact dynamic across people. On explicit capture turns, reply with one short holding sentence and no follow-up question unless the user asked for more than storage.",
     {
         "sceneId": {"type": "string"},
         "label": {"type": "string"},
@@ -925,6 +1006,10 @@ TOOL_SCHEMAS = [
     GET_JOURNEY_TOOL_SCHEMA,
     UPDATE_JOURNEY_TOOL_SCHEMA,
     SET_JOURNEY_STATUS_TOOL_SCHEMA,
+    JOURNEY_EXPERIMENT_START_TOOL_SCHEMA,
+    JOURNEY_EXPERIMENT_RESPOND_TOOL_SCHEMA,
+    JOURNEY_EXPERIMENT_LIST_TOOL_SCHEMA,
+    JOURNEY_EXPERIMENT_GET_TOOL_SCHEMA,
     LIST_MATERIALS_TOOL_SCHEMA,
     GET_MATERIAL_TOOL_SCHEMA,
     INTERPRET_MATERIAL_TOOL_SCHEMA,

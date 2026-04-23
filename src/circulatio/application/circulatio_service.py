@@ -38,6 +38,11 @@ from ..domain.ids import create_id, now_iso
 from ..domain.individuation import IndividuationRecord
 from ..domain.integration import IntegrationRecord
 from ..domain.interpretations import InterpretationRunRecord, ProposalDecisionRecord
+from ..domain.journey_experiments import (
+    JourneyExperimentRecord,
+    JourneyExperimentSource,
+    JourneyExperimentStatus,
+)
 from ..domain.journeys import JourneyRecord
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialRecord, MaterialRevision, StoredDreamStructure
@@ -74,6 +79,7 @@ from ..domain.types import (
     InterpretationInteractionFeedback,
     InterpretationOptions,
     InterpretationResult,
+    JourneyExperimentSummary,
     JourneyFollowthroughSummary,
     LifeContextSnapshot,
     LivingMythReviewInput,
@@ -137,8 +143,10 @@ from .workflow_types import (
     JourneyPageCard,
     JourneyPageResult,
     JourneyPracticeContainer,
+    JourneyTendingContainer,
     JourneyWeeklySurface,
     ListJourneysInput,
+    ListJourneyExperimentsInput,
     LivingMythReviewWorkflowResult,
     MaterialWorkflowResult,
     MethodStateWorkflowResult,
@@ -151,11 +159,13 @@ from .workflow_types import (
     RecordNuminousEncounterInput,
     RecordRelationalSceneInput,
     RespondPracticeInput,
+    RespondJourneyExperimentInput,
     RespondRhythmicBriefInput,
     RhythmicBriefWorkflowResult,
     SetConsentPreferenceInput,
     SetCulturalFrameInput,
     SetJourneyStatusInput,
+    StartJourneyExperimentInput,
     StoreBodyStateResult,
     StoreMaterialWithIntakeContextResult,
     SurfaceContextBundle,
@@ -166,6 +176,7 @@ from .workflow_types import (
     UpsertGoalInput,
     UpsertGoalTensionInput,
     UpsertThresholdProcessInput,
+    GetJourneyExperimentInput,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -1312,6 +1323,12 @@ class CirculatioService:
             include_deleted=False,
             limit=50,
         )
+        journey_experiments = await self._repository.list_journey_experiments(
+            user_id,
+            statuses=["active", "quiet"],
+            include_deleted=False,
+            limit=100,
+        )
         existing_briefs = await self._repository.list_proactive_briefs(
             user_id,
             include_deleted=False,
@@ -1322,6 +1339,7 @@ class CirculatioService:
         result: dict[str, object] = {
             "recentPractices": recent_practices,
             "journeys": journeys,
+            "journeyExperiments": journey_experiments,
             "existingBriefs": existing_briefs,
             "profile": profile,
             "adaptationSummary": adaptation_summary,
@@ -1396,6 +1414,7 @@ class CirculatioService:
             entity_refs: dict[str, list[Id]] = {}
             for key, ref_key in (
                 ("journeys", "relatedJourneyIds"),
+                ("experiments", "relatedExperimentIds"),
                 ("materials", "relatedMaterialIds"),
                 ("goals", "relatedGoalIds"),
                 ("symbols", "relatedSymbolIds"),
@@ -1614,6 +1633,9 @@ class CirculatioService:
             method_context=method_context,
             thread_digests=record_thread_digests,
             journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+            journey_experiments=cast(
+                list[JourneyExperimentRecord], coach_runtime["journeyExperiments"]
+            ),
             recent_practices=cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
             existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
             dashboard=dashboard,
@@ -1622,6 +1644,10 @@ class CirculatioService:
             ),
             now=effective_runtime_now,
         )
+        method_context["activeJourneyExperiments"] = [
+            self._summarize_journey_experiment(item)
+            for item in cast(list[JourneyExperimentRecord], coach_runtime["journeyExperiments"])
+        ]
         method_context = self._finalize_method_context_snapshot(
             method_context,
             window_end=window_end,
@@ -1675,6 +1701,9 @@ class CirculatioService:
             "threadDigests": thread_digests,
             "recentPractices": cast(list[PracticeSessionRecord], coach_runtime["recentPractices"]),
             "journeys": cast(list[JourneyRecord], coach_runtime["journeys"]),
+            "journeyExperiments": cast(
+                list[JourneyExperimentRecord], coach_runtime["journeyExperiments"]
+            ),
             "existingBriefs": cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
             "profile": coach_runtime["profile"],
         }
@@ -2105,6 +2134,194 @@ class CirculatioService:
             updates,
         )
 
+    async def start_journey_experiment(
+        self,
+        input_data: StartJourneyExperimentInput,
+    ) -> JourneyExperimentRecord:
+        timestamp = now_iso()
+        brief_id = self._optional_str(input_data.get("briefId"))
+        source = cast(
+            JourneyExperimentSource,
+            self._optional_str(input_data.get("source"))
+            or ("rhythmic_brief" if brief_id else self._optional_str(input_data.get("surface")) or "manual"),
+        )
+        brief: ProactiveBriefRecord | None = None
+        if brief_id is not None:
+            brief = await self._repository.get_proactive_brief(input_data["userId"], brief_id)
+            existing = await self._repository.list_journey_experiments(
+                input_data["userId"],
+                statuses=["active", "quiet", "completed", "released", "archived"],
+                include_deleted=False,
+                limit=200,
+            )
+            for experiment in existing:
+                if str(experiment.get("originBriefId") or "").strip() == brief_id:
+                    return experiment
+        journey = await self._resolve_journey_reference(
+            user_id=input_data["userId"],
+            journey_id=input_data.get("journeyId") or (brief.get("relatedJourneyIds", [None])[0] if brief else None),
+            journey_label=input_data.get("journeyLabel"),
+        )
+        if str(journey.get("status") or "").strip() in {"paused", "completed", "archived", "deleted"}:
+            raise ValidationError("Journey experiments require an active journey.")
+        suggested = await self._resolve_journey_experiment_start_payload(
+            user_id=input_data["userId"],
+            journey=journey,
+            input_data=input_data,
+            brief=brief,
+        )
+        await self._archive_current_journey_experiments(
+            user_id=input_data["userId"],
+            journey_id=cast(Id, journey["id"]),
+            archived_at=timestamp,
+        )
+        record: JourneyExperimentRecord = {
+            "id": create_id("journey_experiment"),
+            "userId": input_data["userId"],
+            "journeyId": cast(Id, journey["id"]),
+            "title": suggested["title"],
+            "summary": suggested["summary"],
+            "status": "active",
+            "source": source,
+            "bodyFirst": bool(suggested.get("bodyFirst", False)),
+            "relatedPracticeSessionIds": list(suggested.get("relatedPracticeSessionIds", [])),
+            "relatedBriefIds": [brief_id] if brief_id else [],
+            "relatedSymbolIds": list(suggested.get("relatedSymbolIds", [])),
+            "relatedGoalTensionIds": list(suggested.get("relatedGoalTensionIds", [])),
+            "relatedBodyStateIds": list(suggested.get("relatedBodyStateIds", [])),
+            "relatedResourceIds": list(suggested.get("relatedResourceIds", [])),
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
+        }
+        if suggested.get("preferredMoveKind"):
+            record["preferredMoveKind"] = cast(CoachMoveKind, suggested["preferredMoveKind"])
+        if suggested.get("currentQuestion"):
+            record["currentQuestion"] = str(suggested["currentQuestion"])
+        if suggested.get("suggestedActionText"):
+            record["suggestedActionText"] = str(suggested["suggestedActionText"])
+        if suggested.get("nextCheckInDueAt"):
+            record["nextCheckInDueAt"] = str(suggested["nextCheckInDueAt"])
+        if brief_id:
+            record["originBriefId"] = brief_id
+        created = await self._repository.create_journey_experiment(record)
+        if brief is not None:
+            brief_related_ids = self._normalize_id_list(brief.get("relatedExperimentIds"))
+            await self._repository.update_proactive_brief(
+                input_data["userId"],
+                brief["id"],
+                {
+                    "status": "acted_on",
+                    "actedOnAt": str(brief.get("actedOnAt") or timestamp),
+                    "updatedAt": timestamp,
+                    "cooldownUntil": self._format_datetime(
+                        self._parse_datetime(timestamp) + timedelta(hours=96)
+                    ),
+                    "relatedExperimentIds": self._merge_ids(brief_related_ids, [created["id"]]),
+                },
+            )
+        await self._touch_related_journeys(
+            user_id=input_data["userId"],
+            journey_ids=[cast(Id, journey["id"])],
+            touched_at=timestamp,
+        )
+        return created
+
+    async def list_journey_experiments(
+        self,
+        input_data: ListJourneyExperimentsInput,
+    ) -> list[JourneyExperimentRecord]:
+        journey_ids: list[Id] | None = None
+        if input_data.get("journeyId") or input_data.get("journeyLabel"):
+            journey = await self._resolve_journey_reference(
+                user_id=input_data["userId"],
+                journey_id=input_data.get("journeyId"),
+                journey_label=input_data.get("journeyLabel"),
+                include_deleted=bool(input_data.get("includeDeleted", False)),
+            )
+            journey_ids = [cast(Id, journey["id"])]
+        statuses = [
+            cast(JourneyExperimentStatus, str(item))
+            for item in input_data.get("statuses", [])
+            if str(item).strip()
+        ] or None
+        return await self._repository.list_journey_experiments(
+            input_data["userId"],
+            journey_ids=journey_ids,
+            statuses=statuses,
+            include_deleted=bool(input_data.get("includeDeleted", False)),
+            limit=max(int(input_data.get("limit", 50)), 0),
+        )
+
+    async def get_journey_experiment(
+        self,
+        input_data: GetJourneyExperimentInput,
+    ) -> JourneyExperimentRecord:
+        return await self._repository.get_journey_experiment(
+            input_data["userId"],
+            input_data["experimentId"],
+            include_deleted=bool(input_data.get("includeDeleted", False)),
+        )
+
+    async def respond_journey_experiment(
+        self,
+        input_data: RespondJourneyExperimentInput,
+    ) -> JourneyExperimentRecord:
+        experiment = await self._repository.get_journey_experiment(
+            input_data["userId"],
+            input_data["experimentId"],
+            include_deleted=True,
+        )
+        action = cast(str, input_data["action"])
+        current_status = str(experiment.get("status") or "")
+        allowed: dict[str, set[str]] = {
+            "active": {"quiet", "complete", "release", "archive"},
+            "quiet": {"resume", "complete", "release", "archive"},
+            "completed": {"archive"},
+            "released": {"archive"},
+            "archived": set(),
+            "deleted": set(),
+        }
+        if action not in allowed.get(current_status, set()):
+            raise ValidationError(
+                f"Journey experiment cannot transition from {current_status} via {action}."
+            )
+        timestamp = now_iso()
+        updates: dict[str, object] = {"updatedAt": timestamp}
+        if action == "quiet":
+            profile = await self._repository.get_adaptation_profile(input_data["userId"])
+            cadence_hints = self._adaptation_engine.derive_rhythm_hints(profile=profile)
+            updates["status"] = "quiet"
+            updates["cooldownUntil"] = self._format_datetime(
+                self._parse_datetime(timestamp)
+                + timedelta(hours=int(cadence_hints.get("dismissedTriggerCooldownHours", 48)))
+            )
+            updates.pop("nextCheckInDueAt", None)
+        elif action == "resume":
+            updates["status"] = "active"
+            updates["cooldownUntil"] = ""
+            if input_data.get("nextCheckInDueAt"):
+                updates["nextCheckInDueAt"] = input_data["nextCheckInDueAt"]
+        elif action == "complete":
+            updates["status"] = "completed"
+            updates["completedAt"] = str(experiment.get("completedAt") or timestamp)
+        elif action == "release":
+            updates["status"] = "released"
+            updates["releasedAt"] = str(experiment.get("releasedAt") or timestamp)
+        elif action == "archive":
+            updates["status"] = "archived"
+            updates["archivedAt"] = str(experiment.get("archivedAt") or timestamp)
+        updated = await self._repository.update_journey_experiment(
+            input_data["userId"],
+            input_data["experimentId"],
+            cast(dict[str, object], updates),
+        )
+        await self._touch_related_journeys(
+            user_id=input_data["userId"],
+            journey_ids=[cast(Id, updated["journeyId"])],
+            touched_at=timestamp,
+        )
+        return updated
+
     async def set_journey_status(
         self,
         input_data: SetJourneyStatusInput,
@@ -2132,6 +2349,25 @@ class CirculatioService:
                 journey_ids=[journey["id"]],
                 retired_at=timestamp,
             )
+            experiments = await self._repository.list_journey_experiments(
+                input_data["userId"],
+                journey_ids=[journey["id"]],
+                statuses=["active", "quiet"],
+                include_deleted=False,
+                limit=20,
+            )
+            for experiment in experiments:
+                updates: dict[str, object] = {"updatedAt": timestamp}
+                if status == "paused":
+                    updates["status"] = "quiet"
+                else:
+                    updates["status"] = "archived"
+                    updates["archivedAt"] = str(experiment.get("archivedAt") or timestamp)
+                await self._repository.update_journey_experiment(
+                    input_data["userId"],
+                    experiment["id"],
+                    cast(dict[str, object], updates),
+                )
         return updated
 
     async def _retire_related_open_briefs(
@@ -4150,6 +4386,9 @@ class CirculatioService:
         thread_digests = bundle["threadDigests"]
         recent_practices = bundle["recentPractices"]
         journeys = bundle["journeys"]
+        journey_experiments = cast(
+            list[JourneyExperimentRecord], bundle.get("journeyExperiments", [])
+        )
         existing_briefs = bundle["existingBriefs"]
         journey_followthrough = cast(
             list[JourneyFollowthroughSummary], bundle.get("journeyFollowthrough", [])
@@ -4193,6 +4432,13 @@ class CirculatioService:
             existing_briefs=existing_briefs,
             due_seeds=due_seeds,
             max_invitations=max_invitations,
+            window_start=resolved_start,
+            window_end=resolved_end,
+        )
+        tending_container = self._build_journey_tending_container(
+            journey_experiments=journey_experiments,
+            journeys=journeys,
+            journey_followthrough=journey_followthrough,
             window_start=resolved_start,
             window_end=resolved_end,
         )
@@ -4242,6 +4488,27 @@ class CirculatioService:
                 payload={"items": deepcopy(rhythmic_invitations)},
             ),
             self._journey_card(
+                section="tending_now",
+                title=tending_container["title"],
+                body=tending_container["summary"],
+                status=tending_container["kind"],
+                actions=tending_container["actions"],
+                entity_refs={
+                    "journeys": [tending_container["journeyId"]]
+                    if tending_container.get("journeyId")
+                    else [],
+                    "experiments": list(tending_container.get("relatedExperimentIds", [])),
+                    "practiceSessions": list(
+                        tending_container.get("relatedPracticeSessionIds", [])
+                    ),
+                },
+                payload=(
+                    {"suggestedExperiment": deepcopy(tending_container["suggestedExperiment"])}
+                    if tending_container.get("suggestedExperiment")
+                    else None
+                ),
+            ),
+            self._journey_card(
                 section="practice_container",
                 title=practice_container["title"],
                 body=practice_container["summary"],
@@ -4281,6 +4548,7 @@ class CirculatioService:
             "aliveToday": alive_surface,
             "weeklySurface": weekly_surface,
             "rhythmicInvitations": rhythmic_invitations,
+            "tendingContainer": tending_container,
             "practiceContainer": practice_container,
             "fallbackText": self._render_journey_page_fallback(
                 cards=cards,
@@ -4762,6 +5030,12 @@ class CirculatioService:
             success=event.get("success"),
             sample_weight=event.get("sampleWeight"),
         )
+        if updated.get("relatedExperimentIds"):
+            await self._touch_journey_experiments(
+                user_id=input_data["userId"],
+                experiment_ids=self._normalize_id_list(updated.get("relatedExperimentIds")),
+                touched_at=timestamp,
+            )
         if updated.get("relatedJourneyIds"):
             await self._touch_related_journeys(
                 user_id=input_data["userId"],
@@ -4875,6 +5149,12 @@ class CirculatioService:
                 signals=event["signals"],
                 success=event.get("success"),
                 sample_weight=event.get("sampleWeight"),
+            )
+        if practice.get("relatedExperimentIds"):
+            await self._touch_journey_experiments(
+                user_id=user_id,
+                experiment_ids=self._normalize_id_list(practice.get("relatedExperimentIds")),
+                touched_at=timestamp,
             )
         if practice.get("relatedJourneyIds"):
             await self._touch_related_journeys(
@@ -5077,6 +5357,23 @@ class CirculatioService:
             input_data["briefId"],
             updates,
         )
+        if action == "dismissed" and updated.get("relatedExperimentIds"):
+            for experiment_id in self._normalize_id_list(updated.get("relatedExperimentIds")):
+                await self._repository.update_journey_experiment(
+                    input_data["userId"],
+                    experiment_id,
+                    {
+                        "status": "quiet",
+                        "updatedAt": timestamp,
+                        "cooldownUntil": str(updated.get("cooldownUntil") or timestamp),
+                    },
+                )
+        elif action in {"shown", "acted_on"} and updated.get("relatedExperimentIds"):
+            await self._touch_journey_experiments(
+                user_id=input_data["userId"],
+                experiment_ids=self._normalize_id_list(updated.get("relatedExperimentIds")),
+                touched_at=timestamp,
+            )
         if action in {"shown", "acted_on"} and updated.get("relatedJourneyIds"):
             await self._touch_related_journeys(
                 user_id=input_data["userId"],
@@ -8333,7 +8630,8 @@ class CirculatioService:
             reasons.append("clarification_state_present")
         elif item_count > 0:
             mention_recommendation = "context_available_hold_first"
-            followup_question_style = "single_gentle_question"
+            followup_question_style = "none"
+            max_questions = 0
             reasons.append("context_items_available")
         questioning_preference = (
             method_state.get("questioningPreference")
@@ -8607,6 +8905,7 @@ class CirculatioService:
                     "status": str(brief.get("status") or ""),
                     "suggestedAction": self._optional_str(brief.get("suggestedAction")),
                     "relatedJourneyIds": list(brief.get("relatedJourneyIds", [])),
+                    "relatedExperimentIds": list(brief.get("relatedExperimentIds", [])),
                     "relatedMaterialIds": list(brief.get("relatedMaterialIds", [])),
                     "relatedSymbolIds": list(brief.get("relatedSymbolIds", [])),
                     "relatedPracticeSessionIds": list(brief.get("relatedPracticeSessionIds", [])),
@@ -8632,6 +8931,7 @@ class CirculatioService:
                     "triggerKey": trigger_key,
                     "suggestedAction": self._optional_str(seed.get("suggestedActionHint")),
                     "relatedJourneyIds": list(seed.get("relatedJourneyIds", [])),
+                    "relatedExperimentIds": list(seed.get("relatedExperimentIds", [])),
                     "relatedMaterialIds": list(seed.get("relatedMaterialIds", [])),
                     "relatedSymbolIds": list(seed.get("relatedSymbolIds", [])),
                     "relatedPracticeSessionIds": list(seed.get("relatedPracticeSessionIds", [])),
@@ -8653,6 +8953,199 @@ class CirculatioService:
                 }
             )
         return previews[:max_invitations]
+
+    def _build_journey_tending_container(
+        self,
+        *,
+        journey_experiments: list[JourneyExperimentRecord],
+        journeys: list[JourneyRecord],
+        journey_followthrough: list[JourneyFollowthroughSummary],
+        window_start: str,
+        window_end: str,
+    ) -> JourneyTendingContainer:
+        journeys_by_id = {
+            str(journey.get("id") or "").strip(): journey
+            for journey in journeys
+            if str(journey.get("id") or "").strip()
+        }
+        followthrough_by_journey = {
+            str(item.get("journeyId") or "").strip(): item
+            for item in journey_followthrough
+            if isinstance(item, dict) and str(item.get("journeyId") or "").strip()
+        }
+        prioritized = sorted(
+            [item for item in journey_experiments if str(item.get("status") or "").strip() in {"active", "quiet"}],
+            key=lambda item: (
+                1 if str(item.get("status") or "") == "active" else 0,
+                int(followthrough_by_journey.get(str(item.get("journeyId") or "").strip(), {}).get("priority", 0) or 0),
+                str(item.get("updatedAt") or item.get("createdAt") or ""),
+            ),
+            reverse=True,
+        )
+        if prioritized:
+            experiment = prioritized[0]
+            journey = journeys_by_id.get(str(experiment.get("journeyId") or "").strip(), {})
+            active = str(experiment.get("status") or "") == "active"
+            actions = [
+                self._journey_action(
+                    label="Resume" if not active else "Quiet for now",
+                    kind="tool",
+                    operation="circulatio.journey.experiment.respond",
+                    payload={
+                        "experimentId": experiment["id"],
+                        "action": "resume" if not active else "quiet",
+                    },
+                    write_intent="write",
+                    requires_explicit_user_action=True,
+                ),
+                self._journey_action(
+                    label="Complete",
+                    kind="tool",
+                    operation="circulatio.journey.experiment.respond",
+                    payload={"experimentId": experiment["id"], "action": "complete"},
+                    write_intent="write",
+                    requires_explicit_user_action=True,
+                ),
+                self._journey_action(
+                    label="Release",
+                    kind="tool",
+                    operation="circulatio.journey.experiment.respond",
+                    payload={"experimentId": experiment["id"], "action": "release"},
+                    write_intent="write",
+                    requires_explicit_user_action=True,
+                ),
+            ]
+            related_practice_ids = list(experiment.get("relatedPracticeSessionIds", []))
+            if related_practice_ids:
+                actions.append(
+                    self._journey_action(
+                        label="Open practice",
+                        kind="entity",
+                        entity_type="PracticeSession",
+                        entity_id=related_practice_ids[0],
+                        write_intent="read",
+                        requires_explicit_user_action=True,
+                    )
+                )
+            return {
+                "kind": "active_experiment" if active else "quiet_experiment",
+                "title": "Current tending",
+                "summary": self._compact_page_text(
+                    str(experiment.get("summary") or experiment.get("title") or "A current tending frame is active."),
+                    max_length=320,
+                ),
+                "journeyId": cast(Id, experiment["journeyId"]),
+                "journeyLabel": self._optional_str(journey.get("label")),
+                "experimentId": cast(Id, experiment["id"]),
+                "preferredMoveKind": self._optional_str(experiment.get("preferredMoveKind")),
+                "bodyFirst": bool(experiment.get("bodyFirst", False)),
+                "relatedExperimentIds": [cast(Id, experiment["id"])],
+                "relatedPracticeSessionIds": related_practice_ids,
+                "actions": actions,
+            }
+        suggestion = self._suggested_journey_experiment(journey_followthrough=journey_followthrough, journeys=journeys)
+        if suggestion is not None:
+            return {
+                "kind": "suggested_experiment",
+                "title": "Current tending",
+                "summary": self._compact_page_text(str(suggestion["summary"]), max_length=320),
+                "journeyId": cast(Id, suggestion["journeyId"]),
+                "journeyLabel": self._optional_str(suggestion.get("journeyLabel")),
+                "preferredMoveKind": self._optional_str(suggestion.get("preferredMoveKind")),
+                "bodyFirst": bool(suggestion.get("bodyFirst", False)),
+                "relatedExperimentIds": [],
+                "relatedPracticeSessionIds": list(suggestion.get("relatedPracticeSessionIds", [])),
+                "actions": [
+                    self._journey_action(
+                        label="Start current tending",
+                        kind="tool",
+                        operation="circulatio.journey.experiment.start",
+                        payload={
+                            "journeyId": suggestion["journeyId"],
+                            "surface": "journey_page",
+                            "windowStart": window_start,
+                            "windowEnd": window_end,
+                        },
+                        write_intent="write",
+                        requires_explicit_user_action=True,
+                    )
+                ],
+                "suggestedExperiment": deepcopy(suggestion),
+            }
+        return {
+            "kind": "none",
+            "title": "Current tending",
+            "summary": "No current tending frame is active for this page.",
+            "relatedExperimentIds": [],
+            "relatedPracticeSessionIds": [],
+            "actions": [],
+        }
+
+    def _suggested_journey_experiment(
+        self,
+        *,
+        journey_followthrough: list[JourneyFollowthroughSummary],
+        journeys: list[JourneyRecord],
+    ) -> dict[str, object] | None:
+        journeys_by_id = {
+            str(journey.get("id") or "").strip(): journey
+            for journey in journeys
+            if str(journey.get("id") or "").strip()
+        }
+        candidates = [
+            item
+            for item in journey_followthrough
+            if isinstance(item, dict)
+            and str(item.get("readiness") or "").strip() in {"available", "ready"}
+            and str(item.get("journeyId") or "").strip()
+            and str(item.get("recommendedMoveKind") or "").strip()
+            not in {"", "track_without_prompt", "hold_silence"}
+        ]
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda item: (
+                int(item.get("priority", 0) or 0),
+                str(item.get("lastTouchedAt") or ""),
+            ),
+            reverse=True,
+        )
+        summary = candidates[0]
+        journey = journeys_by_id.get(str(summary.get("journeyId") or "").strip(), {})
+        move_kind = str(summary.get("recommendedMoveKind") or "return_to_journey").strip()
+        title_map = {
+            "ask_body_checkin": "Body-first tending",
+            "offer_resource": "Gentler tending",
+            "ask_goal_tension": "Tend the live tension",
+            "ask_relational_scene": "Stay with the scene",
+            "ask_practice_followup": "Stay with what shifted",
+            "offer_practice": "Bounded practice tending",
+            "return_to_journey": "Return to the thread",
+        }
+        summary_map = {
+            "ask_body_checkin": "This journey looks best tended body-first rather than explained.",
+            "offer_resource": "This journey looks live, but a gentler resource fits better than another push.",
+            "ask_goal_tension": "A live tension can be stayed with without turning it into a task.",
+            "ask_relational_scene": "A relational thread can be revisited scene-first and lightly.",
+            "ask_practice_followup": "A recent journey-linked practice can anchor how you stay with this thread.",
+            "offer_practice": "A light practice could be one way of staying with this journey.",
+            "return_to_journey": "This journey can be picked up from what is already alive.",
+        }
+        return {
+            "journeyId": cast(Id, summary["journeyId"]),
+            "journeyLabel": self._optional_str(journey.get("label")),
+            "title": title_map.get(move_kind, "Current tending"),
+            "summary": summary_map.get(move_kind, "A way of staying with this journey is available."),
+            "preferredMoveKind": move_kind,
+            "bodyFirst": bool(summary.get("bodyFirst", False)),
+            "currentQuestion": self._optional_str(journey.get("currentQuestion")),
+            "relatedPracticeSessionIds": list(summary.get("relatedPracticeSessionIds", [])),
+            "relatedBodyStateIds": list(summary.get("relatedBodyStateIds", [])),
+            "relatedGoalTensionIds": list(summary.get("relatedGoalTensionIds", [])),
+            "relatedSymbolIds": list(journey.get("relatedSymbolIds", []))[:3],
+            "relatedResourceIds": [],
+            "suggestedActionText": "You can stay with this lightly, or leave it alone for now.",
+        }
 
     def _build_journey_practice_container(
         self,
@@ -8710,6 +9203,7 @@ class CirculatioService:
                     max_length=320,
                 ),
                 "practiceSessionId": practice["id"],
+                "relatedExperimentIds": list(practice.get("relatedExperimentIds", [])),
                 "status": str(practice.get("status") or ""),
                 "actions": actions,
             }
@@ -8732,6 +9226,7 @@ class CirculatioService:
                     max_length=320,
                 ),
                 "practiceSessionId": practice["id"],
+                "relatedExperimentIds": list(practice.get("relatedExperimentIds", [])),
                 "status": str(practice.get("status") or ""),
                 "actions": self._practice_response_actions(practice["id"]),
             }
@@ -8744,6 +9239,7 @@ class CirculatioService:
                     max_length=320,
                 ),
                 "practiceRecommendation": deepcopy(practice_suggestion),
+                "relatedExperimentIds": list(practice_suggestion.get("relatedExperimentIds", [])),
                 "actions": [
                     self._journey_action(
                         label="Create practice card",
@@ -9147,6 +9643,156 @@ class CirculatioService:
 
     def _practice_label(self, practice: PracticeSessionRecord) -> str:
         return str(practice.get("practiceType") or "practice").replace("_", " ").title()
+
+    def _summarize_journey_experiment(
+        self, experiment: JourneyExperimentRecord
+    ) -> JourneyExperimentSummary:
+        summary: JourneyExperimentSummary = {
+            "id": cast(Id, experiment["id"]),
+            "journeyId": cast(Id, experiment["journeyId"]),
+            "title": str(experiment.get("title") or "Current tending"),
+            "summary": str(experiment.get("summary") or experiment.get("title") or ""),
+            "status": cast(
+                Literal["active", "quiet", "completed", "released", "archived", "deleted"],
+                str(experiment.get("status") or "active"),
+            ),
+            "bodyFirst": bool(experiment.get("bodyFirst", False)),
+            "relatedPracticeSessionIds": list(experiment.get("relatedPracticeSessionIds", [])),
+            "relatedSymbolIds": list(experiment.get("relatedSymbolIds", [])),
+            "relatedGoalTensionIds": list(experiment.get("relatedGoalTensionIds", [])),
+            "relatedBodyStateIds": list(experiment.get("relatedBodyStateIds", [])),
+            "relatedResourceIds": list(experiment.get("relatedResourceIds", [])),
+            "updatedAt": str(experiment.get("updatedAt") or experiment.get("createdAt") or now_iso()),
+        }
+        if experiment.get("preferredMoveKind"):
+            summary["preferredMoveKind"] = cast(CoachMoveKind, experiment["preferredMoveKind"])
+        if experiment.get("currentQuestion"):
+            summary["currentQuestion"] = str(experiment["currentQuestion"])
+        if experiment.get("suggestedActionText"):
+            summary["suggestedActionText"] = str(experiment["suggestedActionText"])
+        if experiment.get("nextCheckInDueAt"):
+            summary["nextCheckInDueAt"] = str(experiment["nextCheckInDueAt"])
+        if experiment.get("cooldownUntil"):
+            summary["cooldownUntil"] = str(experiment["cooldownUntil"])
+        return summary
+
+    async def _resolve_journey_experiment_start_payload(
+        self,
+        *,
+        user_id: Id,
+        journey: JourneyRecord,
+        input_data: StartJourneyExperimentInput,
+        brief: ProactiveBriefRecord | None,
+    ) -> dict[str, object]:
+        if brief is not None:
+            return {
+                "title": str(brief.get("title") or "Current tending"),
+                "summary": str(
+                    brief.get("summary")
+                    or brief.get("suggestedAction")
+                    or "Stay with this journey lightly."
+                ),
+                "bodyFirst": str(brief.get("coachMoveKind") or "").strip() == "ask_body_checkin",
+                "preferredMoveKind": self._optional_str(brief.get("coachMoveKind")),
+                "currentQuestion": self._optional_str(journey.get("currentQuestion")),
+                "suggestedActionText": self._optional_str(brief.get("suggestedAction")),
+                "relatedPracticeSessionIds": list(brief.get("relatedPracticeSessionIds", [])),
+                "relatedSymbolIds": list(brief.get("relatedSymbolIds", [])),
+                "relatedGoalTensionIds": [],
+                "relatedBodyStateIds": [],
+                "relatedResourceIds": list(brief.get("relatedResourceIds", [])),
+            }
+        if input_data.get("surface"):
+            window_start, window_end = self._resolve_window(
+                anchor=input_data.get("windowEnd"),
+                fallback_start=input_data.get("windowStart"),
+                fallback_end=input_data.get("windowEnd"),
+            )
+            bundle = await self._load_surface_context_bundle(
+                user_id=user_id,
+                window_start=window_start,
+                window_end=window_end,
+                include_dashboard=True,
+                include_weekly_reviews=input_data.get("surface") == "journey_page",
+                memory_query={} if input_data.get("surface") == "journey_page" else None,
+                surface=str(input_data["surface"]),
+            )
+            suggestion = self._suggested_journey_experiment(
+                journey_followthrough=cast(
+                    list[JourneyFollowthroughSummary], bundle.get("journeyFollowthrough", [])
+                ),
+                journeys=cast(list[JourneyRecord], bundle.get("journeys", [])),
+            )
+            if suggestion is None or suggestion.get("journeyId") != journey["id"]:
+                raise ValidationError("No current tending suggestion is available for that journey.")
+            return suggestion
+        title = self._optional_str(input_data.get("title"))
+        summary_text = self._optional_str(input_data.get("summary"))
+        if not title or not summary_text:
+            raise ValidationError("Manual journey experiments require title and summary.")
+        return {
+            "title": title,
+            "summary": summary_text,
+            "bodyFirst": bool(input_data.get("bodyFirst", False)),
+            "preferredMoveKind": self._optional_str(input_data.get("preferredMoveKind")),
+            "currentQuestion": self._optional_str(input_data.get("currentQuestion"))
+            or self._optional_str(journey.get("currentQuestion")),
+            "suggestedActionText": self._optional_str(input_data.get("suggestedActionText")),
+            "relatedPracticeSessionIds": [],
+            "relatedSymbolIds": list(journey.get("relatedSymbolIds", []))[:3],
+            "relatedGoalTensionIds": [],
+            "relatedBodyStateIds": list(journey.get("relatedBodyStateIds", []))[:3],
+            "relatedResourceIds": [],
+        }
+
+    async def _archive_current_journey_experiments(
+        self,
+        *,
+        user_id: Id,
+        journey_id: Id,
+        archived_at: str,
+        keep_id: Id | None = None,
+    ) -> None:
+        experiments = await self._repository.list_journey_experiments(
+            user_id,
+            journey_ids=[journey_id],
+            statuses=["active", "quiet"],
+            include_deleted=False,
+            limit=20,
+        )
+        for experiment in experiments:
+            if keep_id is not None and experiment["id"] == keep_id:
+                continue
+            await self._repository.update_journey_experiment(
+                user_id,
+                experiment["id"],
+                {
+                    "status": "archived",
+                    "updatedAt": archived_at,
+                    "archivedAt": str(experiment.get("archivedAt") or archived_at),
+                },
+            )
+
+    async def _touch_journey_experiments(
+        self,
+        *,
+        user_id: Id,
+        experiment_ids: list[Id],
+        touched_at: str,
+    ) -> None:
+        for experiment_id in self._normalize_id_list(experiment_ids):
+            experiment = await self._repository.get_journey_experiment(
+                user_id,
+                experiment_id,
+                include_deleted=False,
+            )
+            if str(experiment.get("status") or "").strip() in {"archived", "deleted"}:
+                continue
+            await self._repository.update_journey_experiment(
+                user_id,
+                experiment_id,
+                {"updatedAt": touched_at},
+            )
 
     def _compact_page_text(self, value: object, *, max_length: int) -> str:
         text = " ".join(str(value or "").split())
@@ -11364,6 +12010,7 @@ class CirculatioService:
             )
         if related_journey_ids:
             plan["relatedJourneyIds"] = list(related_journey_ids)
+        related_experiment_ids = self._normalize_id_list(plan.get("relatedExperimentIds"))
         record: PracticeSessionRecord = {
             "id": str(plan.get("id") or create_id("practice_session")),
             "userId": user_id,
@@ -11428,6 +12075,8 @@ class CirculatioService:
             record["relatedResourceIds"] = cast(list[Id], related_resource_ids)
         if related_journey_ids:
             record["relatedJourneyIds"] = cast(list[Id], related_journey_ids)
+        if related_experiment_ids:
+            record["relatedExperimentIds"] = cast(list[Id], related_experiment_ids)
         stored = await self._repository.create_practice_session(record)
         if related_journey_ids:
             await self._touch_related_journeys(
@@ -11461,6 +12110,7 @@ class CirculatioService:
             "renderedResponse": str(result["userFacingResponse"]),
             "expiresAt": expires_at,
             "relatedJourneyIds": list(seed.get("relatedJourneyIds", [])),
+            "relatedExperimentIds": list(seed.get("relatedExperimentIds", [])),
             "relatedMaterialIds": list(seed.get("relatedMaterialIds", [])),
             "relatedSymbolIds": list(seed.get("relatedSymbolIds", [])),
             "relatedPracticeSessionIds": list(seed.get("relatedPracticeSessionIds", [])),

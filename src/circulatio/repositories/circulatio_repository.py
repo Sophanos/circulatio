@@ -50,6 +50,11 @@ from ..domain.interpretations import (
     InterpretationRunUpdate,
     ProposalDecisionRecord,
 )
+from ..domain.journey_experiments import (
+    JourneyExperimentRecord,
+    JourneyExperimentStatus,
+    JourneyExperimentUpdate,
+)
 from ..domain.journeys import JourneyRecord, JourneyUpdate
 from ..domain.living_myth import (
     AnalysisPacketRecord,
@@ -934,6 +939,36 @@ class CirculatioRepository(GraphMemoryRepository):
     async def update_journey(
         self, user_id: Id, journey_id: Id, updates: JourneyUpdate
     ) -> JourneyRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_journey_experiment(
+        self, record: JourneyExperimentRecord
+    ) -> JourneyExperimentRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_journey_experiments(
+        self,
+        user_id: Id,
+        *,
+        journey_ids: list[Id] | None = None,
+        statuses: list[JourneyExperimentStatus] | None = None,
+        include_deleted: bool = False,
+        limit: int = 50,
+    ) -> list[JourneyExperimentRecord]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_journey_experiment(
+        self, user_id: Id, experiment_id: Id, *, include_deleted: bool = False
+    ) -> JourneyExperimentRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_journey_experiment(
+        self, user_id: Id, experiment_id: Id, updates: JourneyExperimentUpdate
+    ) -> JourneyExperimentRecord:
         raise NotImplementedError
 
     @abstractmethod

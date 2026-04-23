@@ -3141,6 +3141,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "alive_today",
                     "weekly_reflection",
                     "rhythmic_invitations",
+                    "tending_now",
                     "practice_container",
                     "analysis_packet",
                 ],
@@ -3148,6 +3149,7 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(await repository.list_weekly_reviews("user_1"), [])
             self.assertEqual(await repository.list_proactive_briefs("user_1"), [])
             self.assertEqual(await repository.list_practice_sessions("user_1"), [])
+            self.assertEqual(await repository.list_journey_experiments("user_1"), [])
             self.assertIsNone(await repository.get_adaptation_profile("user_1"))
             self.assertEqual(len(llm.alive_today_calls), 1)
             self.assertIn("methodContextSnapshot", llm.alive_today_calls[0])
@@ -3530,6 +3532,128 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(paused["status"], "paused")
             self.assertEqual(active["status"], "active")
             self.assertEqual([item["id"] for item in active_list], [journey["id"]])
+
+        asyncio.run(run())
+
+    def test_start_journey_experiment_from_brief_is_idempotent_and_links_brief(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Returning contact thread",
+                }
+            )
+            brief = await repository.create_proactive_brief(
+                {
+                    "id": create_id("proactive_brief"),
+                    "userId": "user_1",
+                    "briefType": "journey_checkin",
+                    "status": "candidate",
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                    "relatedJourneyIds": [journey["id"]],
+                    "relatedMaterialIds": [],
+                    "relatedSymbolIds": [],
+                    "relatedPracticeSessionIds": [],
+                    "relatedExperimentIds": [],
+                    "evidenceIds": [],
+                    "createdAt": "2026-04-19T00:00:00Z",
+                    "updatedAt": "2026-04-19T00:00:00Z",
+                }
+            )
+
+            first = await service.start_journey_experiment(
+                {"userId": "user_1", "briefId": brief["id"]}
+            )
+            second = await service.start_journey_experiment(
+                {"userId": "user_1", "briefId": brief["id"]}
+            )
+            experiments = await repository.list_journey_experiments("user_1")
+            updated_brief = await repository.get_proactive_brief("user_1", brief["id"])
+
+            self.assertEqual(first["id"], second["id"])
+            self.assertEqual(len(experiments), 1)
+            self.assertEqual(updated_brief["status"], "acted_on")
+            self.assertEqual(updated_brief["relatedExperimentIds"], [first["id"]])
+
+        asyncio.run(run())
+
+    def test_dismissing_experiment_linked_brief_quiets_the_experiment(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Returning contact thread",
+                }
+            )
+            experiment = await service.start_journey_experiment(
+                {
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                }
+            )
+            brief = await repository.create_proactive_brief(
+                {
+                    "id": create_id("proactive_brief"),
+                    "userId": "user_1",
+                    "briefType": "journey_checkin",
+                    "status": "candidate",
+                    "title": "Journey check-in",
+                    "summary": "A light check-in remains available.",
+                    "relatedJourneyIds": [journey["id"]],
+                    "relatedMaterialIds": [],
+                    "relatedSymbolIds": [],
+                    "relatedPracticeSessionIds": [],
+                    "relatedExperimentIds": [experiment["id"]],
+                    "evidenceIds": [],
+                    "createdAt": "2026-04-19T00:00:00Z",
+                    "updatedAt": "2026-04-19T00:00:00Z",
+                }
+            )
+
+            dismissed = await service.respond_rhythmic_brief(
+                {"userId": "user_1", "briefId": brief["id"], "action": "dismissed"}
+            )
+            updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
+
+            self.assertEqual(dismissed["status"], "dismissed")
+            self.assertEqual(updated_experiment["status"], "quiet")
+            self.assertEqual(updated_experiment["cooldownUntil"], dismissed["cooldownUntil"])
+
+        asyncio.run(run())
+
+    def test_pausing_journey_quiets_current_experiment(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Returning contact thread",
+                }
+            )
+            experiment = await service.start_journey_experiment(
+                {
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                }
+            )
+
+            await service.set_journey_status(
+                {
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "status": "paused",
+                }
+            )
+            updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
+
+            self.assertEqual(updated_experiment["status"], "quiet")
 
         asyncio.run(run())
 

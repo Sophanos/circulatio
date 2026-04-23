@@ -367,6 +367,9 @@ class CoachEngine:
             "blockedMoves": list(selected.get("blockedMoves", [])),
             "reasons": list(selected.get("reasons", [])),
         }
+        related_experiment_ids = self._ids(selected.get("relatedExperimentIds"))
+        if related_experiment_ids:
+            move["relatedExperimentIds"] = related_experiment_ids
         related_resource_ids = selected.get("relatedResourceIds", [])
         if related_resource_ids:
             move["relatedResourceIds"] = list(related_resource_ids)
@@ -450,6 +453,7 @@ class CoachEngine:
         loop_kind = self._followthrough_loop_kind(summary)
         title_hint, summary_hint, prompt_frame = self._followthrough_prompt(summary=summary)
         related_practice_session_ids = self._ids(summary.get("relatedPracticeSessionIds"))
+        related_experiment_ids = self._ids(summary.get("relatedExperimentIds"))
         related_body_state_ids = self._ids(summary.get("relatedBodyStateIds"))
         related_goal_tension_ids = self._ids(summary.get("relatedGoalTensionIds"))
         related_goal_ids: list[Id] = []
@@ -499,6 +503,10 @@ class CoachEngine:
             {"recordType": "Journey", "recordId": journey_id, "summary": summary_hint}
         ]
         source_record_refs.extend(
+            {"recordType": "JourneyExperiment", "recordId": experiment_id}
+            for experiment_id in related_experiment_ids[:1]
+        )
+        source_record_refs.extend(
             {"recordType": "PracticeSession", "recordId": practice_id}
             for practice_id in related_practice_session_ids[:2]
         )
@@ -517,6 +525,7 @@ class CoachEngine:
             priority=int(summary.get("priority", 0) or 0),
             related_goal_ids=related_goal_ids,
             related_journey_ids=[cast(Id, journey_id)],
+            related_experiment_ids=related_experiment_ids,
             related_practice_session_ids=related_practice_session_ids,
             related_symbol_ids=[],
             related_body_state_ids=related_body_state_ids,
@@ -688,9 +697,10 @@ class CoachEngine:
         loop_candidates: list[CoachLoopSummary],
         followthrough_loop: CoachLoopSummary,
         goal_ids_by_tension: dict[str, list[Id]],
-    ) -> int | None:
+        ) -> int | None:
         followthrough_kind = str(followthrough_loop.get("kind") or "").strip()
         followthrough_journey_ids = set(self._ids(followthrough_loop.get("relatedJourneyIds")))
+        followthrough_experiment_ids = set(self._ids(followthrough_loop.get("relatedExperimentIds")))
         followthrough_practice_ids = set(self._ids(followthrough_loop.get("relatedPracticeSessionIds")))
         followthrough_body_ids = set(self._ids(followthrough_loop.get("relatedBodyStateIds")))
         followthrough_goal_ids = set(self._ids(followthrough_loop.get("relatedGoalIds")))
@@ -699,6 +709,10 @@ class CoachEngine:
             candidate_kind = str(candidate.get("kind") or "").strip()
             if candidate_kind != followthrough_kind:
                 continue
+            if followthrough_experiment_ids.intersection(
+                self._ids(candidate.get("relatedExperimentIds"))
+            ):
+                return index
             if followthrough_journey_ids.intersection(self._ids(candidate.get("relatedJourneyIds"))):
                 return index
             if followthrough_practice_ids.intersection(
@@ -725,6 +739,7 @@ class CoachEngine:
         for field in (
             "relatedGoalIds",
             "relatedJourneyIds",
+            "relatedExperimentIds",
             "relatedPracticeSessionIds",
             "relatedSymbolIds",
             "relatedBodyStateIds",
@@ -848,12 +863,13 @@ class CoachEngine:
                 answer_mode="choice_then_free_text",
                 skip_behavior="track_only",
             ),
-            priority=92 if move_kind == "offer_resource" else 82,
-            related_goal_ids=self._ids(active_goal_tension.get("linkedGoalIds"))
-            or self._ids(first_body_state.get("linkedGoalIds")),
-            related_journey_ids=[],
-            related_practice_session_ids=[],
-            related_symbol_ids=self._ids(first_body_state.get("linkedSymbolIds")),
+                priority=92 if move_kind == "offer_resource" else 82,
+                related_goal_ids=self._ids(active_goal_tension.get("linkedGoalIds"))
+                or self._ids(first_body_state.get("linkedGoalIds")),
+                related_journey_ids=[],
+                related_experiment_ids=[],
+                related_practice_session_ids=[],
+                related_symbol_ids=self._ids(first_body_state.get("linkedSymbolIds")),
             related_body_state_ids=self._ids([body_state_id]) if body_states else [],
             related_relational_scene_ids=[],
             evidence_ids=self._ids(active_goal_tension.get("evidenceIds")),
@@ -937,12 +953,13 @@ class CoachEngine:
                 expected_targets=["goal_tension", "goal", "conscious_attitude"],
                 answer_mode="choice_then_free_text",
                 skip_behavior="track_only",
-            ),
-            priority=78,
-            related_goal_ids=goal_ids,
-            related_journey_ids=[],
-            related_practice_session_ids=[],
-            related_symbol_ids=[],
+                ),
+                priority=78,
+                related_goal_ids=goal_ids,
+                related_journey_ids=[],
+                related_experiment_ids=[],
+                related_practice_session_ids=[],
+                related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=[],
             evidence_ids=self._ids(active_goal_tension.get("evidenceIds")),
@@ -1025,12 +1042,13 @@ class CoachEngine:
                 expected_targets=expected_targets,
                 answer_mode="choice_then_free_text",
                 skip_behavior="cooldown",
-            ),
-            priority=80,
-            related_goal_ids=[],
-            related_journey_ids=[],
-            related_practice_session_ids=[],
-            related_symbol_ids=[],
+                ),
+                priority=80,
+                related_goal_ids=[],
+                related_journey_ids=[],
+                related_experiment_ids=[],
+                related_practice_session_ids=[],
+                related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=active_scene_ids,
             evidence_ids=self._dedupe_ids(
@@ -1161,12 +1179,13 @@ class CoachEngine:
                         else {}
                     ),
                 ),
-            ),
-            priority=94 if move_kind == "ask_practice_followup" else 88,
-            related_goal_ids=[],
-            related_journey_ids=[],
-            related_practice_session_ids=self._ids([practice_id]) if practice is not None else [],
-            related_symbol_ids=[],
+                ),
+                priority=94 if move_kind == "ask_practice_followup" else 88,
+                related_goal_ids=[],
+                related_journey_ids=[],
+                related_experiment_ids=[],
+                related_practice_session_ids=self._ids([practice_id]) if practice is not None else [],
+                related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=[],
             evidence_ids=practice_evidence_ids,
@@ -1250,12 +1269,13 @@ class CoachEngine:
                 answer_mode="free_text",
                 skip_behavior="cooldown",
                 anchor_refs=cast(MethodStateAnchorRefs, {"journeyId": journey_id}),
-            ),
-            priority=90,
-            related_goal_ids=self._ids(journey.get("relatedGoalIds")),
-            related_journey_ids=self._ids([journey_id]),
-            related_practice_session_ids=[],
-            related_symbol_ids=self._ids(journey.get("relatedSymbolIds")),
+                ),
+                priority=90,
+                related_goal_ids=self._ids(journey.get("relatedGoalIds")),
+                related_journey_ids=self._ids([journey_id]),
+                related_experiment_ids=[],
+                related_practice_session_ids=[],
+                related_symbol_ids=self._ids(journey.get("relatedSymbolIds")),
             related_body_state_ids=[],
             related_relational_scene_ids=[],
             evidence_ids=[],
@@ -1355,13 +1375,14 @@ class CoachEngine:
                         else {}
                     ),
                 ),
-            ),
-            priority=96 if depth_level == "grounding_only" else 86,
-            related_goal_ids=[],
-            related_journey_ids=[],
-            related_practice_session_ids=(
-                self._ids([practice.get("id")]) if isinstance(practice, dict) else []
-            ),
+                ),
+                priority=96 if depth_level == "grounding_only" else 86,
+                related_goal_ids=[],
+                related_journey_ids=[],
+                related_experiment_ids=[],
+                related_practice_session_ids=(
+                    self._ids([practice.get("id")]) if isinstance(practice, dict) else []
+                ),
             related_symbol_ids=[],
             related_body_state_ids=self._ids([body_states[0].get("id")]) if body_states else [],
             related_relational_scene_ids=[],
@@ -1422,6 +1443,7 @@ class CoachEngine:
         priority: int,
         related_goal_ids: list[Id],
         related_journey_ids: list[Id],
+        related_experiment_ids: list[Id],
         related_practice_session_ids: list[Id],
         related_symbol_ids: list[Id],
         related_body_state_ids: list[Id],
@@ -1462,6 +1484,7 @@ class CoachEngine:
             "relatedMaterialIds": [],
             "relatedGoalIds": related_goal_ids,
             "relatedJourneyIds": related_journey_ids,
+            "relatedExperimentIds": related_experiment_ids,
             "relatedPracticeSessionIds": related_practice_session_ids,
             "relatedSymbolIds": related_symbol_ids,
             "relatedBodyStateIds": related_body_state_ids,
@@ -1604,7 +1627,7 @@ class CoachEngine:
         loop: CoachLoopSummary,
         *,
         surface: CoachSurface,
-    ) -> tuple[int, int, int, int]:
+    ) -> tuple[int, int, int, int, int]:
         surface_order = {
             "generic": {
                 "practice_integration": 0,
@@ -1668,8 +1691,10 @@ class CoachEngine:
             if "journey_followthrough_dominant" in self._strings(loop.get("reasons"))
             else 1
         )
+        experiment_rank = 0 if self._ids(loop.get("relatedExperimentIds")) else 1
         return (
             dominant_rank,
+            experiment_rank,
             surface_order.get(surface, {}).get(kind, 10),
             -int(loop.get("priority", 0)),
             status_rank.get(str(loop.get("status") or "").strip(), 10),

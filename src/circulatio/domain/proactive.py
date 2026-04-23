@@ -36,6 +36,7 @@ class RhythmicBriefSeed(TypedDict, total=False):
     suggestedActionHint: NotRequired[str]
     priority: Required[int]
     relatedJourneyIds: Required[list[Id]]
+    relatedExperimentIds: NotRequired[list[Id]]
     relatedMaterialIds: Required[list[Id]]
     relatedSymbolIds: Required[list[Id]]
     relatedPracticeSessionIds: Required[list[Id]]
@@ -62,6 +63,7 @@ class ProactiveBriefRecord(TypedDict, total=False):
     suggestedAction: NotRequired[str]
     renderedResponse: NotRequired[str]
     relatedJourneyIds: Required[list[Id]]
+    relatedExperimentIds: NotRequired[list[Id]]
     relatedMaterialIds: Required[list[Id]]
     relatedSymbolIds: Required[list[Id]]
     relatedPracticeSessionIds: Required[list[Id]]
@@ -92,6 +94,7 @@ class ProactiveBriefUpdate(TypedDict, total=False):
     suggestedAction: str
     renderedResponse: str
     relatedJourneyIds: list[Id]
+    relatedExperimentIds: list[Id]
     relatedMaterialIds: list[Id]
     relatedSymbolIds: list[Id]
     relatedPracticeSessionIds: list[Id]

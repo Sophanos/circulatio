@@ -45,6 +45,7 @@ class PracticeEngineTests(unittest.TestCase):
                 "durationMinutes": 12,
                 "contraindicationsChecked": ["none"],
                 "requiresConsent": True,
+                "relatedExperimentIds": ["experiment_1"],
             },
             safety={"status": "clear", "flags": ["none"], "depthWorkAllowed": True},
             method_gate={"blockedMoves": ["active_imagination"]},
@@ -52,6 +53,7 @@ class PracticeEngineTests(unittest.TestCase):
             consent_preferences=[],
         )
         self.assertEqual(result["type"], "journaling")
+        self.assertEqual(result["relatedExperimentIds"], ["experiment_1"])
 
     def test_consent_fallback_precedes_method_block_for_active_imagination(self) -> None:
         result = self.engine.reconcile_llm_practice(
@@ -63,6 +65,7 @@ class PracticeEngineTests(unittest.TestCase):
                 "durationMinutes": 12,
                 "contraindicationsChecked": ["none"],
                 "requiresConsent": True,
+                "relatedExperimentIds": ["experiment_1"],
             },
             safety={"status": "clear", "flags": ["none"], "depthWorkAllowed": True},
             method_gate={"blockedMoves": ["active_imagination"]},
@@ -78,6 +81,7 @@ class PracticeEngineTests(unittest.TestCase):
             "active_imagination_blocked_by_method_fallback_to_journaling",
             result["adaptationNotes"],
         )
+        self.assertEqual(result["relatedExperimentIds"], ["experiment_1"])
 
     def test_explicit_duration_cap(self) -> None:
         result = self.engine.reconcile_llm_practice(
@@ -203,6 +207,32 @@ class PracticeEngineTests(unittest.TestCase):
                 trigger={"triggerType": trigger_type},
             )
             self.assertEqual(defaults["source"], trigger_type)
+
+    def test_method_state_frame_copies_related_experiment_ids_from_selected_move(self) -> None:
+        result = self.engine.reconcile_llm_practice(
+            practice={
+                "id": "practice_1",
+                "type": "journaling",
+                "reason": "Write what is present.",
+                "instructions": ["Write what is present."],
+                "durationMinutes": 10,
+                "contraindicationsChecked": ["none"],
+                "requiresConsent": False,
+            },
+            safety={"status": "clear", "flags": ["none"], "depthWorkAllowed": True},
+            method_gate=None,
+            depth_readiness=None,
+            consent_preferences=[],
+            method_context={
+                "coachState": {
+                    "selectedMove": {
+                        "relatedExperimentIds": ["experiment_1"],
+                    }
+                }
+            },
+            runtime_policy={},
+        )
+        self.assertEqual(result["relatedExperimentIds"], ["experiment_1"])
 
 
 if __name__ == "__main__":

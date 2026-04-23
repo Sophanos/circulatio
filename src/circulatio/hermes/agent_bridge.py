@@ -295,6 +295,14 @@ class CirculatioAgentBridge:
             return await self.update_journey(request)
         if operation == "circulatio.journeys.set_status":
             return await self.set_journey_status(request)
+        if operation == "circulatio.journey.experiment.start":
+            return await self.start_journey_experiment(request)
+        if operation == "circulatio.journey.experiment.respond":
+            return await self.respond_journey_experiment(request)
+        if operation == "circulatio.journey.experiment.list":
+            return await self.list_journey_experiments(request)
+        if operation == "circulatio.journey.experiment.get":
+            return await self.get_journey_experiment(request)
         if operation == "circulatio.review.weekly":
             return await self.weekly_review(request)
         if operation == "circulatio.witness.state":
@@ -724,12 +732,6 @@ class CirculatioAgentBridge:
         packet_record = command_result.get("analysisPacket")
         if isinstance(packet, dict):
             result["analysisPacket"] = packet
-        if isinstance(packet_record, dict):
-            result["packetId"] = packet_record["id"]
-        elif isinstance(packet_result, dict):
-            packet_id = self._optional_string(packet_result.get("id"))
-            if packet_id:
-                result["packetId"] = packet_id
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
@@ -1834,6 +1836,136 @@ class CirculatioAgentBridge:
             affected_entity_ids=[journey["id"]],
         )
 
+    async def start_journey_experiment(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        experiment = await self._service.start_journey_experiment(
+            {
+                "userId": request["userId"],
+                **{
+                    key: deepcopy(value)
+                    for key, value in payload.items()
+                    if key
+                    in {
+                        "briefId",
+                        "journeyId",
+                        "journeyLabel",
+                        "surface",
+                        "windowStart",
+                        "windowEnd",
+                        "source",
+                        "title",
+                        "summary",
+                        "bodyFirst",
+                        "preferredMoveKind",
+                        "currentQuestion",
+                        "suggestedActionText",
+                    }
+                },
+            }
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message="Started current tending for this journey.",
+            result={
+                "experimentId": experiment["id"],
+                "journeyExperiment": self._journey_experiment_summary(experiment),
+            },
+            affected_entity_ids=[experiment["id"], cast(Id, experiment["journeyId"])],
+        )
+
+    async def respond_journey_experiment(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        action = self._optional_string(payload.get("action"))
+        experiment_id = self._optional_string(payload.get("experimentId"))
+        if not action or not experiment_id:
+            raise ValidationError("experimentId and action are required.")
+        experiment = await self._service.respond_journey_experiment(
+            {
+                "userId": request["userId"],
+                "experimentId": experiment_id,
+                "action": action,  # type: ignore[typeddict-item]
+                **{
+                    key: deepcopy(value)
+                    for key, value in payload.items()
+                    if key == "nextCheckInDueAt"
+                },
+            }
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message=f'Updated current tending via "{action}".',
+            result={
+                "experimentId": experiment["id"],
+                "journeyExperiment": self._journey_experiment_summary(experiment),
+            },
+            affected_entity_ids=[experiment["id"], cast(Id, experiment["journeyId"])],
+        )
+
+    async def list_journey_experiments(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        experiments = await self._service.list_journey_experiments(
+            {
+                "userId": request["userId"],
+                **{
+                    key: deepcopy(value)
+                    for key, value in payload.items()
+                    if key in {"journeyId", "journeyLabel", "statuses", "includeDeleted", "limit"}
+                },
+            }
+        )
+        count = len(experiments)
+        return self._response(
+            request=request,
+            status="ok",
+            message=(
+                "No journey-tending frames matched."
+                if count == 0
+                else f"Found {count} journey-tending frame{'s' if count != 1 else ''}."
+            ),
+            result={
+                "journeyExperiments": [
+                    self._journey_experiment_summary(item) for item in experiments
+                ],
+                "experimentCount": count,
+            },
+            affected_entity_ids=[item["id"] for item in experiments],
+        )
+
+    async def get_journey_experiment(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
+        payload = request["payload"]
+        experiment_id = self._optional_string(payload.get("experimentId"))
+        if not experiment_id:
+            raise ValidationError("experimentId is required.")
+        experiment = await self._service.get_journey_experiment(
+            {
+                "userId": request["userId"],
+                "experimentId": experiment_id,
+                **{
+                    key: deepcopy(value)
+                    for key, value in payload.items()
+                    if key == "includeDeleted"
+                },
+            }
+        )
+        return self._response(
+            request=request,
+            status="ok",
+            message="Loaded current tending.",
+            result={
+                "experimentId": experiment["id"],
+                "journeyExperiment": self._journey_experiment_summary(experiment),
+            },
+            affected_entity_ids=[experiment["id"]],
+        )
+
     async def list_symbols(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
         payload = request["payload"]
         include_history = bool(
@@ -2399,6 +2531,33 @@ class CirculatioAgentBridge:
             summary["nextReviewDueAt"] = next_review_due_at
         return summary
 
+    def _journey_experiment_summary(self, experiment: dict[str, object]) -> dict[str, object]:
+        summary: dict[str, object] = {
+            "title": self._optional_string(experiment.get("title")) or "Current tending",
+            "summary": self._optional_string(experiment.get("summary"))
+            or "A current tending frame is active.",
+        }
+        for key in ("id", "journeyId", "status", "source", "preferredMoveKind", "currentQuestion"):
+            value = self._optional_string(experiment.get(key))
+            if value is not None:
+                summary[key] = value
+        if "bodyFirst" in experiment:
+            summary["bodyFirst"] = bool(experiment.get("bodyFirst"))
+        for key in ("relatedPracticeSessionIds", "relatedBriefIds"):
+            values = [
+                item
+                for item in (
+                    self._optional_string(value) for value in experiment.get(key, [])
+                )
+                if item is not None
+            ]
+            if values:
+                summary[key] = values
+        updated_at = self._optional_string(experiment.get("updatedAt"))
+        if updated_at is not None:
+            summary["updatedAt"] = updated_at
+        return summary
+
     def _journey_section_label(self, title: str) -> str:
         mapping = {
             "Life context": "Alltag und Umfeld",
@@ -2446,9 +2605,6 @@ class CirculatioAgentBridge:
         packet_title = self._optional_string(packet.get("packetTitle"))
         if packet_title:
             summary["packetTitle"] = packet_title
-        source = self._optional_string(packet.get("source"))
-        if source:
-            summary["source"] = source
         sections = packet.get("sections")
         if isinstance(sections, list):
             preview_sections: list[dict[str, object]] = []
@@ -2502,19 +2658,12 @@ class CirculatioAgentBridge:
             if function_summary:
                 summary["functionDynamics"] = function_summary
             if status in {"signals_only", "insufficient_evidence"}:
-                summary["recoveryHint"] = (
-                    "If the user's request still needs a clearer foreground/background answer, "
-                    "do one bounded circulatio_discovery read over the same window and explicit "
-                    "question before answering. Do not fall back to raw material listing or "
-                    "host-authored interpretation."
-                )
-        if "recoveryHint" not in summary and source == "bounded_fallback":
-            summary["recoveryHint"] = (
-                "If the user's request is still too open for a foreground/background answer, "
-                "do one bounded circulatio_discovery read over the same window and explicit "
-                "question before answering. Do not fall back to raw material listing or "
-                "host-authored interpretation."
-            )
+                summary["replyPlan"] = "bounded_discovery_same_window"
+        if "replyPlan" not in summary and self._optional_string(packet.get("source")) == "bounded_fallback":
+            summary["replyPlan"] = "bounded_discovery_same_window"
+        if summary.get("functionDynamics"):
+            summary["replyStyle"] = "tentative_typology"
+            summary["maxSentences"] = 5
         return summary
 
     def _witness_state_summary(self, snapshot: dict[str, object]) -> dict[str, object]:
@@ -2582,35 +2731,16 @@ class CirculatioAgentBridge:
             )
             function_status = self._optional_string(function_dynamics.get("status"))
             if function_status == "readable":
-                return (
-                    "A concise cross-material function-dynamics answer is already available "
-                    "from evidence in this window. Answer from it directly without widening "
-                    "the read surface."
-                )
+                return "Use the returned function-dynamics summary for a brief tentative typology answer."
             if function_status in {"signals_only", "insufficient_evidence"}:
-                return (
-                    "A concise cross-material evidence digest is available from material that is "
-                    "already here. If that is still too thin for a foreground/background answer, "
-                    "do one bounded read across the same window before answering rather than "
-                    "asking for clarification or listing raw materials."
-                )
+                return "Make one same-window recovery read for this typology request, then answer briefly."
         if (
             isinstance(packet, dict)
             and self._optional_string(packet.get("source")) == "bounded_fallback"
         ):
-            return (
-                "A concise cross-material evidence digest is available from material that is "
-                "already here. If that is still too thin for a foreground/background answer, "
-                "do one bounded read across the same window before answering rather than asking "
-                "for clarification or listing raw materials."
-            )
+            return "Make one same-window recovery read for this typology request, then answer briefly."
         if "bounded packet" in message.lower():
-            return (
-                "A concise cross-material evidence digest is available from material that is "
-                "already here. If that is still too thin for a foreground/background answer, "
-                "do one bounded read across the same window before answering rather than asking "
-                "for clarification or listing raw materials."
-            )
+            return "Make one same-window recovery read for this typology request, then answer briefly."
         return message
 
     def _pending_proposals_message(self, *, count: int, capture_run: bool, review: bool) -> str:
@@ -2709,6 +2839,32 @@ class CirculatioAgentBridge:
                 }
                 sanitized["affectedEntityIds"] = []
             return sanitized
+        if operation in {
+            "circulatio.journey.experiment.start",
+            "circulatio.journey.experiment.respond",
+            "circulatio.journey.experiment.get",
+        }:
+            experiment = result.get("journeyExperiment")
+            if isinstance(experiment, dict):
+                sanitized["result"] = {
+                    "experimentId": experiment.get("id", result.get("experimentId")),
+                    "journeyExperiment": self._journey_experiment_summary(experiment),
+                }
+                sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.journey.experiment.list":
+            experiments = result.get("journeyExperiments")
+            if isinstance(experiments, list):
+                sanitized["result"] = {
+                    "journeyExperiments": [
+                        self._journey_experiment_summary(item)
+                        for item in experiments
+                        if isinstance(item, dict)
+                    ],
+                    "experimentCount": result.get("experimentCount", len(experiments)),
+                }
+                sanitized["affectedEntityIds"] = []
+            return sanitized
         if operation == "circulatio.witness.state":
             snapshot = result.get("witnessState")
             if isinstance(snapshot, dict):
@@ -2749,11 +2905,21 @@ class CirculatioAgentBridge:
                 sanitized.get("message", ""),
                 packet,
             )
-            packet_result = self._analysis_packet_host_result(packet)
-            packet_id = self._optional_string(result.get("packetId"))
-            if packet_id:
-                packet_result["packetId"] = packet_id
-            sanitized["result"] = packet_result
+            sanitized["result"] = self._analysis_packet_host_result(packet)
+            sanitized["affectedEntityIds"] = []
+            return sanitized
+        if operation == "circulatio.material.interpret":
+            sanitized_result: dict[str, object] = {}
+            for key in (
+                "materialId",
+                "runId",
+                "safetyStatus",
+                "clarifyingQuestion",
+                "continuationState",
+            ):
+                if key in result:
+                    sanitized_result[key] = deepcopy(result[key])
+            sanitized["result"] = sanitized_result
             sanitized["affectedEntityIds"] = []
             return sanitized
         if operation == "circulatio.proposals.list_pending":
@@ -2914,7 +3080,7 @@ class CirculatioAgentBridge:
                 ],
             )
         if isinstance(exc, ConflictError):
-            message = str(exc) or "Circulatio could not complete this request right now."
+            message = "This reflection is not available right now. Please try again shortly."
             return self._response(
                 request=request,
                 status="conflict",

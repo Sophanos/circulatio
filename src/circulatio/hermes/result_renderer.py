@@ -27,9 +27,15 @@ class CirculatioResultRenderer:
         journey = result.get("journey")
         if isinstance(journey, dict):
             lines.extend(self._render_journey(journey))
+        journey_experiment = result.get("journeyExperiment")
+        if isinstance(journey_experiment, dict):
+            lines.extend(self._render_journey_experiment(journey_experiment))
         journeys = result.get("journeys")
         if isinstance(journeys, list) and journeys:
             lines.extend(self._render_journey_list(journeys))
+        journey_experiments = result.get("journeyExperiments")
+        if isinstance(journey_experiments, list) and journey_experiments:
+            lines.extend(self._render_journey_experiment_list(journey_experiments))
         if result.get("materialId"):
             lines.append(f"Material: {result['materialId']}")
         if result.get("runId"):
@@ -322,5 +328,47 @@ class CirculatioResultRenderer:
             line = f"- {label} ({status}) [{journey_id}]"
             if current_question:
                 line += f" Question: {current_question}"
+            lines.append(line)
+        return lines
+
+    def _render_journey_experiment(self, experiment: dict[str, object]) -> list[str]:
+        lines: list[str] = []
+        title = str(experiment.get("title") or "Current tending")
+        status = str(experiment.get("status") or "unknown")
+        experiment_id = str(experiment.get("id") or "").strip()
+        lines.append(f"Current tending: {title} ({status})")
+        if experiment_id:
+            lines.append(f"Experiment id: {experiment_id}")
+        summary = str(experiment.get("summary") or "").strip()
+        if summary:
+            lines.append(summary)
+        move_kind = str(experiment.get("preferredMoveKind") or "").strip()
+        if move_kind:
+            lines.append(f"Preferred move: {move_kind}")
+        journey_id = str(experiment.get("journeyId") or "").strip()
+        if journey_id:
+            lines.append(f"Journey id: {journey_id}")
+        if experiment_id:
+            if status == "active":
+                lines.append(f"Quiet: /circulation journey experiment quiet {experiment_id}")
+            elif status == "quiet":
+                lines.append(f"Resume: /circulation journey experiment resume {experiment_id}")
+            if status in {"active", "quiet"}:
+                lines.append(f"Complete: /circulation journey experiment complete {experiment_id}")
+                lines.append(f"Release: /circulation journey experiment release {experiment_id}")
+        return lines
+
+    def _render_journey_experiment_list(self, experiments: list[object]) -> list[str]:
+        lines = ["Current tending frames:"]
+        for item in experiments[:10]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "Current tending")
+            status = str(item.get("status") or "unknown")
+            experiment_id = str(item.get("id") or "unknown")
+            summary = str(item.get("summary") or "").strip()
+            line = f"- {title} ({status}) [{experiment_id}]"
+            if summary:
+                line += f" {summary}"
             lines.append(line)
         return lines

@@ -2012,6 +2012,12 @@ def build_thread_digests_locked(
         if not journey_id:
             continue
         record = bucket.journeys.get(journey_id, {})
+        experiment_ids = [
+            experiment["id"]
+            for experiment in bucket.journey_experiments.values()
+            if experiment.get("status") != "deleted"
+            and str(experiment.get("journeyId") or "").strip() == journey_id
+        ]
         entity_refs = _thread_entity_refs(
             journey_ids=[journey_id],
             material_ids=list(
@@ -2027,6 +2033,8 @@ def build_thread_digests_locked(
                 record.get("relatedDreamSeriesIds", summary.get("relatedDreamSeriesIds", []))
             ),
         )
+        if experiment_ids:
+            entity_refs["experiments"] = list(dict.fromkeys(experiment_ids))
         summary_text = str(
             summary.get("currentQuestion")
             or record.get("currentQuestion")
@@ -2034,7 +2042,36 @@ def build_thread_digests_locked(
             or record.get("label")
             or "Journey thread"
         )
+        if experiment_ids:
+            experiment = max(
+                (
+                    bucket.journey_experiments[experiment_id]
+                    for experiment_id in experiment_ids
+                    if experiment_id in bucket.journey_experiments
+                ),
+                key=lambda item: str(item.get("updatedAt") or item.get("createdAt") or ""),
+            )
+            summary_text = str(experiment.get("summary") or experiment.get("title") or summary_text)
         status = str(record.get("status") or summary.get("status") or "active")
+        last_touched_at = max(
+            [
+                str(
+                    record.get("updatedAt")
+                    or record.get("nextReviewDueAt")
+                    or record.get("createdAt")
+                    or window_end
+                ),
+                *[
+                    str(
+                        bucket.journey_experiments[experiment_id].get("updatedAt")
+                        or bucket.journey_experiments[experiment_id].get("createdAt")
+                        or window_end
+                    )
+                    for experiment_id in experiment_ids
+                    if experiment_id in bucket.journey_experiments
+                ],
+            ]
+        )
         append_digest(
             {
                 "threadKey": f"journey:{journey_id}",
@@ -2047,12 +2084,7 @@ def build_thread_digests_locked(
                 "sourceRecordRefs": [
                     _thread_source_ref("Journey", journey_id, summary=summary_text)
                 ],
-                "lastTouchedAt": str(
-                    record.get("updatedAt")
-                    or record.get("nextReviewDueAt")
-                    or record.get("createdAt")
-                    or window_end
-                ),
+                "lastTouchedAt": last_touched_at,
                 "surfaceReadiness": _thread_surface_readiness("journey", status=status),
             }
         )

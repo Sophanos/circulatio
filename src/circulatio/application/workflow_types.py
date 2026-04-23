@@ -12,6 +12,7 @@ from ..domain.clarifications import (
 from ..domain.context import ContextSnapshot
 from ..domain.graph import GraphNodeType
 from ..domain.interpretations import InterpretationRunRecord
+from ..domain.journey_experiments import JourneyExperimentRecord, JourneyExperimentSource
 from ..domain.journeys import JourneyRecord, JourneyStatus
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialListFilters, MaterialRecord, StoredDreamStructure
@@ -115,6 +116,7 @@ class SurfaceContextBundle(TypedDict, total=False):
     memorySnapshot: NotRequired[MemoryKernelSnapshot]
     recentPractices: NotRequired[list[PracticeSessionRecord]]
     journeys: NotRequired[list[JourneyRecord]]
+    journeyExperiments: NotRequired[list[JourneyExperimentRecord]]
     existingBriefs: NotRequired[list[ProactiveBriefRecord]]
     profile: NotRequired[UserAdaptationProfileRecord | None]
     adaptationSummary: NotRequired[UserAdaptationProfileSummary]
@@ -460,6 +462,9 @@ class DiscoveryResult(TypedDict, total=False):
 JourneyLifecycleStatus = Literal["active", "paused", "completed", "archived"]
 
 
+JourneyExperimentAction = Literal["quiet", "resume", "complete", "release", "archive"]
+
+
 class CreateJourneyInput(TypedDict, total=False):
     userId: Required[Id]
     label: Required[str]
@@ -522,6 +527,45 @@ class GenerateJourneyPageInput(TypedDict, total=False):
     includeAnalysisPacket: NotRequired[bool]
 
 
+class StartJourneyExperimentInput(TypedDict, total=False):
+    userId: Required[Id]
+    journeyId: NotRequired[Id]
+    journeyLabel: NotRequired[str]
+    briefId: NotRequired[Id]
+    surface: NotRequired[Literal["journey_page", "alive_today"]]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    source: NotRequired[JourneyExperimentSource]
+    title: NotRequired[str]
+    summary: NotRequired[str]
+    bodyFirst: NotRequired[bool]
+    preferredMoveKind: NotRequired[str]
+    currentQuestion: NotRequired[str]
+    suggestedActionText: NotRequired[str]
+
+
+class RespondJourneyExperimentInput(TypedDict, total=False):
+    userId: Required[Id]
+    experimentId: Required[Id]
+    action: Required[JourneyExperimentAction]
+    nextCheckInDueAt: NotRequired[str]
+
+
+class ListJourneyExperimentsInput(TypedDict, total=False):
+    userId: Required[Id]
+    journeyId: NotRequired[Id]
+    journeyLabel: NotRequired[str]
+    statuses: NotRequired[list[str]]
+    includeDeleted: NotRequired[bool]
+    limit: NotRequired[int]
+
+
+class GetJourneyExperimentInput(TypedDict, total=False):
+    userId: Required[Id]
+    experimentId: Required[Id]
+    includeDeleted: NotRequired[bool]
+
+
 JourneyPageActionKind = Literal["tool", "command", "entity"]
 JourneyPageWriteIntent = Literal["read", "write"]
 
@@ -542,6 +586,7 @@ JourneyPageSection = Literal[
     "alive_today",
     "weekly_reflection",
     "rhythmic_invitations",
+    "tending_now",
     "practice_container",
     "analysis_packet",
 ]
@@ -598,6 +643,7 @@ class JourneyInvitationPreview(TypedDict, total=False):
     status: NotRequired[str]
     suggestedAction: NotRequired[str]
     relatedJourneyIds: Required[list[Id]]
+    relatedExperimentIds: NotRequired[list[Id]]
     relatedMaterialIds: Required[list[Id]]
     relatedSymbolIds: Required[list[Id]]
     relatedPracticeSessionIds: Required[list[Id]]
@@ -617,9 +663,33 @@ class JourneyPracticeContainer(TypedDict, total=False):
     title: Required[str]
     summary: Required[str]
     practiceSessionId: NotRequired[Id]
+    relatedExperimentIds: NotRequired[list[Id]]
     status: NotRequired[str]
     practiceRecommendation: NotRequired[PracticePlan]
     actions: Required[list[JourneyPageAction]]
+
+
+JourneyTendingContainerKind = Literal[
+    "active_experiment",
+    "quiet_experiment",
+    "suggested_experiment",
+    "none",
+]
+
+
+class JourneyTendingContainer(TypedDict, total=False):
+    kind: Required[JourneyTendingContainerKind]
+    title: Required[str]
+    summary: Required[str]
+    journeyId: NotRequired[Id]
+    journeyLabel: NotRequired[str]
+    experimentId: NotRequired[Id]
+    preferredMoveKind: NotRequired[str]
+    bodyFirst: NotRequired[bool]
+    relatedExperimentIds: Required[list[Id]]
+    relatedPracticeSessionIds: Required[list[Id]]
+    actions: Required[list[JourneyPageAction]]
+    suggestedExperiment: NotRequired[dict[str, object]]
 
 
 class JourneyAnalysisPacketItem(TypedDict, total=False):
@@ -672,6 +742,7 @@ class JourneyPageResult(TypedDict, total=False):
     aliveToday: Required[JourneyAliveTodaySurface]
     weeklySurface: Required[JourneyWeeklySurface]
     rhythmicInvitations: Required[list[JourneyInvitationPreview]]
+    tendingContainer: Required[JourneyTendingContainer]
     practiceContainer: Required[JourneyPracticeContainer]
     analysisPacket: NotRequired[JourneyAnalysisPacketPreview]
     fallbackText: Required[str]

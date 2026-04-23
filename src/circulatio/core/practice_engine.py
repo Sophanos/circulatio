@@ -99,6 +99,11 @@ class PracticeEngine:
             resolved_hints = adaptation_hints
         else:
             resolved_hints = {"maturity": "default", "source": "default"}
+        source_experiment_ids = (
+            [str(item) for item in practice.get("relatedExperimentIds", []) if str(item).strip()]
+            if isinstance(practice, dict)
+            else []
+        )
 
         def finalize(candidate: PracticePlan, extra_notes: list[str]) -> PracticePlan:
             framed = self._with_notes(candidate, extra_notes)
@@ -107,6 +112,8 @@ class PracticeEngine:
                 method_context=method_context,
                 runtime_policy=runtime_policy,
             )
+            if source_experiment_ids and not framed.get("relatedExperimentIds"):
+                framed["relatedExperimentIds"] = cast(list[Id], source_experiment_ids)
             return self._annotate_target_refs(
                 framed,
                 goal_tensions=resolved_goal_tensions,
@@ -350,6 +357,20 @@ class PracticeEngine:
                 related_resource_ids = [resource_id]
         if related_resource_ids:
             result["relatedResourceIds"] = cast(list[Id], related_resource_ids)
+        related_experiment_ids_value = selected_move.get("relatedExperimentIds")
+        related_experiment_ids = (
+            [str(item) for item in related_experiment_ids_value if str(item).strip()]
+            if isinstance(related_experiment_ids_value, list)
+            else []
+        )
+        if not related_experiment_ids and isinstance(selected_loop, dict):
+            loop_experiment_ids_value = selected_loop.get("relatedExperimentIds")
+            if isinstance(loop_experiment_ids_value, list):
+                related_experiment_ids = [
+                    str(item) for item in loop_experiment_ids_value if str(item).strip()
+                ]
+        if related_experiment_ids:
+            result["relatedExperimentIds"] = cast(list[Id], related_experiment_ids)
 
         max_duration = runtime_constraints.get("maxDurationMinutes")
         if not isinstance(max_duration, int):

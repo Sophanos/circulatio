@@ -31,6 +31,16 @@ longitudinal cases in `tests/evals/journey_cli/JOURNEY_FAMILIES.md` to probe hos
 surface boundaries, and anchored follow-up expectations without claiming backend truth. Service,
 bridge, and Hermes host-smoke tests remain authoritative for runtime behavior.
 
+### Journey P2-P4 Extension
+
+After the current Phase 6 journey baseline, the next additive layer is explicit current tending.
+
+- P2 adds one durable sibling record, `JourneyExperimentRecord`, rather than rewriting `JourneyRecord`.
+- P3 threads that record through followthrough, coach, proactivity, practice linkage, and journey-page selection.
+- P4 exposes the lifecycle through Hermes tools and `/circulation journey experiment ...` commands.
+
+This extends the existing substrate rather than replacing it with a persisted journey-state machine.
+
 ---
 
 ## Who This Is For

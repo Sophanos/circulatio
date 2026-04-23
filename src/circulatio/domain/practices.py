@@ -66,6 +66,7 @@ class PracticeSessionRecord(TypedDict, total=False):
     followUpCount: NotRequired[int]
     relatedBriefId: NotRequired[Id]
     relatedJourneyIds: NotRequired[list[Id]]
+    relatedExperimentIds: NotRequired[list[Id]]
     coachLoopKey: NotRequired[Id]
     coachLoopKind: NotRequired[CoachLoopKind]
     coachMoveKind: NotRequired[CoachMoveKind]
@@ -108,6 +109,7 @@ class PracticeSessionUpdate(TypedDict, total=False):
     followUpCount: int
     relatedBriefId: Id
     relatedJourneyIds: list[Id]
+    relatedExperimentIds: list[Id]
     coachLoopKey: Id
     coachLoopKind: CoachLoopKind
     coachMoveKind: CoachMoveKind

@@ -14,6 +14,7 @@ from ..domain.goals import GoalRecord, GoalTensionRecord
 from ..domain.individuation import IndividuationRecord
 from ..domain.integration import IntegrationRecord
 from ..domain.interpretations import InterpretationRunRecord
+from ..domain.journey_experiments import JourneyExperimentRecord
 from ..domain.journeys import JourneyRecord
 from ..domain.living_myth import AnalysisPacketRecord, LivingMythRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialRecord, MaterialRevision
@@ -73,6 +74,7 @@ class UserCirculatioBucket:
     consent_preferences: dict[Id, ConsentPreferenceRecord] = field(default_factory=dict)
     adaptation_profiles: dict[Id, UserAdaptationProfileRecord] = field(default_factory=dict)
     journeys: dict[Id, JourneyRecord] = field(default_factory=dict)
+    journey_experiments: dict[Id, JourneyExperimentRecord] = field(default_factory=dict)
     proactive_briefs: dict[Id, ProactiveBriefRecord] = field(default_factory=dict)
     feedback: list[InterpretationFeedbackSummary] = field(default_factory=list)
     interaction_feedback: list[InteractionFeedbackRecord] = field(default_factory=list)

@@ -78,7 +78,7 @@ Journals store. Chatbots react. Circulatio creates meaning and continuity:
 - **You remain the author of your own symbols.** Nothing becomes "true" about you without your witness.
 - **Your images become a language you recognize.** Not generic meanings. Your own recurring vocabulary, deepening over time.
 
-It does not diagnose, gamify, or optimize.  
+It does not diagnose, gamify, optimize, or turn inner work into streaks or quotas.  
 It holds, remembers, and helps patterns become visible.
 
 <p align="center">
@@ -180,6 +180,7 @@ The host handles routing, sessions, and scheduling. Circulatio handles:
 - **Proactive runtime** — `alive_today`, rhythmic briefs, journey pages, and weekly reviews
 - **Read surfaces** — discovery, journey pages, threshold reviews, living myth reviews, and bounded analysis packets
 - **Practice lifecycle** — recommendations, follow-ups, and integration, held lightly
+- **Current tending** — one explicit, non-gamified way of staying with a journey when the user accepts it
 
 It can run in-memory for testing or with a SQLite-backed profile runtime for durable local use.
 

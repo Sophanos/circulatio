@@ -43,6 +43,29 @@ def _practice(**overrides: object) -> dict[str, object]:
     return practice
 
 
+def _experiment(**overrides: object) -> dict[str, object]:
+    experiment = {
+        "id": "experiment_1",
+        "userId": "user_1",
+        "journeyId": "journey_1",
+        "title": "Current tending",
+        "summary": "Stay with this thread lightly.",
+        "status": "active",
+        "source": "manual",
+        "bodyFirst": False,
+        "relatedPracticeSessionIds": [],
+        "relatedBriefIds": [],
+        "relatedSymbolIds": [],
+        "relatedGoalTensionIds": [],
+        "relatedBodyStateIds": [],
+        "relatedResourceIds": [],
+        "createdAt": "2026-04-09T00:00:00Z",
+        "updatedAt": "2026-04-09T00:00:00Z",
+    }
+    experiment.update(overrides)
+    return experiment
+
+
 def test_mature_reentry_threshold_delays_return_after_absence() -> None:
     engine = JourneyFollowthroughEngine()
     practices = [
@@ -56,6 +79,7 @@ def test_mature_reentry_threshold_delays_return_after_absence() -> None:
         method_context={"windowStart": "2026-04-01T00:00:00Z", "windowEnd": "2026-04-15T00:00:00Z"},
         thread_digests=[],
         journeys=journeys,
+        journey_experiments=[],
         recent_practices=practices,
         existing_briefs=[],
         dashboard=None,
@@ -66,6 +90,7 @@ def test_mature_reentry_threshold_delays_return_after_absence() -> None:
         method_context={"windowStart": "2026-04-01T00:00:00Z", "windowEnd": "2026-04-15T00:00:00Z"},
         thread_digests=[],
         journeys=journeys,
+        journey_experiments=[],
         recent_practices=practices,
         existing_briefs=[],
         dashboard=None,
@@ -85,6 +110,7 @@ def test_due_followup_after_activation_prefers_gentler_reentry() -> None:
         method_context={"windowStart": "2026-04-18T00:00:00Z", "windowEnd": "2026-04-23T00:00:00Z"},
         thread_digests=[],
         journeys=[_journey(updatedAt="2026-04-18T00:00:00Z")],
+        journey_experiments=[],
         recent_practices=[
             _practice(
                 nextFollowUpDueAt="2026-04-19T00:00:00Z",
@@ -141,6 +167,7 @@ def test_symbol_body_life_pressure_uses_explicit_body_link_and_goal_tension() ->
                 updatedAt="2026-04-22T12:00:00Z",
             )
         ],
+        journey_experiments=[],
         recent_practices=[],
         existing_briefs=[],
         dashboard=None,
@@ -162,6 +189,7 @@ def test_cooldown_quiets_journey_followthrough() -> None:
         method_context={"windowStart": "2026-04-20T00:00:00Z", "windowEnd": "2026-04-23T00:00:00Z"},
         thread_digests=[],
         journeys=[_journey(updatedAt="2026-04-22T12:00:00Z")],
+        journey_experiments=[],
         recent_practices=[],
         existing_briefs=[
             {
@@ -203,6 +231,7 @@ def test_recent_stabilization_quiets_when_no_new_signal_has_arrived() -> None:
                 lastBriefedAt="2026-04-21T00:00:00Z",
             )
         ],
+        journey_experiments=[],
         recent_practices=[
             _practice(
                 followUpCount=2,
@@ -220,3 +249,93 @@ def test_recent_stabilization_quiets_when_no_new_signal_has_arrived() -> None:
 
     assert summary["readiness"] == "quiet"
     assert "journey_recent_practice_quieting" in summary["reasons"]
+
+
+def test_quiet_experiment_suppresses_followthrough_without_fresh_signal() -> None:
+    engine = JourneyFollowthroughEngine()
+
+    summary = engine.build_summaries(
+        method_context={"windowStart": "2026-04-18T00:00:00Z", "windowEnd": "2026-04-23T00:00:00Z"},
+        thread_digests=[],
+        journeys=[
+            _journey(
+                updatedAt="2026-04-20T00:00:00Z",
+                lastBriefedAt="2026-04-22T00:00:00Z",
+            )
+        ],
+        journey_experiments=[
+            _experiment(
+                status="quiet",
+                updatedAt="2026-04-20T00:00:00Z",
+                cooldownUntil="2026-04-29T00:00:00Z",
+            )
+        ],
+        recent_practices=[],
+        existing_briefs=[],
+        dashboard=None,
+        adaptation_profile=None,
+        now="2026-04-23T00:00:00Z",
+    )[0]
+
+    assert summary["readiness"] == "quiet"
+    assert summary["currentExperimentStatus"] == "quiet"
+    assert summary["relatedExperimentIds"] == ["experiment_1"]
+    assert "journey_experiment_quiet" in summary["reasons"]
+
+
+def test_active_experiment_opens_single_available_window_without_becoming_ready() -> None:
+    engine = JourneyFollowthroughEngine()
+
+    summary = engine.build_summaries(
+        method_context={"windowStart": "2026-04-18T00:00:00Z", "windowEnd": "2026-04-23T00:00:00Z"},
+        thread_digests=[],
+        journeys=[
+            _journey(
+                updatedAt="2026-04-20T00:00:00Z",
+                lastBriefedAt="2026-04-22T00:00:00Z",
+            )
+        ],
+        journey_experiments=[
+            _experiment(
+                status="active",
+                updatedAt="2026-04-20T00:00:00Z",
+                nextCheckInDueAt="2026-04-21T00:00:00Z",
+            )
+        ],
+        recent_practices=[],
+        existing_briefs=[],
+        dashboard=None,
+        adaptation_profile=None,
+        now="2026-04-23T00:00:00Z",
+    )[0]
+
+    assert summary["readiness"] == "available"
+    assert summary["currentExperimentStatus"] == "active"
+    assert summary["relatedExperimentIds"] == ["experiment_1"]
+    assert "journey_experiment_checkin_window_open" in summary["reasons"]
+
+
+def test_preferred_experiment_move_does_not_override_gentling_resource_choice() -> None:
+    engine = JourneyFollowthroughEngine()
+
+    summary = engine.build_summaries(
+        method_context={"windowStart": "2026-04-18T00:00:00Z", "windowEnd": "2026-04-23T00:00:00Z"},
+        thread_digests=[],
+        journeys=[_journey(updatedAt="2026-04-18T00:00:00Z")],
+        journey_experiments=[_experiment(preferredMoveKind="ask_goal_tension")],
+        recent_practices=[
+            _practice(
+                nextFollowUpDueAt="2026-04-19T00:00:00Z",
+                activationBefore="moderate",
+                activationAfter="high",
+            )
+        ],
+        existing_briefs=[],
+        dashboard=None,
+        adaptation_profile=None,
+        now="2026-04-23T00:00:00Z",
+    )[0]
+
+    assert summary["family"] == "practice_reentry"
+    assert summary["recommendedMoveKind"] == "offer_resource"
+    assert "journey_experiment_preferred_move_applied" not in summary["reasons"]
