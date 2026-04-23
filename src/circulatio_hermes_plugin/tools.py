@@ -25,7 +25,7 @@ async def _dispatch_tool(
         response = await get_runtime(request["source"].get("profile")).bridge.dispatch(request)
     except Exception as exc:
         response = _boot_failure_response(request=request, exc=exc)
-    return json.dumps(response, sort_keys=True)
+    return json.dumps(response, sort_keys=True, ensure_ascii=False)
 
 
 async def _dispatch_material_store_tool(
