@@ -92,9 +92,17 @@ BreathCycleSpec
 - restSeconds
 - cycles
 - pattern: steadying | lengthened_exhale | box_breath | orienting
+- techniqueName?
+- preferenceSource:
+    explicit_user_preference
+    host_prompted_preference
+    host_default
+    llm_suggested
 - visualForm: orb | wave | mandala | horizon
 - syncMarkers[]
 ```
+
+`pattern` is the normalized breathing shape used by the runtime. `techniqueName` is the user-facing or host-requested technique label when one is explicitly wanted, including named forms such as prana-derived breathing or other custom practices. If the technique matters, the host should either carry the user's explicit preference or ask. Circulatio may suggest a fit, but the host owns whether to surface that suggestion, ask a clarifying question, or fall back to a neutral steadying pattern.
 
 ### AssociationProtocol (planned)
 
@@ -126,6 +134,115 @@ Not allowed deterministically:
 - this reveals trauma
 - this is mother archetype
 - this means repression
+
+---
+
+## Tool Calling Contract (planned)
+
+Embodied presentation should arrive through **explicit host bridge/tool calls**, not through a generic "make media" ingress.
+
+Hermes, OpenClaw, or another host adapter decides:
+- whether a moment should become a ritual, broadcast, or cinema rendering
+- whether Circulatio should write the narrative fully, minimally, or not at all
+- whether the host should ask the user about breathing technique or carry forward an explicit preference
+
+Circulatio returns a typed plan. The host renders it or asks follow-up questions when needed.
+
+### Ritual Planning Tool (planned)
+
+```text
+circulatio.presentation.plan_ritual
+
+input
+- sourceRefs[]
+- ritualIntent:
+    hold_container
+    guided_ritual
+    breath_container
+    image_return
+    active_imagination_container
+- narrativeMode:
+    full_guided
+    sparse_guided
+    breath_only
+    user_script
+    hybrid
+- authorshipMode:
+    circulatio_written
+    host_written
+    user_supplied
+    host_plus_circulatio
+- requestedLenses[]:
+    breath
+    photo
+    cinema
+- scriptSeed?
+- breathRequest?
+- privacyClass
+- safetyContext
+- deliveryPolicy
+```
+
+Notes:
+- `narrativeMode=breath_only` means the host wants a reduced ritual container centered on breath timing, minimal captioning, and little or no narrative script.
+- `authorshipMode=host_written` or `user_supplied` means the host can pass its own words through `scriptSeed`; Circulatio should normalize structure, pacing, contraindications, and provenance rather than replacing the text blindly.
+- `requestedLenses[]` expresses the host rendering options, not a backend obligation to generate all media immediately.
+
+### Breath Request Shape (planned)
+
+```text
+breathRequest
+- techniqueName?
+- inhaleSeconds?
+- holdSeconds?
+- exhaleSeconds?
+- restSeconds?
+- cycles?
+- preferenceSource:
+    explicit_user_preference
+    host_prompted_preference
+    host_default
+    llm_suggested
+- allowClarifyingQuestion: boolean
+```
+
+Rules:
+- If the user explicitly asks for a named breathing technique, preserve that request as input rather than silently normalizing it away.
+- If the host needs a technique choice and none is present, the host may ask the user directly.
+- If no preference is present and no question is asked, the safe fallback is a neutral steadying pattern rather than a strong named technique.
+
+### Ritual Planning Result (planned)
+
+```text
+RitualPresentationPlan
+- artifact: PresentationArtifact
+- voiceScript?
+- speechMarkupPlan?
+- breathCycle?
+- mediaSpecs[]
+- interactionSpec?
+- openQuestions[]?
+- withheldReason?
+```
+
+The host can then:
+- render the full ritual as audio + stage + captions
+- reduce it to a breath-only container
+- keep it as a photo-first ritual with sparse speech
+- later attach cinema or generated video assets without changing the symbolic source plan
+
+### Routing Boundary
+
+This should follow the same explicit-routing rule used elsewhere in Circulatio:
+
+```text
+Hermes/OpenClaw/host decides presentation is needed
+→ explicit bridge/tool call (`circulatio.presentation.plan_ritual`)
+→ Circulatio returns typed ritual presentation plan
+→ host renders, asks clarification, or defers
+```
+
+This connector is additive and explicit. It is not a hidden universal ingress, not a frontend-code generator, and not a license for the backend to decide on its own that every held note should become a ritual.
 
 ---
 

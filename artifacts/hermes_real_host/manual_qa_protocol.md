@@ -845,3 +845,193 @@ Operator mode: real `hermes chat` only, no mocks, no direct service calls
 - `circulatio_analysis_packet` still timed out live on the typology-heavy prompts. Hermes now recovers correctly via one bounded `circulatio_discovery` read, so the remaining issue is provider/runtime availability rather than host routing.
 - The exact completed-practice variant A prompt now also performs one `circulatio_dashboard_summary` preflight before `circulatio_record_practice_feedback`. Final routing is still correct, but the earlier cleaner direct-only route was not re-established in this pass.
 - German ASCII transliteration was not reproduced anywhere in the deep pass or the visible-only stability sweep. Keep it on watch because the defect was historically intermittent, but the current evidence supports `currently stable in reruns`.
+
+## 2026-04-23 Typology Journeys Suite
+
+- Dataset: `tests/evals/hermes_real_host/typology_journeys.jsonl`
+- Final recorded run id: `hermes_real_host_078cc1ca12`
+- Final artifact set:
+  - `artifacts/hermes_real_host/typology_journeys_report.json`
+  - `artifacts/hermes_real_host/typology_journeys_report.md`
+  - `artifacts/hermes_real_host/typology_journeys_trace.jsonl`
+
+### Commands used
+
+- Targeted same-session correction spot-check before the full sweep:
+
+  ```bash
+  .venv/bin/python scripts/evaluate_hermes_real_host.py \
+    --dataset tests/evals/hermes_real_host/typology_journeys.jsonl \
+    --case typology_thinking_single_001 \
+    --case typology_thinking_single_002 \
+    --case typology_thinking_single_003 \
+    --strict \
+    --timeout-seconds 180
+  ```
+
+- Final full-suite run used for the recorded artifacts:
+
+  ```bash
+  .venv/bin/python -u scripts/evaluate_hermes_real_host.py \
+    --dataset tests/evals/hermes_real_host/typology_journeys.jsonl \
+    --strict \
+    --timeout-seconds 60 \
+    --report-json artifacts/hermes_real_host/typology_journeys_report.json \
+    --report-md artifacts/hermes_real_host/typology_journeys_report.md \
+    --trace-jsonl artifacts/hermes_real_host/typology_journeys_trace.jsonl
+  ```
+
+### Run summary
+
+- Total cases / turns: `20 / 20`
+- PASS: `5`
+- FAIL: `15`
+- Story rollups: `0 / 8` stories passed
+
+### What passed
+
+- Explicit hold/store phrasing improved the capture lanes materially.
+- The following capture turns routed cleanly and stayed user-facing:
+  - `typology_thinking_single_001`
+  - `typology_thinking_cross_001`
+  - `typology_thinking_cross_002`
+  - `typology_intuition_cross_001`
+  - `typology_intuition_cross_002`
+
+### Main failure buckets
+
+1. Cross-material typology turns still timed out on `circulatio_analysis_packet` before producing a bounded user-facing answer.
+   Affected cases:
+   - `typology_thinking_cross_003`
+   - `typology_feeling_cross_003`
+   - `typology_intuition_cross_003`
+   - `typology_sensation_cross_003`
+
+2. Timed-out typology turns leaked internal host/tool reasoning into visible chat instead of falling back cleanly.
+   Strong repros:
+   - `typology_no_evidence_001`
+   - `typology_thinking_single_002`
+   - `typology_thinking_cross_003`
+   - `typology_feeling_cross_003`
+   - `typology_intuition_cross_003`
+   - `typology_sensation_cross_003`
+
+3. Same-session journey continuation still collapses when the prior interpret turn times out without a session id.
+   Affected cases:
+   - `typology_thinking_single_003`
+   - `typology_thinking_single_004`
+
+4. Several capture surfaces still over-speak or add interpretive gloss instead of staying within the one-to-two-sentence hold discipline.
+   Affected cases:
+   - `typology_feeling_cross_001`
+   - `typology_feeling_cross_002`
+   - `typology_sensation_cross_001`
+   - `typology_sensation_cross_002`
+   - `typology_ambiguous_001`
+
+5. The exact-material ambiguous typology case still opens with a method gate instead of offering a bounded ambiguity answer.
+   Affected case:
+   - `typology_ambiguous_002`
+
+6. The safety pause story is directionally correct in visible prose, but Hermes handled it as a host-only grounding reply with no Circulatio tool call.
+   Affected case:
+   - `typology_safety_pause_001`
+
+### Interpretation of the suite
+
+- The harness/dataset work is functioning: resumable story turns, exact alternative sequences, regex checks, and story rollups all ran against live Hermes and produced coherent reports.
+- The dominant product problem is no longer basic capture routing. It is the typology-answer surface under live timeout pressure: Hermes reaches the intended packet/interpret entry points, then leaks internal reasoning or stalls instead of rendering the bounded typology answer.
+- The suite is therefore useful immediately as a regression/QA surface, but the live product does **not** yet satisfy the intended typology-journey contract end to end.
+
+## 2026-04-23 Typology Journeys Suite Revalidation
+
+- Dataset: `tests/evals/hermes_real_host/typology_journeys.jsonl`
+- Final recorded run id after this pass: `hermes_real_host_03fbd0aa24`
+- Final artifact set:
+  - `artifacts/hermes_real_host/typology_journeys_report.json`
+  - `artifacts/hermes_real_host/typology_journeys_report.md`
+  - `artifacts/hermes_real_host/typology_journeys_trace.jsonl`
+
+### Harness note
+
+- The live harness was switched from `hermes chat -v -Q` to `hermes chat -Q` plus
+  `hermes sessions export --session-id ...` for post-turn tool-call recovery.
+- Reason: verbose Hermes streaming exposed wrapped `[thinking]` output that polluted the measured host reply surface and over-reported “visible leak” failures even when the final assistant turn itself was clean.
+- This revalidation still uses real `hermes chat` and still validates actual tool routing; it now measures the final host reply surface rather than the verbose debug stream.
+
+### Command used
+
+```bash
+.venv/bin/python -u scripts/evaluate_hermes_real_host.py \
+  --dataset tests/evals/hermes_real_host/typology_journeys.jsonl \
+  --strict \
+  --timeout-seconds 180 \
+  --report-json artifacts/hermes_real_host/typology_journeys_report.json \
+  --report-md artifacts/hermes_real_host/typology_journeys_report.md \
+  --trace-jsonl artifacts/hermes_real_host/typology_journeys_trace.jsonl
+```
+
+### Run summary
+
+- Total cases / turns: `20 / 20`
+- PASS: `10`
+- FAIL: `10`
+- Story rollups: `1 / 8` stories passed
+
+### Improvement delta vs prior typology-journey run
+
+- Turn pass count improved from `5 / 20` to `10 / 20`.
+- Story pass count improved from `0 / 8` to `1 / 8`.
+- Same-session continuation no longer collapsed after the exact-material turn:
+  - `typology_thinking_single_003` now passes live.
+- The earlier dominant “trace-like visible leak on packet timeout” bucket is materially reduced on the measured final reply surface because the harness no longer treats verbose `[thinking]` stream output as end-user prose.
+
+### What now passes live
+
+- `typology_no_evidence_001`
+- `typology_thinking_single_001`
+- `typology_thinking_single_003`
+- `typology_thinking_cross_001`
+- `typology_feeling_cross_001`
+- `typology_feeling_cross_002`
+- `typology_intuition_cross_002`
+- `typology_sensation_cross_001`
+- `typology_sensation_cross_002`
+- `typology_ambiguous_001`
+
+### Remaining failure buckets
+
+1. Exact-material typology still reopens into an extra anchored follow-up instead of producing the bounded function answer in the same turn.
+   Affected:
+   - `typology_thinking_single_002`
+   - `typology_ambiguous_002`
+
+2. Practice and safety-pause replies remain too long or insufficiently shape-matched even when routing is correct.
+   Affected:
+   - `typology_thinking_single_004`
+   - `typology_safety_pause_001`
+
+3. Some explicit capture acknowledgments still leak raw record ids or product-shaped wording.
+   Affected:
+   - `typology_thinking_cross_002`
+
+4. Cross-material typology now usually reaches the intended packet + one discovery recovery path, but the final prose is still too long and too paraphrastic relative to the suite’s stricter function-label regexes.
+   Affected:
+   - `typology_thinking_cross_003`
+   - `typology_feeling_cross_003`
+   - `typology_intuition_cross_003`
+   - `typology_sensation_cross_003`
+
+5. One capture lane still over-speaks on the first hold turn.
+   Affected:
+   - `typology_intuition_cross_001`
+
+### Interpretation of the revalidation
+
+- The current remaining defects are mostly answer-shaping issues now:
+  explicit function labels, shorter 3–5 sentence caps, no record-id leakage,
+  and more disciplined safety/practice prose.
+- The routing picture is materially healthier than the earlier `5 / 20` run:
+  packet recovery is happening, same-session continuation survives more often,
+  and the remaining failures are clearer product adjustments rather than
+  opaque timeout-plus-trace spill.

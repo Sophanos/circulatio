@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { motion, AnimatePresence } from "motion/react"
 
-import { CompactChannelMixer } from "@/components/ritual/CompactChannelMixer"
+import { CompactChannelMixer, type ChannelName } from "@/components/ritual/CompactChannelMixer"
 import { RitualSectionList, type SectionMuteHandler } from "@/components/ritual/RitualSectionList"
 import { RitualTranscript } from "@/components/ritual/RitualTranscript"
 import type {
@@ -13,29 +14,44 @@ import type {
 
 export type RailTab = "sections" | "transcript" | "channels"
 
+const TAB_CONTENT = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+  transition: { duration: 0.2, ease: "easeOut" as const }
+}
+
 export function RitualRail({
   artifact,
   currentMs,
   sections,
   channels,
+  activeTab,
+  onTabChange,
   onToggleSectionMute,
   onToggleChannelMute,
+  onChannelGainChange,
   onSeek
 }: {
   artifact: PresentationArtifact
   currentMs: number
   sections: RitualSection[]
   channels?: ArtifactChannels
+  activeTab?: RailTab
+  onTabChange?: (tab: RailTab) => void
   onToggleSectionMute?: SectionMuteHandler
   onToggleChannelMute?: (name: string, muted: boolean) => void
+  onChannelGainChange?: (name: ChannelName, gain: number) => void
   onSeek?: (ms: number) => void
 }) {
-  const [tab, setTab] = useState<RailTab>("sections")
+  const [internalTab, setInternalTab] = useState<RailTab>("sections")
+  const tab = activeTab ?? internalTab
+  const setTab = onTabChange ?? setInternalTab
 
   return (
     <div className="flex h-full flex-col">
       {/* Tabs */}
-      <div className="mb-3 flex items-center gap-1 rounded-2xl bg-white/40 p-1 backdrop-blur-md">
+      <div className="mb-3 flex items-center gap-1 rounded-2xl p-1">
         <TabButton active={tab === "sections"} onClick={() => setTab("sections")}>
           Sections
         </TabButton>
@@ -47,34 +63,36 @@ export function RitualRail({
         </TabButton>
       </div>
 
-      {/* Content */}
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white/40 p-4 backdrop-blur-md">
-        {tab === "sections" && (
-          <RitualSectionList
-            sections={sections}
-            currentMs={currentMs}
-            onToggleMute={onToggleSectionMute}
-            onSeek={onSeek}
-          />
-        )}
-        {tab === "transcript" && (
-          <RitualTranscript
-            artifact={artifact}
-            currentMs={currentMs}
-            onSeek={onSeek}
-          />
-        )}
+      {/* Content — animated transitions between tabs */}
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl px-3 py-3">
+        <AnimatePresence mode="wait" initial={false}>
+          {tab === "sections" && (
+            <motion.div key="sections" {...TAB_CONTENT}>
+              <RitualSectionList
+                sections={sections}
+                currentMs={currentMs}
+                onToggleMute={onToggleSectionMute}
+                onSeek={onSeek}
+              />
+            </motion.div>
+          )}
+          {tab === "transcript" && (
+            <motion.div key="transcript" {...TAB_CONTENT}>
+              <RitualTranscript
+                artifact={artifact}
+                currentMs={currentMs}
+                onSeek={onSeek}
+              />
+            </motion.div>
+          )}
         {tab === "channels" && (
-          <div className="flex flex-col gap-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-graphite-500">
-              Channel mixer
-            </p>
-            <CompactChannelMixer
-              channels={channels}
-              onToggle={(name, muted) => onToggleChannelMute?.(name, muted)}
-            />
-          </div>
+          <CompactChannelMixer
+            channels={channels}
+            onToggle={(name, muted) => onToggleChannelMute?.(name, muted)}
+            onGainChange={(name, gain) => onChannelGainChange?.(name, gain)}
+          />
         )}
+        </AnimatePresence>
       </div>
     </div>
   )
@@ -94,10 +112,10 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={[
-        "flex-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors",
+        "flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-200",
         active
-          ? "bg-white text-graphite-950 shadow-sm"
-          : "text-graphite-500 hover:text-graphite-800"
+          ? "bg-white/[0.10] text-silver-100"
+          : "text-silver-600 hover:text-silver-300"
       ].join(" ")}
     >
       {children}

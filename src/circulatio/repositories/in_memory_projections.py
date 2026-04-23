@@ -2042,16 +2042,6 @@ def build_thread_digests_locked(
             or record.get("label")
             or "Journey thread"
         )
-        if experiment_ids:
-            experiment = max(
-                (
-                    bucket.journey_experiments[experiment_id]
-                    for experiment_id in experiment_ids
-                    if experiment_id in bucket.journey_experiments
-                ),
-                key=lambda item: str(item.get("updatedAt") or item.get("createdAt") or ""),
-            )
-            summary_text = str(experiment.get("summary") or experiment.get("title") or summary_text)
         status = str(record.get("status") or summary.get("status") or "active")
         last_touched_at = max(
             [

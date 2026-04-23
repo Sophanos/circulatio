@@ -74,6 +74,7 @@ def test_build_thread_digests_locked_keeps_journey_kind_when_experiment_is_prese
         "id": "journey_1",
         "userId": "user_1",
         "label": "Bear pursuit",
+        "currentQuestion": "What keeps chasing me here?",
         "status": "active",
         "relatedMaterialIds": [],
         "relatedSymbolIds": [],
@@ -113,4 +114,5 @@ def test_build_thread_digests_locked_keeps_journey_kind_when_experiment_is_prese
     assert len(result) == 1
     digest = result[0]
     assert digest["kind"] == "journey"
+    assert digest["summary"] == "What keeps chasing me here?"
     assert digest["entityRefs"]["experiments"] == ["experiment_1"]

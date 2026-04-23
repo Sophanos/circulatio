@@ -263,6 +263,70 @@ def _extract_host_reply(raw_output: str) -> tuple[str | None, str]:
     return None, "\n".join(lines).strip()
 
 
+def _extract_session_turn_details(
+    export_payload: dict[str, Any], *, user_turn: str
+) -> tuple[list[str], str]:
+    messages = export_payload.get("messages")
+    if not isinstance(messages, list):
+        return [], ""
+    user_indexes = [
+        index
+        for index, item in enumerate(messages)
+        if isinstance(item, dict)
+        and item.get("role") == "user"
+        and str(item.get("content") or "") == user_turn
+    ]
+    if not user_indexes:
+        return [], ""
+    start_index = user_indexes[-1]
+    tool_calls: list[str] = []
+    host_reply = ""
+    for item in messages[start_index + 1 :]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "")
+        if role == "user":
+            break
+        if role == "assistant":
+            tool_call_items = item.get("tool_calls")
+            if isinstance(tool_call_items, list):
+                for tool_call in tool_call_items:
+                    if not isinstance(tool_call, dict):
+                        continue
+                    function_payload = tool_call.get("function")
+                    if not isinstance(function_payload, dict):
+                        continue
+                    tool_name = str(function_payload.get("name") or "").strip()
+                    if tool_name:
+                        tool_calls.append(tool_name)
+            content = str(item.get("content") or "").strip()
+            if content:
+                host_reply = content
+    return tool_calls, host_reply
+
+
+def export_session_turn(
+    *, hermes_bin: str, session_id: str, user_turn: str
+) -> tuple[list[str], str]:
+    cmd = [hermes_bin, "sessions", "export", "-", "--session-id", session_id]
+    result = subprocess.run(
+        cmd,
+        cwd=REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=30,
+    )
+    payload_text = sanitize_output(result.stdout or "")
+    if result.returncode != 0 or not payload_text:
+        return [], ""
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return [], ""
+    return _extract_session_turn_details(payload, user_turn=user_turn)
+
+
 def _sentence_count(text: str) -> int:
     pieces = [piece.strip() for piece in re.split(r"[.!?]+", text) if piece.strip()]
     return len(pieces)
@@ -543,7 +607,6 @@ def run_turn(
     cmd = [
         hermes_bin,
         "chat",
-        "-v",
         "-Q",
         "-t",
         toolset,
@@ -570,7 +633,18 @@ def run_turn(
         return_code = 124
         raw_output = sanitize_output(exc.stdout or "")
     session_id, host_reply = _extract_host_reply(raw_output)
-    tool_calls = TOOL_CALL_RE.findall(raw_output)
+    tool_calls: list[str] = TOOL_CALL_RE.findall(raw_output)
+    export_session_id = session_id or resume_session_id
+    if export_session_id is not None:
+        exported_tool_calls, exported_host_reply = export_session_turn(
+            hermes_bin=hermes_bin,
+            session_id=export_session_id,
+            user_turn=user_turn,
+        )
+        if exported_tool_calls:
+            tool_calls = exported_tool_calls
+        if exported_host_reply:
+            host_reply = exported_host_reply
     return session_id, tool_calls, host_reply, raw_output, return_code, timed_out
 
 

@@ -2531,7 +2531,9 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(self) -> None:
+    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(
+        self,
+    ) -> None:
         async def run() -> None:
             repository, service, _ = self._service()
             material = await service.store_material(
@@ -2586,7 +2588,9 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
             function_section = next(
-                section for section in discovery["sections"] if section["key"] == "function_dynamics"
+                section
+                for section in discovery["sections"]
+                if section["key"] == "function_dynamics"
             )
             self.assertIn("Foreground", {item["label"] for item in function_section["items"]})
             criteria = {
@@ -3654,6 +3658,249 @@ class CirculatioServiceTests(unittest.TestCase):
             updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
 
             self.assertEqual(updated_experiment["status"], "quiet")
+
+        asyncio.run(run())
+
+    def test_quieting_journey_experiment_clears_due_date_and_resume_stays_neutral(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Returning contact thread",
+                }
+            )
+            experiment = await repository.create_journey_experiment(
+                {
+                    "id": create_id("journey_experiment"),
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                    "status": "active",
+                    "source": "manual",
+                    "bodyFirst": False,
+                    "relatedPracticeSessionIds": [],
+                    "relatedBriefIds": [],
+                    "relatedSymbolIds": [],
+                    "relatedGoalTensionIds": [],
+                    "relatedBodyStateIds": [],
+                    "relatedResourceIds": [],
+                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+
+            quiet = await service.respond_journey_experiment(
+                {"userId": "user_1", "experimentId": experiment["id"], "action": "quiet"}
+            )
+            resumed = await service.respond_journey_experiment(
+                {"userId": "user_1", "experimentId": experiment["id"], "action": "resume"}
+            )
+
+            self.assertEqual(quiet["status"], "quiet")
+            self.assertEqual(quiet.get("nextCheckInDueAt", ""), "")
+            self.assertTrue(str(quiet.get("cooldownUntil") or ""))
+            self.assertEqual(resumed["status"], "active")
+            self.assertEqual(resumed.get("nextCheckInDueAt", ""), "")
+
+        asyncio.run(run())
+
+    def test_practice_responses_resolve_linked_experiments(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Returning contact thread",
+                }
+            )
+            accepted_experiment = await repository.create_journey_experiment(
+                {
+                    "id": create_id("journey_experiment"),
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                    "status": "active",
+                    "source": "manual",
+                    "bodyFirst": False,
+                    "relatedPracticeSessionIds": [],
+                    "relatedBriefIds": [],
+                    "relatedSymbolIds": [],
+                    "relatedGoalTensionIds": [],
+                    "relatedBodyStateIds": [],
+                    "relatedResourceIds": [],
+                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+            skipped_experiment = await repository.create_journey_experiment(
+                {
+                    "id": create_id("journey_experiment"),
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                    "status": "active",
+                    "source": "manual",
+                    "bodyFirst": False,
+                    "relatedPracticeSessionIds": [],
+                    "relatedBriefIds": [],
+                    "relatedSymbolIds": [],
+                    "relatedGoalTensionIds": [],
+                    "relatedBodyStateIds": [],
+                    "relatedResourceIds": [],
+                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+            accepted_practice = await repository.create_practice_session(
+                {
+                    "id": create_id("practice_session"),
+                    "userId": "user_1",
+                    "practiceType": "journaling",
+                    "target": "thread contact",
+                    "reason": "stay with the thread",
+                    "instructions": [],
+                    "durationMinutes": 5,
+                    "contraindicationsChecked": [],
+                    "requiresConsent": False,
+                    "status": "recommended",
+                    "source": "manual",
+                    "followUpCount": 0,
+                    "relatedJourneyIds": [journey["id"]],
+                    "relatedExperimentIds": [accepted_experiment["id"]],
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+            skipped_practice = await repository.create_practice_session(
+                {
+                    "id": create_id("practice_session"),
+                    "userId": "user_1",
+                    "practiceType": "grounding",
+                    "target": "settle body",
+                    "reason": "stay with the thread",
+                    "instructions": [],
+                    "durationMinutes": 5,
+                    "contraindicationsChecked": [],
+                    "requiresConsent": False,
+                    "status": "recommended",
+                    "source": "manual",
+                    "followUpCount": 0,
+                    "relatedJourneyIds": [journey["id"]],
+                    "relatedExperimentIds": [skipped_experiment["id"]],
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+
+            await service.respond_practice_recommendation(
+                {
+                    "userId": "user_1",
+                    "practiceSessionId": accepted_practice["id"],
+                    "action": "accepted",
+                }
+            )
+            await service.respond_practice_recommendation(
+                {
+                    "userId": "user_1",
+                    "practiceSessionId": skipped_practice["id"],
+                    "action": "skipped",
+                    "note": "Not today.",
+                }
+            )
+            accepted_updated = await repository.get_journey_experiment(
+                "user_1", accepted_experiment["id"]
+            )
+            skipped_updated = await repository.get_journey_experiment(
+                "user_1", skipped_experiment["id"]
+            )
+
+            self.assertEqual(accepted_updated["status"], "quiet")
+            self.assertEqual(
+                accepted_updated["relatedPracticeSessionIds"], [accepted_practice["id"]]
+            )
+            self.assertEqual(accepted_updated.get("nextCheckInDueAt", ""), "")
+            self.assertTrue(str(accepted_updated.get("cooldownUntil") or ""))
+            self.assertEqual(skipped_updated["status"], "quiet")
+            self.assertEqual(skipped_updated["relatedPracticeSessionIds"], [skipped_practice["id"]])
+            self.assertEqual(skipped_updated.get("nextCheckInDueAt", ""), "")
+            self.assertTrue(str(skipped_updated.get("cooldownUntil") or ""))
+
+        asyncio.run(run())
+
+    def test_practice_outcome_completes_linked_experiment(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            journey = await service.create_journey(
+                {
+                    "userId": "user_1",
+                    "label": "Returning contact thread",
+                }
+            )
+            experiment = await repository.create_journey_experiment(
+                {
+                    "id": create_id("journey_experiment"),
+                    "userId": "user_1",
+                    "journeyId": journey["id"],
+                    "title": "Current tending",
+                    "summary": "Stay with this thread lightly.",
+                    "status": "active",
+                    "source": "manual",
+                    "bodyFirst": False,
+                    "relatedPracticeSessionIds": [],
+                    "relatedBriefIds": [],
+                    "relatedSymbolIds": [],
+                    "relatedGoalTensionIds": [],
+                    "relatedBodyStateIds": [],
+                    "relatedResourceIds": [],
+                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+            practice = await repository.create_practice_session(
+                {
+                    "id": create_id("practice_session"),
+                    "userId": "user_1",
+                    "practiceType": "grounding",
+                    "target": "settle body",
+                    "reason": "stay with the thread",
+                    "instructions": [],
+                    "durationMinutes": 5,
+                    "contraindicationsChecked": [],
+                    "requiresConsent": False,
+                    "status": "recommended",
+                    "source": "manual",
+                    "followUpCount": 0,
+                    "relatedJourneyIds": [journey["id"]],
+                    "relatedExperimentIds": [experiment["id"]],
+                    "createdAt": "2026-04-20T08:00:00Z",
+                    "updatedAt": "2026-04-20T08:00:00Z",
+                }
+            )
+
+            result = await service.record_practice_outcome(
+                user_id="user_1",
+                practice_session_id=practice["id"],
+                material_id=None,
+                outcome={
+                    "practiceType": "grounding",
+                    "outcome": "Felt more settled after grounding.",
+                },
+            )
+            updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
+
+            self.assertEqual(result["practiceSession"]["status"], "completed")
+            self.assertEqual(updated_experiment["status"], "completed")
+            self.assertEqual(updated_experiment["relatedPracticeSessionIds"], [practice["id"]])
+            self.assertEqual(updated_experiment.get("nextCheckInDueAt", ""), "")
+            self.assertTrue(str(updated_experiment.get("completedAt") or ""))
 
         asyncio.run(run())
 

@@ -110,12 +110,7 @@ Routing is LLM-driven at the host layer. Hermes-agent and future OpenClaw/MCP ho
 - **Storage:** SQLite canonical. Graph is derived, not separate DB.
 - **Scope:** No frontend, no medical diagnosis, no unbounded task management.
 
-## Private Frontend Workflow
-
-- Private Hermes Ritual frontend work lives on the local branch `ritual-frontend-private`.
-- Treat `apps/hermes-rituals-web/` as excluded from normal `main` staging, commit, and push flows unless the user explicitly asks to include it.
-- Backend, docs, tests, scripts, and evaluation changes may continue to ship on `main` without the frontend path.
-- If frontend work must move, discuss branch/publication intent first rather than merging it into routine backend commits.
+- Private frontend rule: keep `apps/hermes-rituals-web/` on local branch `ritual-frontend-private` and exclude it from normal `main` commits/pushes unless the user explicitly asks.
 
 ## Testing
 

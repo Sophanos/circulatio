@@ -38,11 +38,30 @@ export type ArtifactChannels = {
   music?: ArtifactChannelState
 }
 
+export type BreathPattern =
+  | "steadying"
+  | "lengthened_exhale"
+  | "box_breath"
+  | "orienting"
+
+export type BreathPreferenceSource =
+  | "explicit_user_preference"
+  | "host_prompted_preference"
+  | "host_default"
+  | "llm_suggested"
+
+export type BreathVisualForm = "orb" | "wave" | "mandala" | "horizon"
+
 export type BreathCycle = {
   inhaleMs: number
   holdMs: number
   exhaleMs: number
   restMs: number
+  cycles?: number
+  pattern?: BreathPattern
+  techniqueName?: string
+  preferenceSource?: BreathPreferenceSource
+  visualForm?: BreathVisualForm
 }
 
 export type CaptionCue = {

@@ -70,7 +70,12 @@ const artifacts: PresentationArtifact[] = [
       inhaleMs: 4200,
       holdMs: 1800,
       exhaleMs: 6400,
-      restMs: 2200
+      restMs: 2200,
+      cycles: 4,
+      pattern: "lengthened_exhale",
+      techniqueName: "Steadying",
+      preferenceSource: "host_default",
+      visualForm: "orb"
     },
     scenes: [
       {
