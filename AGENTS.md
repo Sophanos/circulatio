@@ -91,11 +91,14 @@ Routing is LLM-driven at the host layer. Hermes-agent and future OpenClaw/MCP ho
 
 ## Docs Hierarchy
 
-1. `docs/ROADMAP.md` — Vision, use cases, phases.
-2. `docs/ENGINEERING_GUIDE.md` — Tech spec, file impact, order.
-3. `docs/INTERPRETATION_ENGINE_SPEC.md` — Jungian hermeneutic method.
-4. `docs/RUNBOOK.md` — Safety, evidence, typology, demo script.
-5. `docs/SUCCESS_VISION.md` — Experience target.
+1. `docs/ARCHITECTURE.md` — System framing, scalability thesis, builder-psyche separation.
+2. `docs/ROADMAP.md` — Vision, use cases, phases.
+3. `docs/ENGINEERING_GUIDE.md` — Tech spec, current state, runtime constraints.
+4. `docs/INTERPRETATION_ENGINE_SPEC.md` — Jungian hermeneutic method.
+5. `docs/RUNBOOK.md` — Safety, evidence, typology, demo script.
+6. `docs/SELF_EVOLUTION_OS.md` — Offline Evolution OS contract and CLI.
+7. `docs/PRESENTATION_LAYER.md` — Deferred embodied presentation contract (backend-only).
+8. `tests/evals/journey_cli/JOURNEY_FAMILIES.md` — Longitudinal journey families and eval cases.
 
 ## Locked
 

@@ -1,6 +1,6 @@
 > **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
-> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing, scalability thesis, and builder-psyche separation. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `JOURNEY_FAMILIES.md` for the derived longitudinal journey families and eval-case framing used to test backend continuity, pacing, and host behavior.
+> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `PRESENTATION_LAYER.md` for the deferred embodied presentation contract.
 
 # Circulatio Engineering Guide
 ## Technical Specification For Builders
@@ -208,6 +208,7 @@ Circulatio now also includes a separate repo-local Journey CLI comparison layer 
 * `tests/evals/journey_cli/schema/journey_case.schema.json`
 * `tests/evals/journey_cli/*.jsonl`
 * `tests/evals/journey_cli/README.md`
+* `tests/evals/journey_cli/JOURNEY_FAMILIES.md` — longitudinal journey family taxonomy and canonical cases
 * `tools/journey_cli_eval/` package modules for dataset loading, prompt packaging, adapter
   execution, normalization, scoring, caching, traces, reporting, and run orchestration
 * `scripts/evaluate_journey_cli.py`
@@ -235,481 +236,17 @@ Reuse these existing structures rather than inventing parallel storage:
 
 ---
 
-## Phase 1: Native Memory-Kernel Scaffolding ✅ IMPLEMENTED
-
-**Status:** Complete. Files exist and tests pass.
-
-Add typed memory-kernel scaffolding as a **derived projection**, not a new durable store.
-
-### Module
-
-`src/circulatio/domain/memory.py`
-
-Use a new module instead of adding all of this to `domain/types.py` because the memory-kernel shapes are a separate domain surface from interpretation input/output wire types.
-
-### New Domain Types
-
-```text
-MemoryNamespace = Literal[
-  "materials",
-  "context_snapshots",
-  "interpretation_runs",
-  "evidence",
-  "personal_symbols",
-  "patterns",
-  "typology_lenses",
-  "practice_sessions",
-  "weekly_reviews",
-  "integrations",
-  "suppressed_hypotheses",
-]
-```
-
-Use plural namespace names because repository buckets already store plural collections with matching product-domain concepts.
-
-Add provenance:
-```text
-MemoryKernelProvenance
-- sourceNamespace: MemoryNamespace
-- sourceId: Id
-- materialId?
-- runId?
-- evidenceIds[]
-- createdAt?
-- observedAt?
-```
-
-Add importance:
-```text
-MemoryImportance
-- score: float        # 0.0–1.0 deterministic hint, not embedding score
-- reasons[]          # e.g. "recurring_symbol", "recent_practice_outcome"
-- recurrenceCount?
-- userConfirmed?
-- lastSeen?
-```
-
-Add memory item:
-```text
-MemoryKernelItem
-- id
-- userId
-- namespace
-- entityId
-- entityType
-- label
-- summary
-- keywords[]
-- provenance
-- importance
-- privacyClass
-- createdAt
-- updatedAt
-```
-
-Add retrieval query and snapshot:
-```text
-MemoryRetrievalRankingProfile = Literal[
-  "default",
-  "recency",
-  "recurrence",
-  "importance",
-]
-
-MemoryRetrievalQuery
-- namespaces?
-- relatedEntityIds?
-- windowStart?
-- windowEnd?
-- privacyClasses?
-- textQuery?              # keyword filtering only; no embedding/vector behavior
-- rankingProfile?
-- limit?
-
-MemoryKernelSnapshot
-- userId
-- query?
-- items[]
-- generatedAt
-- rankingNotes[]
-```
-
-### Repository Surface
-
-Add to `CirculatioRepository`:
-```text
-async build_memory_kernel_snapshot(
-    user_id: Id,
-    *,
-    query: MemoryRetrievalQuery | None = None,
-) -> MemoryKernelSnapshot
-```
-
-Do **not** add this to `GraphMemoryRepository` unless a concrete existing implementation already satisfies all new methods.
-
-### In-Memory Projection Behavior
-
-Implement in `in_memory_projections.py` as a pure locked-bucket helper:
-```text
-build_memory_kernel_snapshot_locked(bucket, user_id, query) -> MemoryKernelSnapshot
-```
-
-Initial item sources:
-
-| Namespace | Source records | Summary behavior |
-|-----------|---------------|------------------|
-| `materials` | `bucket.materials` and `bucket.material_summaries` | Prefer stored summary/title/tags; never expose raw text |
-| `personal_symbols` | `bucket.symbols` | canonical name, recurrence, valence hints |
-| `patterns` | `bucket.patterns` | label, formulation, activation intensity, confidence |
-| `practice_sessions` | `bucket.practice_sessions` | practice type, target, outcome if completed |
-| `context_snapshots` | `bucket.context_snapshots` | summary plus source/window |
-| `weekly_reviews` | `bucket.weekly_reviews` | result user-facing response summarized/truncated |
-| `integrations` | `bucket.integrations` | action, affected ids, note summary |
-| `evidence` | `bucket.evidence` | quote/summary only, privacy preserved |
-| `suppressed_hypotheses` | `bucket.suppressed` | normalized claim key and reason |
-
-Filtering:
-1. Exclude records with status `"deleted"`.
-2. Apply namespace filter.
-3. Apply privacy class filter.
-4. Apply window overlap using best available timestamp.
-5. Apply simple case-insensitive keyword matching for `textQuery`.
-6. Apply limit, default `20`, hard cap `100`.
-
-Ranking:
-- `default`: importance score desc, then updated/created desc.
-- `recency`: latest timestamp desc.
-- `recurrence`: recurrence count desc, then importance.
-- `importance`: importance score desc.
-
-### Symbolic Keyword Expansion (Amendment To Base Plan)
-
-Add a lightweight symbolic expansion layer:
-- When a `PersonalSymbol` is extracted, generate `symbolicFingerprint`: a list of related concepts (e.g., `serpent` → `snake, reptile, wisdom, danger, kundalini, uroboros`).
-- Store in `MemoryKernelItem.keywords`.
-- Memory query matches against this expanded set.
-- This is deterministic, requires no external dependencies, and gives 60-70% of cross-symbol retrieval.
-- Leave seam: `MemoryKernelItem.embedding?: list[float]` for future Phase.
-
-### Compaction (Amendment To Base Plan)
-
-When `raw` episodic records exceed threshold per namespace, generate `semantic` summary:
-- Simple concatenation + recurrence count for now.
-- Key is bucket classification (`episodic` → `semantic`).
-- Preserve `compactedFromIds` lineage.
-
----
-
-## Phase 2: Native Graph-Engine Scaffolding ✅ IMPLEMENTED
-
-**Status:** Complete. Files exist and tests pass.
-
-Add graph query and allowlist types over the existing domain vocabulary. The graph is derived from current records at query time.
-
-### Extend `domain/graph.py`
-
-Add missing vocabulary:
-```text
-GraphNodeType += "EvidenceItem"
-GraphEdgeType += "SUMMARIZES"
-```
-
-Add graph query types:
-```text
-GraphTraversalDirection = Literal["outbound", "inbound", "both"]
-
-GraphQuery
-- rootNodeIds?
-- nodeTypes?
-- edgeTypes?
-- maxDepth?
-- direction?
-- includeEvidence?
-- limit?
-
-GraphNodeProjection
-- id
-- userId
-- type
-- sourceId
-- label
-- summary?
-- privacyClass
-- createdAt
-- updatedAt
-- metadata?
-
-GraphEdgeProjection
-- id
-- userId
-- type
-- fromNodeId
-- toNodeId
-- evidenceIds[]
-- createdAt
-
-GraphQueryAllowlist
-- nodeTypes[]
-- edgeTypes[]
-- maxDepth
-- maxLimit
-
-GraphQueryResult
-- userId
-- nodes[]
-- edges[]
-- allowlist
-- warnings[]
-```
-
-Add constant:
-```text
-DEFAULT_GRAPH_QUERY_ALLOWLIST
-```
-
-Allowed node types (current Circulatio vocabulary only):
-```text
-MaterialEntry, DreamEntry, ReflectionEntry, ChargedEventNote, ContextSnapshot,
-PersonalSymbol, DreamFigure, MotifMention, Theme, ComplexCandidate,
-InterpretationRun, PracticeSession, IntegrationNote, LifeEventRef,
-StateSnapshotRef, TypologyLens, TypologyHypothesis, WeeklyReview, EvidenceItem
-```
-
-Allowed edge types:
-```text
-MENTIONS, INSTANCE_OF, FEATURES, MAY_EXPRESS, LINKED_TO, CONTEXTUALIZED_BY,
-SUPPORTED_BY, CONTRADICTED_BY, AMPLIFIED_BY, DRAWS_FROM, USED_EVIDENCE,
-TARGETED, CONFIRMS_OR_REJECTS, SUMMARIZES
-```
-
-### Repository Surface
-
-Add to `CirculatioRepository`:
-```text
-async query_graph(
-    self,
-    user_id: Id,
-    *,
-    query: GraphQuery | None = None,
-) -> GraphQueryResult
-```
-
-### In-Memory Graph Derivation
-
-Add in `in_memory_projections.py`:
-```text
-query_graph_locked(bucket, user_id, query) -> GraphQueryResult
-```
-
-Build nodes from bucket records:
-
-| Record | Node type |
-|--------|-----------|
-| `MaterialRecord.materialType == "dream"` | `DreamEntry` |
-| `reflection` | `ReflectionEntry` |
-| `charged_event` | `ChargedEventNote` |
-| `symbolic_motif`, `practice_outcome` | `MaterialEntry` |
-| `ContextSnapshot` | `ContextSnapshot` |
-| `InterpretationRunRecord` | `InterpretationRun` |
-| `EvidenceItem` | `EvidenceItem` |
-| `SymbolRecord` | `PersonalSymbol` |
-| `PatternRecord.patternType == "complex_candidate"` | `ComplexCandidate` |
-| `PatternRecord.patternType == "theme"` | `Theme` |
-| other pattern types | `Theme` initially, `metadata.patternType` preserved |
-| `PracticeSessionRecord` | `PracticeSession` |
-| `IntegrationRecord` | `IntegrationNote` |
-| `WeeklyReviewRecord` | `WeeklyReview` |
-| `TypologyLensRecord` | `TypologyLens` |
-
-Derive edges from current fields:
-```text
-InterpretationRun -DRAWS_FROM-> Material
-InterpretationRun -USED_EVIDENCE-> EvidenceItem
-InterpretationRun -CONTEXTUALIZED_BY-> ContextSnapshot
-Material -CONTEXTUALIZED_BY-> ContextSnapshot
-Material -MENTIONS-> PersonalSymbol (via linkedMaterialIds)
-Pattern -SUPPORTED_BY-> EvidenceItem
-Pattern -CONTRADICTED_BY-> EvidenceItem
-Pattern -LINKED_TO-> PersonalSymbol (via linkedSymbolIds)
-PracticeSession -DRAWS_FROM-> Material
-PracticeSession -LINKED_TO-> InterpretationRun
-WeeklyReview -SUMMARIZES-> Material / PersonalSymbol / Pattern
-IntegrationNote -CONFIRMS_OR_REJECTS-> InterpretationRun
-IntegrationNote -LINKED_TO-> affected entity nodes
-```
-
-### Symbol-to-Symbol Inferred Edges (Amendment To Base Plan)
-
-At query time, add inferred edges:
-```text
-if Symbol_A and Symbol_B appear in same Material:
-  add edge Symbol_A -ASSOCIATED_WITH-> Symbol_B
-
-if Symbol_A consistently precedes BodyState_X within 24h:
-  add edge Symbol_A -TRIGGERS-> BodyState_X
-
-if Symbol_A appears in dreams where Goal_Y is marked avoided:
-  add edge Symbol_A -CORRELATES_WITH-> Goal_Y
-```
-
-These edges are computed from the bucket at query time. They connect **symbols to symbols**, not just records to records.
-
-Query algorithm:
-1. Build candidate nodes and edges.
-2. Validate against `DEFAULT_GRAPH_QUERY_ALLOWLIST`.
-3. Clamp `maxDepth` to allowlist max (initially `2`).
-4. Clamp `limit` to allowlist max (initially `100`).
-5. BFS/DFS from root nodes with direction/edge/node filters.
-6. Deduplicate by id.
-7. Return warnings for unmatched roots or clamped limits.
-
-Failure behavior:
-- Invalid type: raise `ValidationError`.
-- Missing root: warning, not failure.
-- Empty graph: empty result.
-- Deleted records: excluded.
-
----
-
-## Phase 3: Circulatio-Derived Context Builder ✅ IMPLEMENTED
-
-**Status:** Complete. Files exist and tests pass.
-
-Add a real native builder and make it the primary life-context source.
-
-### Module
-
-`src/circulatio/adapters/context_builder.py`
-
-### New Component
-
-```text
-CirculatioLifeContextBuilder
-- repository: CirculatioRepository
-- default_window_days: int = 7
-
-async build_life_context_snapshot(
-    *,
-    user_id: Id,
-    window_start: str,
-    window_end: str,
-    material_id: Id | None = None,
-) -> LifeContextSnapshot | None
-```
-
-Behavior:
-- Calls repository native projection method.
-- Returns `None` when no meaningful native signals exist.
-- Always returns source `"circulatio-backend"` when it returns a snapshot.
-- Never reads Hermes profile state.
-- Never includes raw material text.
-- Always passes output through `compact_life_context_snapshot()`.
-
-### Native Context Derivation Algorithm
-
-Inputs: symbols, symbol history, patterns, pattern history, practice sessions, materials, interpretation runs, stored feedback, suppressed hypotheses.
-
-Output fields:
-
-| Field | Derivation |
-|-------|-----------|
-| `windowStart` | requested window start |
-| `windowEnd` | requested window end |
-| `source` | `"circulatio-backend"` |
-| `lifeEventRefs` | recent `charged_event` materials and important summarized reflections; summary/title/tags only |
-| `moodSummary` | recent symbol valenceHistory tones and tone shifts |
-| `energySummary` | practice outcome activation deltas |
-| `focusSummary` | top recurring symbols plus active/recurring patterns by activation intensity |
-| `mentalStateSummary` | safety dispositions, feedback trends, suppression/rejection patterns |
-| `habitSummary` | material frequency and completed/skipped practice cadence |
-| `notableChanges` | symbol history emergence/valence shifts, pattern status changes, new active patterns, completed practices |
-
-Bounding rules:
-- `lifeEventRefs`: max 5
-- `notableChanges`: max 5
-- Summary strings: concise enough for compaction
-- Skip raw material text
-- Exclude `exclude_material_id`
-
-Meaningfulness rule: Return `None` if only `windowStart`, `windowEnd`, `source` would be present.
-
-### Context Precedence
-
-In `ContextAdapter`:
-```text
-1. Circulatio-derived snapshot from CirculatioLifeContextBuilder
-2. Explicit provided lifeContextSnapshot from caller
-3. Hermes profile life-OS snapshot, only if lifeOsWindow is provided
-4. No lifeContextSnapshot
-```
-
-Do **not** merge Hermes fields into a native snapshot in this phase. `LifeContextSnapshot` has a single `source` field and no per-entry provenance.
-
-### ContextAdapter Changes
-
-Constructor:
-```text
-ContextAdapter(
-    repository: GraphMemoryRepository,
-    life_os: LifeOsReferenceAdapter | None = None,
-    life_context_builder: LifeContextBuilder | None = None,
-    default_life_context_window_days: int = 7,
-)
-```
-
-Window resolution:
-```text
-if lifeOsWindow exists:
-    window_start = lifeOsWindow.start
-    window_end = lifeOsWindow.end
-else:
-    anchor = materialDate or now_iso()
-    window_end = anchor
-    window_start = anchor - default_life_context_window_days
-```
-
-Error behavior:
-- Native builder failure: log warning, continue to fallback.
-- Provided snapshot compaction failure: skip it.
-- Hermes failure: existing behavior.
-- Interpretation should not fail solely because context building failed.
-
-### Service Wiring
-
-Modify `CirculatioService._build_material_input()` to always use `ContextAdapter.build_material_input()`.
-
-Before:
-```text
-if life_os_window:
-    adapter path
-else:
-    direct repository path
-```
-
-After:
-```text
-always build BuildContextInput
-always call ContextAdapter.build_material_input()
-```
-
-### Weekly Review Wiring
-
-Update `build_circulation_summary_input_locked()`:
-```text
-native_snapshot = build_life_context_snapshot_locked(...)
-if native_snapshot:
-    result["lifeContextSnapshot"] = native_snapshot
-elif overlapping stored context snapshots exist:
-    result["lifeContextSnapshot"] = latest stored snapshot
-```
-
-### Source Enum Fix
-
-Update `ContextSnapshotSource` in `domain/records.py`:
-```text
-"circulatio-backend"
-"circulatio-life-os"
-```
+## Historical Implementation Notes
+
+Phases 1–3 (memory-kernel scaffolding, graph-engine scaffolding, and native context builder) are fully implemented. The detailed design specifications (domain types, repository surfaces, projection behavior, filtering, ranking, graph derivation algorithms, and file-by-file impact tables) have been retired from this document because they are now canonically expressed in the code and tests.
+
+If you need to understand the exact shapes, see:
+- `src/circulatio/domain/memory.py` — memory-kernel types
+- `src/circulatio/domain/graph.py` — graph query types and allowlist
+- `src/circulatio/adapters/context_builder.py` — `CirculatioLifeContextBuilder`
+- `src/circulatio/repositories/in_memory_projections.py` — derived projection helpers
+- `tests/test_memory_graph_scaffolding.py` — memory and graph tests
+- `tests/test_context_builder.py` — context derivation tests
 
 ---
 
@@ -741,103 +278,7 @@ Operational implication:
 
 ---
 
-## Open Engineering Tasks
-
-### 1. Practice Delivery
-
-Phase 6 now keeps practice generation LLM-first while giving the runtime an explicit lifecycle:
-- `PracticeEngine` is the deterministic boundary for consent, safety, lifecycle defaults, follow-up timing, and coarse outcome signals
-- Practice recommendations remain LLM-shaped through `CirculatioCore.generate_practice()`
-- Practice sessions persist explicit `recommended`, `accepted`, `skipped`, and `completed` states without introducing a deterministic symbolic router
-- The fallback floor remains safety-blocked grounding or low-intensity journaling when the LLM path is unavailable
-
-**Status:** Implemented. Further work should extend prompts and schemas, not add deterministic practice routing.
-
-### 2. User Adaptation Profile
-
-Phase 6 also centralizes adaptation learning in `AdaptationEngine`. `UserAdaptationProfile` now tracks:
-- **Engagement patterns:** Which namespaces does the user log most? (dream-heavy vs. body-heavy vs. goal-heavy)
-- **Practice preferences:** Explicit preferred/avoided modalities plus explicit duration ceiling
-- **Communication preferences:** Tone, questioning style, symbolic density
-- **Interpretation preferences:** Depth pacing and modality bias
-- **Amplification pack affinity:** Which cultural frames resonate? Which are ignored?
-- **Typology indicators:** Cognitive function signals from language
-- **Ego strength trajectory:** Confronting shadow vs. avoiding it
-- **Rhythmic tolerance:** Engagement rate with unsolicited briefings and cadence preferences
-
-**Explicit + implicit learning:** Explicit preferences are validated by scope and remain user-owned. Learned policy updates live separately under `learnedSignals.*Policy`, never rewrite explicit preferences, and only become prompt-visible through derived typed hints. Raw multilingual note text is stored durably on `InteractionFeedbackRecord` and excluded from runtime prompts.
-
-**Status:** Implemented for communication, interpretation, practice, and rhythm scopes. Interaction feedback, learned policy updates, and Hermes Atropos env builders now exist as bounded runtime surfaces. Learned preferences remain soft and threshold-gated.
-
----
-
-## File-By-File Impact
-
-| File | Action |
-|------|--------|
-| `src/circulatio/domain/memory.py` | **New.** Phase 1 typed scaffolding. |
-| `src/circulatio/domain/graph.py` | **Modify.** Add EvidenceItem, SUMMARIZES, query/result types, allowlist. |
-| `src/circulatio/domain/records.py` | **Modify.** Add circulatio-backend and circulatio-life-os to ContextSnapshotSource. |
-| `src/circulatio/adapters/context_builder.py` | **New.** CirculatioLifeContextBuilder. |
-| `src/circulatio/adapters/context_adapter.py` | **Modify.** Add builder injection, precedence, window resolution. |
-| `src/circulatio/adapters/__init__.py` | **Modify.** Export CirculatioLifeContextBuilder and LifeContextBuilder. |
-| `src/circulatio/domain/feedback.py` | **New.** Durable interaction-feedback records for interpretation/practice feedback. |
-| `src/circulatio/application/circulatio_service.py` | **Modify.** Unify _build_material_input() to always use ContextAdapter. |
-| `src/circulatio/repositories/circulatio_repository.py` | **Modify.** Add abstract methods for memory kernel, graph query, life context. |
-| `src/circulatio/repositories/in_memory_projections.py` | **Modify.** Add build_memory_kernel_snapshot_locked, query_graph_locked, build_life_context_snapshot_locked. |
-| `src/circulatio/repositories/in_memory_circulatio_repository.py` | **Modify.** Implement three new abstract methods. |
-| `src/circulatio/repositories/hermes_profile_circulatio_repository.py` | **Modify.** Implement three new abstract methods. |
-| `src/circulatio/hermes/runtime.py` | **Modify.** Wire CirculatioLifeContextBuilder into both runtime builders. |
-| `src/circulatio/hermes/atropos_envs.py` | **New.** Bounded Hermes-side communication/practice env builders plus reward helpers. |
-| `tests/test_context_builder.py` | **New.** Tests for native context derivation and precedence. |
-| `tests/test_memory_graph_scaffolding.py` | **New.** Tests for memory kernel and graph query. |
-| `tests/test_circulatio_service.py` | **Modify.** Update service tests for unified context path. |
-
----
-
-## Implementation Order
-
-1. Add Phase 1 domain memory types (`domain/memory.py`).
-2. Add Phase 2 graph query types (`domain/graph.py`).
-3. Fix context source literals (`domain/records.py`).
-4. Add repository abstract methods and in-memory projection helpers atomically.
-5. Add `CirculatioLifeContextBuilder` (`adapters/context_builder.py`).
-6. Update `ContextAdapter` precedence.
-7. Unify `CirculatioService._build_material_input()`.
-8. Wire runtime builders.
-9. Update weekly review context projection.
-10. Add Phase 1-2 tests.
-11. Update service tests.
-12. Add documentation.
-13. Final validation: run full test suite, confirm no Kora-specific names, no vector/graph DB deps.
-
----
-
-## Risks And Migration
-
-### Persistence
-No storage migration required if memory-kernel and graph outputs remain derived projections.
-
-New `ContextSnapshot` records may contain `source: "circulatio-backend"` or `"circulatio-life-os"`. Existing records remain valid.
-
-### Abstract Method Risk
-Adding methods to `CirculatioRepository` is a breaking internal interface change. Must land atomically with all implementations.
-
-### Context Behavior Change
-After Phase 3:
-```text
-lifeOsWindow + native records → circulatio-backend snapshot
-lifeOsWindow + no native records → hermes-life-os fallback
-no lifeOsWindow + native records → circulatio-backend snapshot
-no lifeOsWindow + no native records → no lifeContextSnapshot
-```
-
-### Privacy Risk
-Native context builder must never summarize from raw `MaterialRecord.text`. Use only summary, title, tags, and metadata.
-
----
-
-## Implemented Runtime Direction (4–7)
+## Runtime Architecture Constraints (Phases 4–7)
 
 > **For full product descriptions, see `ROADMAP.md`.** This section captures the architectural direction that now exists in the runtime, plus the constraints later work should preserve.
 
@@ -891,6 +332,36 @@ Native context builder must never summarize from raw `MaterialRecord.text`. Use 
 ### Later: Standalone Distribution
 
 Standalone packaging is no longer Phase 7. Treat it as a later distribution concern after the embedded rhythmic runtime is stable.
+
+---
+
+## Open Engineering Tasks
+
+### 1. Practice Delivery
+
+Phase 6 now keeps practice generation LLM-first while giving the runtime an explicit lifecycle:
+- `PracticeEngine` is the deterministic boundary for consent, safety, lifecycle defaults, follow-up timing, and coarse outcome signals
+- Practice recommendations remain LLM-shaped through `CirculatioCore.generate_practice()`
+- Practice sessions persist explicit `recommended`, `accepted`, `skipped`, and `completed` states without introducing a deterministic symbolic router
+- The fallback floor remains safety-blocked grounding or low-intensity journaling when the LLM path is unavailable
+
+**Status:** Implemented. Further work should extend prompts and schemas, not add deterministic practice routing.
+
+### 2. User Adaptation Profile
+
+Phase 6 also centralizes adaptation learning in `AdaptationEngine`. `UserAdaptationProfile` now tracks:
+- **Engagement patterns:** Which namespaces does the user log most? (dream-heavy vs. body-heavy vs. goal-heavy)
+- **Practice preferences:** Explicit preferred/avoided modalities plus explicit duration ceiling
+- **Communication preferences:** Tone, questioning style, symbolic density
+- **Interpretation preferences:** Depth pacing and modality bias
+- **Amplification pack affinity:** Which cultural frames resonate? Which are ignored?
+- **Typology indicators:** Cognitive function signals from language
+- **Ego strength trajectory:** Confronting shadow vs. avoiding it
+- **Rhythmic tolerance:** Engagement rate with unsolicited briefings and cadence preferences
+
+**Explicit + implicit learning:** Explicit preferences are validated by scope and remain user-owned. Learned policy updates live separately under `learnedSignals.*Policy`, never rewrite explicit preferences, and only become prompt-visible through derived typed hints. Raw multilingual note text is stored durably on `InteractionFeedbackRecord` and excluded from runtime prompts.
+
+**Status:** Implemented for communication, interpretation, practice, and rhythm scopes. Interaction feedback, learned policy updates, and Hermes Atropos env builders now exist as bounded runtime surfaces. Learned preferences remain soft and threshold-gated.
 
 ---
 

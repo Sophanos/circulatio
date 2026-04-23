@@ -27,7 +27,7 @@ This tooling is still offline-only. It is not a runtime loop, does not mutate we
 
 The repo also includes a separate repo-local Journey CLI comparison harness under
 `tools/journey_cli_eval/` and `scripts/evaluate_journey_cli.py`. That layer uses the shared
-longitudinal cases in `docs/JOURNEY_FAMILIES.md` to probe host-routing behavior, read-mostly
+longitudinal cases in `tests/evals/journey_cli/JOURNEY_FAMILIES.md` to probe host-routing behavior, read-mostly
 surface boundaries, and anchored follow-up expectations without claiming backend truth. Service,
 bridge, and Hermes host-smoke tests remain authoritative for runtime behavior.
 
@@ -514,7 +514,6 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - `src/circulatio/domain/graph.py`
 - `src/circulatio/application/circulatio_service.py`
 - `src/circulatio/repositories/in_memory_projections.py`
-- `docs/SUCCESS_VISION.md`
 
 **Success criteria:**
 - Body notes become first-class context
@@ -565,7 +564,6 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - `src/circulatio/hermes/command_router.py`
 - `src/circulatio/hermes/runtime.py`
 - `src/circulatio/hermes/agent_bridge.py`
-- `docs/SUCCESS_VISION.md`
 - Future automation or Hermes scheduling integration files
 
 **Success criteria:**
@@ -618,7 +616,7 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 - Easy demonstration of journeys/reviews/context
 - Circulatio can stand on its own, while still fitting Hermes
 
-**Embodied presentation note:** Voice, breath containers, association-circle interaction, and host-rendered media are tracked separately in `docs/EMBODIED_PRESENTATION_PLAN.md` so this roadmap stays focused on core symbolic and individuation work. That later layer can optionally include spoken daily reflections, TTS delivery, brief meditation containers, small affirmation sets, and short reflective audio/podcast-style outputs, but only as host-rendered ritual surfaces built on top of the symbolic core rather than in place of it.
+**Embodied presentation note:** Voice, breath containers, association-circle interaction, and host-rendered media are tracked separately in `docs/PRESENTATION_LAYER.md` so this roadmap stays focused on core symbolic and individuation work. That later layer can optionally include spoken daily reflections, TTS delivery, brief meditation containers, small affirmation sets, and short reflective audio/podcast-style outputs, but only as host-rendered ritual surfaces built on top of the symbolic core rather than in place of it.
 
 ---
 
