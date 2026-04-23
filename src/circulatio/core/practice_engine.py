@@ -13,6 +13,7 @@ from ..domain.practices import (
     PracticeSessionSource,
     PracticeSessionStatus,
 )
+from ..domain.timestamps import format_iso_datetime, parse_iso_datetime
 from ..domain.types import (
     CoachLoopKind,
     CoachMoveKind,
@@ -492,7 +493,7 @@ class PracticeEngine:
         created_at: str,
         trigger: PracticeTriggerSummary,
     ) -> PracticeLifecycleDefaults:
-        created_dt = self._parse_datetime(created_at)
+        created_dt = parse_iso_datetime(created_at, default=datetime.now(UTC))
         trigger_type = str(trigger.get("triggerType") or "manual")
         follow_up_hours = {
             "manual": 24,
@@ -504,7 +505,7 @@ class PracticeEngine:
         }.get(trigger_type, 24)
         defaults: PracticeLifecycleDefaults = {
             "source": self._source_for_trigger(trigger_type),
-            "nextFollowUpDueAt": self._format_datetime(
+            "nextFollowUpDueAt": format_iso_datetime(
                 created_dt + timedelta(hours=follow_up_hours)
             ),
             "followUpCount": 0,
@@ -616,17 +617,3 @@ class PracticeEngine:
             "analysis_packet": "analysis_packet",
         }
         return mapping.get(trigger_type, "manual")
-
-    def _parse_datetime(self, value: str | None) -> datetime:
-        if not value:
-            return datetime.now(UTC)
-        candidate = value.strip()
-        if candidate.endswith("Z"):
-            candidate = candidate[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(candidate)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
-
-    def _format_datetime(self, value: datetime) -> str:
-        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

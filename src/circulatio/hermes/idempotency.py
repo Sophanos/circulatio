@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Literal, Protocol, TypedDict
 
 from ..domain.errors import ProfileStorageCorruptionError
+from ..domain.ids import now_iso
+from ..domain.timestamps import try_parse_iso_datetime
 from ..hermes.profile_paths import get_circulatio_db_path
 from ..repositories.sqlite_utils import (
     create_sqlite_connection,
@@ -58,7 +60,7 @@ class InMemoryIdempotencyStore:
     async def begin(self, key: str, request_hash: str) -> IdempotencyBeginResult:
         async with self._lock:
             stored = self._items.get(key)
-            now = _now_iso()
+            now = now_iso()
             if stored is None:
                 self._items[key] = StoredBridgeResponse(
                     request_hash=request_hash,
@@ -82,7 +84,7 @@ class InMemoryIdempotencyStore:
                 raise KeyError(f"Unknown idempotency key: {key}")
             stored.status = "completed"
             stored.response = deepcopy(response)
-            stored.updated_at = _now_iso()
+            stored.updated_at = now_iso()
 
     async def fail(self, key: str, error: BridgeResponseEnvelope) -> None:
         async with self._lock:
@@ -91,7 +93,7 @@ class InMemoryIdempotencyStore:
                 raise KeyError(f"Unknown idempotency key: {key}")
             stored.status = "failed"
             stored.response = deepcopy(error)
-            stored.updated_at = _now_iso()
+            stored.updated_at = now_iso()
 
     def close(self) -> None:
         return None
@@ -258,10 +260,6 @@ class SQLiteIdempotencyStore:
         )
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
 def _is_stale(timestamp: str | None, *, ttl_seconds: int) -> bool:
     if not timestamp:
         return False
@@ -272,17 +270,4 @@ def _is_stale(timestamp: str | None, *, ttl_seconds: int) -> bool:
 
 
 def _parse_timestamp(value: str) -> datetime | None:
-    normalized = value.strip()
-    if not normalized:
-        return None
-    if normalized.endswith("Z"):
-        normalized = normalized[:-1] + "+00:00"
-    elif len(normalized) == 19 and "T" not in normalized:
-        normalized = normalized.replace(" ", "T") + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    return try_parse_iso_datetime(value)

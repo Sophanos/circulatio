@@ -11,6 +11,7 @@ from ..domain.normalization import (
     normalize_options,
     normalize_session_context,
 )
+from ..domain.timestamps import format_iso_datetime, parse_iso_datetime
 from ..domain.types import (
     CulturalOriginSummary,
     InterpretationOptions,
@@ -271,21 +272,7 @@ class ContextAdapter:
     def _resolve_window(self, input_data: BuildContextInput) -> tuple[str, str]:
         if input_data.get("lifeOsWindow"):
             return input_data["lifeOsWindow"]["start"], input_data["lifeOsWindow"]["end"]
-        anchor = self._parse_datetime(input_data.get("materialDate"))
+        anchor = parse_iso_datetime(input_data.get("materialDate"), default=datetime.now(UTC))
         window_end = anchor
         window_start = anchor - timedelta(days=self._default_life_context_window_days)
-        return self._format_datetime(window_start), self._format_datetime(window_end)
-
-    def _parse_datetime(self, value: str | None) -> datetime:
-        if not value:
-            return datetime.now(UTC)
-        candidate = value.strip()
-        if candidate.endswith("Z"):
-            candidate = candidate[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(candidate)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
-
-    def _format_datetime(self, value: datetime) -> str:
-        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        return format_iso_datetime(window_start), format_iso_datetime(window_end)

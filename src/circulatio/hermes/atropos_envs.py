@@ -7,6 +7,7 @@ from ..core.method_state_policy import get_containment_summary, get_grounding_su
 from ..domain.feedback import InteractionFeedbackRecord
 from ..domain.ids import now_iso
 from ..domain.practices import PracticeSessionRecord
+from ..domain.timestamps import format_iso_datetime, try_parse_iso_datetime
 from ..domain.types import Id
 from ..repositories.circulatio_repository import CirculatioRepository
 
@@ -409,17 +410,11 @@ def _latest_timestamp(values: list[object]) -> datetime | None:
 
 
 def _parse_timestamp(value: object) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(UTC)
-    except ValueError:
-        return None
+    return try_parse_iso_datetime(value)
 
 
 def _format_timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    return format_iso_datetime(value)
 
 
 __all__ = [

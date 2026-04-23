@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ..domain.normalization import compact_life_context_snapshot
+from ..domain.timestamps import format_iso_datetime, parse_iso_datetime
 from ..domain.types import Id, LifeContextSnapshot
 from ..hermes.profile_paths import get_hermes_home
 from ..llm.ports import CirculatioLlmPort
@@ -243,16 +244,7 @@ class HermesProfileLifeOsReferenceAdapter:
         return compact_life_context_snapshot(snapshot) or snapshot
 
     def _iso_to_timestamp(self, value: str) -> float:
-        return self._parse_datetime(value).timestamp()
+        return parse_iso_datetime(value).timestamp()
 
     def _timestamp_to_iso(self, value: float) -> str:
-        return datetime.fromtimestamp(value, tz=UTC).isoformat().replace("+00:00", "Z")
-
-    def _parse_datetime(self, value: str) -> datetime:
-        normalized = value.strip()
-        if normalized.endswith("Z"):
-            normalized = normalized[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(normalized)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
+        return format_iso_datetime(datetime.fromtimestamp(value, tz=UTC))

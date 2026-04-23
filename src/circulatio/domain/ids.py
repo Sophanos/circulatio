@@ -6,6 +6,8 @@ import time
 import unicodedata
 from datetime import UTC, datetime
 
+from .timestamps import format_iso_datetime
+
 
 def create_id(prefix: str) -> str:
     random_part = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
@@ -14,7 +16,7 @@ def create_id(prefix: str) -> str:
 
 
 def now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    return format_iso_datetime(datetime.now(UTC))
 
 
 def normalize_claim_key(hypothesis_type: str, claim: str) -> str:
