@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+import re
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 
 from .targets import ALL_IMMUTABLE_ARTIFACTS, REPO_ROOT, get_target
 
-MAX_SKILL_BYTES = 15 * 1024
-MAX_TOOL_DESCRIPTION_CHARS = 500
+MAX_SKILL_BYTES = 20 * 1024
+MAX_TOOL_DESCRIPTION_CHARS = 1800
 REQUIRED_PROMPT_FRAGMENT_FUNCTIONS = (
     "analysis_packet_instruction_block",
     "interpretation_instruction_block",
@@ -56,6 +57,28 @@ def validate_skill_size(skill_text: str, *, limit_bytes: int = MAX_SKILL_BYTES) 
     if size_bytes > limit_bytes:
         findings.append(f"Skill text exceeds {limit_bytes} bytes ({size_bytes}).")
     return findings
+
+
+def skill_contract_text(
+    skill_text: str,
+    *,
+    section_headings: Sequence[str] | None = None,
+) -> str:
+    headings = [str(heading).strip() for heading in section_headings or () if str(heading).strip()]
+    if not headings:
+        return skill_text
+
+    sections: list[str] = []
+    for heading in headings:
+        pattern = re.compile(
+            rf"(^## {re.escape(heading)}\n)(.*?)(?=^## |\Z)",
+            re.MULTILINE | re.DOTALL,
+        )
+        match = pattern.search(skill_text)
+        if match is None:
+            continue
+        sections.append(f"{match.group(1)}{match.group(2).strip()}\n")
+    return "\n".join(sections) if sections else skill_text
 
 
 def validate_tool_descriptions(

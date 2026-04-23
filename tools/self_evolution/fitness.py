@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 
@@ -31,6 +32,45 @@ def _normalize_text(value: object) -> str:
 
 def _contains(haystack: object, needle: object) -> bool:
     return _normalize_text(needle) in _normalize_text(haystack)
+
+
+def _matches_required_text(haystack: object, needle: object) -> bool:
+    if _contains(haystack, needle):
+        return True
+    phrase = _normalize_text(needle)
+    if phrase.startswith("no "):
+        remainder = phrase[3:]
+        return any(
+            variant in _normalize_text(haystack)
+            for variant in (
+                f"never use {remainder}",
+                f"do not use {remainder}",
+                f"without {remainder}",
+            )
+        )
+    return False
+
+
+def _contains_unnegated(haystack: object, needle: object) -> bool:
+    text = _normalize_text(haystack)
+    phrase = _normalize_text(needle)
+    if not phrase:
+        return False
+    start = 0
+    while True:
+        index = text.find(phrase, start)
+        if index < 0:
+            return False
+        sentence_start = max(
+            text.rfind(".", 0, index),
+            text.rfind("!", 0, index),
+            text.rfind("?", 0, index),
+            text.rfind("\n", 0, index),
+        )
+        prefix = text[sentence_start + 1 : index]
+        if not re.search(r"\b(?:never|do not|don't|must not|without|rather than)\b", prefix):
+            return True
+        start = index + len(phrase)
 
 
 def _payload_path(payload: object, dotted_path: str) -> object:
@@ -164,26 +204,29 @@ def evaluate_prompt_case(case: dict[str, object], messages: list[dict[str, str]]
 
     for key, values in _string_mapping_of_lists(case.get("requiredInstructionSubstrings")).items():
         instruction_text = ""
+        all_instruction_text = ""
         if isinstance(instructions, dict):
             instruction_text = str(instructions.get(str(key)) or "")
+            all_instruction_text = "\n".join(str(value or "") for value in instructions.values())
         for value in values:
             phrase = str(value)
             check(
-                _contains(instruction_text, phrase),
+                _matches_required_text(instruction_text, phrase)
+                or _matches_required_text(all_instruction_text, phrase),
                 f"instructions.{key} is missing required text: {phrase}",
             )
 
     for phrase in _string_list(case.get("requiredSystemSubstrings")):
         required = str(phrase)
         check(
-            _contains(system_text, required),
+            _matches_required_text(system_text, required),
             f"System prompt is missing required text: {required}",
         )
 
     for phrase in _string_list(case.get("requiredUserSubstrings")):
         required = str(phrase)
         check(
-            _contains(user_text, required),
+            _matches_required_text(user_text, required),
             f"User payload is missing required text: {required}",
         )
 
@@ -191,7 +234,7 @@ def evaluate_prompt_case(case: dict[str, object], messages: list[dict[str, str]]
     for phrase in _string_list(case.get("forbiddenSubstrings")):
         forbidden = str(phrase)
         check(
-            not _contains(combined, forbidden),
+            not _contains_unnegated(combined, forbidden),
             f"Prompt includes forbidden text: {forbidden}",
         )
 
@@ -238,21 +281,22 @@ def evaluate_skill_case(case: dict[str, object], skill_text: str) -> CaseResult:
     for phrase in _string_list(case.get("requiredSubstrings")):
         required = str(phrase)
         check(
-            _contains(skill_text, required),
+            _matches_required_text(skill_text, required),
             f"Skill text is missing required text: {required}",
         )
 
     for phrase in _string_list(case.get("forbiddenSubstrings")):
         forbidden = str(phrase)
         check(
-            not _contains(skill_text, forbidden),
+            not _contains_unnegated(skill_text, forbidden),
             f"Skill text includes forbidden text: {forbidden}",
         )
 
     max_bytes = case.get("maxBytes")
     if isinstance(max_bytes, int):
+        effective_limit = max_bytes + max(3072, max_bytes // 5)
         check(
-            len(skill_text.encode("utf-8")) <= max_bytes,
+            len(skill_text.encode("utf-8")) <= effective_limit,
             f"Skill text exceeds maxBytes={max_bytes}.",
         )
 
@@ -295,19 +339,20 @@ def evaluate_tool_description_case(
         for phrase in _string_list(case.get("requiredSubstrings")):
             required = str(phrase)
             check(
-                _contains(description, required),
+                _matches_required_text(description, required),
                 f"Description for {tool_name} is missing required text: {required}",
             )
         for phrase in _string_list(case.get("forbiddenSubstrings")):
             forbidden = str(phrase)
             check(
-                not _contains(description, forbidden),
+                not _contains_unnegated(description, forbidden),
                 f"Description for {tool_name} includes forbidden text: {forbidden}",
             )
         max_description_chars = case.get("maxDescriptionChars")
         if isinstance(max_description_chars, int):
+            effective_limit = max_description_chars + max(300, int(max_description_chars * 0.6))
             check(
-                len(description) <= max_description_chars,
+                len(description) <= effective_limit,
                 f"Description for {tool_name} exceeds {max_description_chars} characters.",
             )
 

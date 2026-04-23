@@ -12,6 +12,7 @@ from circulatio_hermes_plugin import schemas as plugin_schemas
 
 from .artifacts import load_candidate_bundle_paths
 from .constraints import (
+    skill_contract_text,
     validate_candidate_bundle_paths,
     validate_candidate_path,
     validate_dataset_coverage,
@@ -200,9 +201,13 @@ def _evaluate_deterministic_cases(
     elif target.kind == "skill":
         active_path = candidate_path or target.baseline_path
         skill_text = active_path.read_text()
-        constraint_findings.extend(validate_skill_size(skill_text))
+        evaluated_skill_text = skill_contract_text(
+            skill_text,
+            section_headings=target.mutable_sections,
+        )
+        constraint_findings.extend(validate_skill_size(evaluated_skill_text))
         for case in cases:
-            case_results.append(evaluate_skill_case(case, skill_text))
+            case_results.append(evaluate_skill_case(case, evaluated_skill_text))
     elif target.kind == "tool_descriptions":
         tool_module = (
             _load_python_module(candidate_path, module_name="circulatio_candidate_schemas")

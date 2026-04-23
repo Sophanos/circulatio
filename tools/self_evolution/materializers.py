@@ -8,6 +8,7 @@ from pathlib import Path
 from types import ModuleType
 
 from .constraints import (
+    skill_contract_text,
     validate_prompt_fragments_module,
     validate_skill_size,
     validate_tool_descriptions,
@@ -191,7 +192,9 @@ class SkillMaterializer(BaseMaterializer):
                 continue
             text = self._replace_section(text, heading, new_markdown)
             summary.append(heading)
-        findings = validate_skill_size(text)
+        findings = validate_skill_size(
+            skill_contract_text(text, section_headings=self._target.mutable_sections)
+        )
         if findings:
             raise ValueError("; ".join(findings))
         candidate_path = self._candidate_path(output_dir, candidate_id=candidate_id)

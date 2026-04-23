@@ -10,7 +10,7 @@ from .output_schema import OUTPUT_SCHEMA
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPO_ROOT / "src" / "circulatio_hermes_plugin" / "skills" / "circulation" / "SKILL.md"
-JOURNEY_FAMILIES_PATH = REPO_ROOT / "docs" / "JOURNEY_FAMILIES.md"
+JOURNEY_FAMILIES_PATH = REPO_ROOT / "tests" / "evals" / "journey_cli" / "JOURNEY_FAMILIES.md"
 
 _FAMILY_HEADINGS = {
     "EmbodiedRecurrence": "### 1. Embodied Recurrence",
