@@ -191,22 +191,6 @@ pip install -e ".[dev]" --upgrade
 
 ---
 
-## First workflow
-
-You share a thought, a feeling, an experience.
-
-You mention the snake hunting you in last night's dream. Circulatio **captures** it.
-
-Three days later, you describe the car crash — your hands still shaking. Circulatio **notices** the thread.
-
-A week later, you ask: *"What's showing up?"* Circulatio **sees the pattern**: the snake, the crash, the recurring image of losing control. It offers one grounded observation — a thread held up to the light, not a reading. You approve what rings true. You reject what does not.
-
-Over time, you get a weekly synthesis — what recurred, what shifted, what was avoided. Seasonally, a life chapter — where you are in the story.
-
-You simply speak. The agent handles the rest.
-
----
-
 ## Architecture
 
 Circulatio is a durable backend for symbolic memory. It can embed in a host agent today (Hermes) and adapt to other hosts later. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system stack, scalability thesis, and builder-psyche separation.
