@@ -173,7 +173,7 @@ Circulatio is a durable backend for symbolic memory. It can embed in a host agen
 
 The host handles routing, sessions, and scheduling. Circulatio handles:
 - **Memory kernel** — typed, privacy-classed, provenance-bound
-- **Graph engine** — derived symbol-to-symbol projections, no external graph DB
+- **Graph engine** — derived symbol-to-symbol projections (2 hops supported), no external graph DB
 - **Context derivation** — native life-context built from your own records
 - **LLM-first interpretation** — structured depth output with safety backstops
 - **Approval flows** — symbolic writes are proposals until you accept them
