@@ -168,7 +168,9 @@ class JourneyFollowthroughEngine:
         journey_id = cast(Id, str(journey["id"]))
         related_body_state_ids = self._ids(journey.get("relatedBodyStateIds"))
         related_body_states = [
-            body_state_by_id[state_id] for state_id in related_body_state_ids if state_id in body_state_by_id
+            body_state_by_id[state_id]
+            for state_id in related_body_state_ids
+            if state_id in body_state_by_id
         ]
         related_goal_ids = self._ids(journey.get("relatedGoalIds"))
         related_goal_tensions = [
@@ -187,7 +189,9 @@ class JourneyFollowthroughEngine:
             practice_loop=practice_loop,
             adaptation_profile=adaptation_profile,
             now=now,
-            fallback_ts=str(journey.get("updatedAt") or journey.get("createdAt") or now.isoformat()),
+            fallback_ts=str(
+                journey.get("updatedAt") or journey.get("createdAt") or now.isoformat()
+            ),
         )
         family = self._detect_family(
             journey=journey,
@@ -237,12 +241,13 @@ class JourneyFollowthroughEngine:
             str(brief.get("status") or "").strip() in {"candidate", "shown"} for brief in briefs
         )
         status = str(journey.get("status") or "active").strip()
-        fresh_signal = (
-            last_briefed_at is None
-            or self._parse_datetime(last_touched_at) > self._parse_datetime(last_briefed_at)
-        )
+        fresh_signal = last_briefed_at is None or self._parse_datetime(
+            last_touched_at
+        ) > self._parse_datetime(last_briefed_at)
         quiet_window_days = 14 if family in {"symbol_body_life_pressure", "cross_family"} else 7
-        signal_is_recent = self._parse_datetime(last_touched_at) >= now - timedelta(days=quiet_window_days)
+        signal_is_recent = self._parse_datetime(last_touched_at) >= now - timedelta(
+            days=quiet_window_days
+        )
         stabilized = self._successful_stabilization(
             practices=practices,
             related_body_states=related_body_states,
@@ -311,7 +316,7 @@ class JourneyFollowthroughEngine:
         recommended_surface = self._recommended_surface(
             readiness=readiness,
             move_kind=recommended_move,
-            practice_signal=practice_signal["kind"],
+            practice_signal=str(practice_signal["kind"]),
         )
         summary: JourneyFollowthroughSummary = {
             "journeyId": journey_id,
@@ -326,9 +331,7 @@ class JourneyFollowthroughEngine:
                 [cast(Id, current_experiment["id"])] if current_experiment else []
             ),
             "relatedPracticeSessionIds": [
-                cast(Id, str(item["id"]))
-                for item in practices
-                if str(item.get("id") or "").strip()
+                cast(Id, str(item["id"])) for item in practices if str(item.get("id") or "").strip()
             ],
             "relatedBodyStateIds": related_body_state_ids,
             "relatedGoalTensionIds": related_goal_tension_ids,
@@ -360,7 +363,8 @@ class JourneyFollowthroughEngine:
         if practice_signal["kind"] != "none":
             return "practice_reentry"
         has_related_scene = any(
-            str(digest.get("kind") or "").strip() == "relational_scene" for digest in related_digests
+            str(digest.get("kind") or "").strip() == "relational_scene"
+            for digest in related_digests
         )
         if related_body_states and journey.get("relatedSymbolIds") and related_goal_tension_ids:
             return "symbol_body_life_pressure"
@@ -386,43 +390,73 @@ class JourneyFollowthroughEngine:
             signal_kind = str(practice_signal["kind"])
             if signal_kind == "due_followup":
                 if bool(practice_signal.get("bodyFirst")):
-                    return 95, "offer_resource", True, [
-                        "journey_practice_followup_due",
-                        "journey_practice_activation_requires_gentler_reentry",
-                    ]
+                    return (
+                        95,
+                        "offer_resource",
+                        True,
+                        [
+                            "journey_practice_followup_due",
+                            "journey_practice_activation_requires_gentler_reentry",
+                        ],
+                    )
                 return 93, "ask_practice_followup", False, ["journey_practice_followup_due"]
             if signal_kind == "repeated_skip":
-                return 90, "offer_resource", True, [
-                    "journey_practice_repeated_skips",
-                    "journey_practice_skip_softening",
-                ]
-            return 85, "return_to_journey", bool(related_body_states), [
-                "journey_return_after_absence",
-            ]
+                return (
+                    90,
+                    "offer_resource",
+                    True,
+                    [
+                        "journey_practice_repeated_skips",
+                        "journey_practice_skip_softening",
+                    ],
+                )
+            return (
+                85,
+                "return_to_journey",
+                bool(related_body_states),
+                [
+                    "journey_return_after_absence",
+                ],
+            )
         if family == "embodied_recurrence":
             if self._body_pressure_level(related_body_states) >= 2:
                 return 80, "offer_resource", True, ["journey_embodied_pressure_active"]
             return 80, "ask_body_checkin", True, ["journey_embodied_recurrence_active"]
         if family == "symbol_body_life_pressure":
             if self._body_pressure_level(related_body_states) >= 2:
-                return 75, "ask_body_checkin", True, [
-                    "journey_symbol_body_goal_convergence",
-                    "journey_body_pressure_present",
-                ]
+                return (
+                    75,
+                    "ask_body_checkin",
+                    True,
+                    [
+                        "journey_symbol_body_goal_convergence",
+                        "journey_body_pressure_present",
+                    ],
+                )
             return 75, "return_to_journey", True, ["journey_symbol_body_goal_convergence"]
         if family == "relational_scene_recurrence":
             if self._body_pressure_level(related_body_states) >= 2:
-                return 70, "return_to_journey", True, [
-                    "journey_relational_scene_recurrence",
-                    "journey_body_pressure_present",
-                ]
+                return (
+                    70,
+                    "return_to_journey",
+                    True,
+                    [
+                        "journey_relational_scene_recurrence",
+                        "journey_body_pressure_present",
+                    ],
+                )
             return 70, "ask_relational_scene", False, ["journey_relational_scene_recurrence"]
         if family == "thought_loop_typology_restraint":
             if related_goal_tension_ids:
-                return 65, "ask_goal_tension", False, [
-                    "journey_goal_tension_present",
-                    "journey_typology_restraint_active",
-                ]
+                return (
+                    65,
+                    "ask_goal_tension",
+                    False,
+                    [
+                        "journey_goal_tension_present",
+                        "journey_typology_restraint_active",
+                    ],
+                )
             return 65, "track_without_prompt", False, ["journey_typology_restraint_active"]
         if related_digests or related_goal_tension_ids or related_body_states:
             reasons.append("journey_cross_family_thread_active")
@@ -445,15 +479,21 @@ class JourneyFollowthroughEngine:
             reverse=True,
         )
         repeated_skips = [
-            item for item in sorted_practices[:3] if str(item.get("status") or "").strip() == "skipped"
+            item
+            for item in sorted_practices[:3]
+            if str(item.get("status") or "").strip() == "skipped"
         ]
-        repeated_skip_same_modality = bool(repeated_skips) and len(
-            {
-                str(item.get("modality") or item.get("practiceType") or "").strip()
-                for item in repeated_skips
-                if str(item.get("modality") or item.get("practiceType") or "").strip()
-            }
-        ) <= 1
+        repeated_skip_same_modality = (
+            bool(repeated_skips)
+            and len(
+                {
+                    str(item.get("modality") or item.get("practiceType") or "").strip()
+                    for item in repeated_skips
+                    if str(item.get("modality") or item.get("practiceType") or "").strip()
+                }
+            )
+            <= 1
+        )
         if len(repeated_skips) >= 2 and repeated_skip_same_modality:
             return {
                 "kind": "repeated_skip",
@@ -478,10 +518,14 @@ class JourneyFollowthroughEngine:
                 "bodyFirst": after in {"high", "overwhelming"} or trend in {"activating", "mixed"},
             }
         if sorted_practices:
-            last_touch = self._parse_datetime(self._practice_timestamp(sorted_practices[0], fallback=fallback_ts))
+            last_touch = self._parse_datetime(
+                self._practice_timestamp(sorted_practices[0], fallback=fallback_ts)
+            )
         else:
             last_touch = self._parse_datetime(fallback_ts)
-        threshold_days = self._reentry_threshold_days(practices=sorted_practices, adaptation_profile=adaptation_profile)
+        threshold_days = self._reentry_threshold_days(
+            practices=sorted_practices, adaptation_profile=adaptation_profile
+        )
         if now - last_touch >= timedelta(days=threshold_days):
             return {"kind": "return_after_absence", "bodyFirst": False}
         return {"kind": "none", "bodyFirst": False}
@@ -549,18 +593,17 @@ class JourneyFollowthroughEngine:
                 if current_experiment is not None
                 else []
             ),
+            *[self._practice_timestamp(item, fallback=fallback) for item in practices],
             *[
-                self._practice_timestamp(item, fallback=fallback)
-                for item in practices
-            ],
-            *[
-                str(item.get("observedAt") or item.get("updatedAt") or item.get("createdAt") or fallback)
+                str(
+                    item.get("observedAt")
+                    or item.get("updatedAt")
+                    or item.get("createdAt")
+                    or fallback
+                )
                 for item in related_body_states
             ],
-            *[
-                str(item.get("lastTouchedAt") or fallback)
-                for item in related_digests
-            ],
+            *[str(item.get("lastTouchedAt") or fallback) for item in related_digests],
         ]
         return max(timestamps)
 
@@ -574,10 +617,7 @@ class JourneyFollowthroughEngine:
             str(journey.get("lastBriefedAt") or "").strip(),
             *[
                 str(
-                    brief.get("actedOnAt")
-                    or brief.get("shownAt")
-                    or brief.get("updatedAt")
-                    or ""
+                    brief.get("actedOnAt") or brief.get("shownAt") or brief.get("updatedAt") or ""
                 ).strip()
                 for brief in briefs
                 if str(brief.get("status") or "").strip() in {"shown", "acted_on"}
@@ -700,9 +740,10 @@ class JourneyFollowthroughEngine:
             if isinstance(adaptation_profile.get("learnedSignals"), dict)
             else {}
         )
-        return bool(learned_signals.get("matured")) or int(
-            adaptation_profile.get("sampleCounts", {}).get("total", 0)
-        ) >= 20
+        return (
+            bool(learned_signals.get("matured"))
+            or int(adaptation_profile.get("sampleCounts", {}).get("total", 0)) >= 20
+        )
 
     def _practice_timestamp(self, practice: PracticeSessionRecord, *, fallback: str) -> str:
         return str(

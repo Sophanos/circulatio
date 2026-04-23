@@ -24,7 +24,9 @@ INTERPRETATION_RESPONSE_POLICY = (
     "rather than explain symbolism. Keep it short, plain, and grounded in lived feeling. "
     "Prefer one real question and at most one brief reflection. Use everyday relational or "
     "bodily language the user can actually feel. Do not use unexplained Jungian jargon like "
-    "anima, Great Mother, or archetype."
+    "anima, Great Mother, or archetype. If the material is a dream and the three-act "
+    "structure, lysis, or conscious attitude is missing, the userFacingResponse must ask for "
+    "those prerequisites before any amplification or symbolic exploration."
 )
 ACTION_DYNAMICS_POLICY = (
     "Action and relational dynamics come before or alongside symbolic decoding. In dreams, "

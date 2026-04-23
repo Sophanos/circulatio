@@ -64,7 +64,9 @@ class JourneyFamiliesBridgeTests(unittest.TestCase):
             after_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
 
             self.assertEqual(response["status"], "ok")
-            self.assertEqual(response["result"]["journeyPage"]["practiceContainer"]["kind"], "practice_follow_up")
+            self.assertEqual(
+                response["result"]["journeyPage"]["practiceContainer"]["kind"], "practice_follow_up"
+            )
             self.assertEqual(before_reviews, after_reviews)
 
         asyncio.run(run())
@@ -129,6 +131,37 @@ class JourneyFamiliesBridgeTests(unittest.TestCase):
                         "windowEnd": "2026-04-19T23:59:59Z",
                     },
                     **self._tool_kwargs(call_id="journey_case_alive_today"),
+                )
+            )
+            after_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
+
+            self.assertEqual(response["status"], "ok")
+            self.assertTrue(response["result"]["summaryId"])
+            self.assertEqual(before_reviews, after_reviews)
+
+        asyncio.run(run())
+
+    def test_relational_scene_consent_case_uses_alive_today_without_review_write(self) -> None:
+        async def run() -> None:
+            case = load_journey_case("relational_scene_002")
+            self._install_in_memory_runtime()
+            runtime = get_runtime("default")
+            await seed_history_seed(
+                case=case,
+                repository=runtime.repository,
+                service=runtime.service,
+                user_id="hermes:default:local",
+            )
+
+            before_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
+            response = json.loads(
+                await alive_today_tool(
+                    {
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "explicitQuestion": case["turns"][0]["userTurn"],
+                    },
+                    **self._tool_kwargs(call_id="journey_case_relational_alive_today"),
                 )
             )
             after_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")

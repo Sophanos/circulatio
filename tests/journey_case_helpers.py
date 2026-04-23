@@ -39,7 +39,9 @@ def load_journey_case(case_id: str) -> dict[str, object]:
     return load_journey_cases(JOURNEY_DATASETS, case_ids=[case_id])[0]
 
 
-def build_service_fixture() -> tuple[InMemoryCirculatioRepository, CirculatioService, FakeCirculatioLlm]:
+def build_service_fixture() -> tuple[
+    InMemoryCirculatioRepository, CirculatioService, FakeCirculatioLlm
+]:
     repository = InMemoryCirculatioRepository()
     llm = FakeCirculatioLlm()
     core = CirculatioCore(repository, llm=llm)

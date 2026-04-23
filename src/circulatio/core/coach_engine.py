@@ -169,9 +169,7 @@ class CoachEngine:
                 if str(item).strip()
             ],
             "reasons": [
-                str(item).strip()
-                for item in runtime_policy.get("reasons", [])
-                if str(item).strip()
+                str(item).strip() for item in runtime_policy.get("reasons", []) if str(item).strip()
             ],
             "updatedAt": updated_at,
         }
@@ -267,7 +265,8 @@ class CoachEngine:
             "doNotAskReasons": [
                 *(
                     ["coach_state_no_eligible_move"]
-                    if selected_move is None and not any(
+                    if selected_move is None
+                    and not any(
                         str(loop.get("status") or "").strip() == "eligible" for loop in active_loops
                     )
                     else []
@@ -337,16 +336,8 @@ class CoachEngine:
     ) -> CoachMoveContract | None:
         loops = active_loops
         if loops is None:
-            loops = (
-                coach_state.get("activeLoops", [])
-                if isinstance(coach_state, dict)
-                else []
-            )
-        eligible = [
-            loop
-            for loop in loops
-            if str(loop.get("status") or "").strip() == "eligible"
-        ]
+            loops = coach_state.get("activeLoops", []) if isinstance(coach_state, dict) else []
+        eligible = [loop for loop in loops if str(loop.get("status") or "").strip() == "eligible"]
         if not eligible:
             return None
         eligible.sort(key=lambda item: self._loop_sort_key(item, surface=surface))
@@ -484,11 +475,7 @@ class CoachEngine:
         blocked_moves = self._dedupe_strings(
             [
                 *self._strings(runtime_policy.get("blockedMoves")),
-                *[
-                    str(item)
-                    for item in summary.get("blockedEscalations", [])
-                    if str(item).strip()
-                ],
+                *[str(item) for item in summary.get("blockedEscalations", []) if str(item).strip()],
             ]
         )
         reasons = self._dedupe_strings(
@@ -666,7 +653,11 @@ class CoachEngine:
                     "stance": "scene_first",
                     "askAbout": "what changed in you after the contact",
                     "avoid": ["diagnosis", "causal_claim", "projection_language"],
-                    "choices": ["track the scene", "body first" if body_first else "hold it lightly", "leave it alone"],
+                    "choices": [
+                        "track the scene",
+                        "body first" if body_first else "hold it lightly",
+                        "leave it alone",
+                    ],
                 },
             )
         if move_kind == "offer_practice":
@@ -675,7 +666,9 @@ class CoachEngine:
                 "A bounded practice option may fit this journey now.",
                 {
                     "stance": "practice_invitation",
-                    "askAbout": "whether a light practice would help or whether silence fits better",
+                    "askAbout": (
+                        "whether a light practice would help or whether silence fits better"
+                    ),
                     "avoid": ["compliance_language", "backlog_pressure", "intensity_escalation"],
                     "choices": ["offer one", "not now", "leave it alone"],
                 },
@@ -687,7 +680,11 @@ class CoachEngine:
                 "stance": "journey_reentry",
                 "askAbout": "what shifted in this thread since the last touchpoint",
                 "avoid": ["backlog_dump", "symbolic_pressure", "certainty_language"],
-                "choices": ["track it", "body first" if body_first else "hold it lightly", "leave it alone"],
+                "choices": [
+                    "track it",
+                    "body first" if body_first else "hold it lightly",
+                    "leave it alone",
+                ],
             },
         )
 
@@ -697,11 +694,15 @@ class CoachEngine:
         loop_candidates: list[CoachLoopSummary],
         followthrough_loop: CoachLoopSummary,
         goal_ids_by_tension: dict[str, list[Id]],
-        ) -> int | None:
+    ) -> int | None:
         followthrough_kind = str(followthrough_loop.get("kind") or "").strip()
         followthrough_journey_ids = set(self._ids(followthrough_loop.get("relatedJourneyIds")))
-        followthrough_experiment_ids = set(self._ids(followthrough_loop.get("relatedExperimentIds")))
-        followthrough_practice_ids = set(self._ids(followthrough_loop.get("relatedPracticeSessionIds")))
+        followthrough_experiment_ids = set(
+            self._ids(followthrough_loop.get("relatedExperimentIds"))
+        )
+        followthrough_practice_ids = set(
+            self._ids(followthrough_loop.get("relatedPracticeSessionIds"))
+        )
         followthrough_body_ids = set(self._ids(followthrough_loop.get("relatedBodyStateIds")))
         followthrough_goal_ids = set(self._ids(followthrough_loop.get("relatedGoalIds")))
         del goal_ids_by_tension
@@ -713,7 +714,9 @@ class CoachEngine:
                 self._ids(candidate.get("relatedExperimentIds"))
             ):
                 return index
-            if followthrough_journey_ids.intersection(self._ids(candidate.get("relatedJourneyIds"))):
+            if followthrough_journey_ids.intersection(
+                self._ids(candidate.get("relatedJourneyIds"))
+            ):
                 return index
             if followthrough_practice_ids.intersection(
                 self._ids(candidate.get("relatedPracticeSessionIds"))
@@ -863,13 +866,13 @@ class CoachEngine:
                 answer_mode="choice_then_free_text",
                 skip_behavior="track_only",
             ),
-                priority=92 if move_kind == "offer_resource" else 82,
-                related_goal_ids=self._ids(active_goal_tension.get("linkedGoalIds"))
-                or self._ids(first_body_state.get("linkedGoalIds")),
-                related_journey_ids=[],
-                related_experiment_ids=[],
-                related_practice_session_ids=[],
-                related_symbol_ids=self._ids(first_body_state.get("linkedSymbolIds")),
+            priority=92 if move_kind == "offer_resource" else 82,
+            related_goal_ids=self._ids(active_goal_tension.get("linkedGoalIds"))
+            or self._ids(first_body_state.get("linkedGoalIds")),
+            related_journey_ids=[],
+            related_experiment_ids=[],
+            related_practice_session_ids=[],
+            related_symbol_ids=self._ids(first_body_state.get("linkedSymbolIds")),
             related_body_state_ids=self._ids([body_state_id]) if body_states else [],
             related_relational_scene_ids=[],
             evidence_ids=self._ids(active_goal_tension.get("evidenceIds")),
@@ -953,13 +956,13 @@ class CoachEngine:
                 expected_targets=["goal_tension", "goal", "conscious_attitude"],
                 answer_mode="choice_then_free_text",
                 skip_behavior="track_only",
-                ),
-                priority=78,
-                related_goal_ids=goal_ids,
-                related_journey_ids=[],
-                related_experiment_ids=[],
-                related_practice_session_ids=[],
-                related_symbol_ids=[],
+            ),
+            priority=78,
+            related_goal_ids=goal_ids,
+            related_journey_ids=[],
+            related_experiment_ids=[],
+            related_practice_session_ids=[],
+            related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=[],
             evidence_ids=self._ids(active_goal_tension.get("evidenceIds")),
@@ -1042,13 +1045,13 @@ class CoachEngine:
                 expected_targets=expected_targets,
                 answer_mode="choice_then_free_text",
                 skip_behavior="cooldown",
-                ),
-                priority=80,
-                related_goal_ids=[],
-                related_journey_ids=[],
-                related_experiment_ids=[],
-                related_practice_session_ids=[],
-                related_symbol_ids=[],
+            ),
+            priority=80,
+            related_goal_ids=[],
+            related_journey_ids=[],
+            related_experiment_ids=[],
+            related_practice_session_ids=[],
+            related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=active_scene_ids,
             evidence_ids=self._dedupe_ids(
@@ -1108,9 +1111,7 @@ class CoachEngine:
         practice = self._select_recent_practice(recent_practices=recent_practices, now=now)
         recent_outcome_trend = str(practice_loop.get("recentOutcomeTrend") or "").strip()
         skipped_count = sum(
-            1
-            for item in recent_practices[:3]
-            if str(item.get("status") or "").strip() == "skipped"
+            1 for item in recent_practices[:3] if str(item.get("status") or "").strip() == "skipped"
         )
         if practice is None and recent_outcome_trend not in {"activating", "mixed", "settling"}:
             return None, None
@@ -1179,13 +1180,13 @@ class CoachEngine:
                         else {}
                     ),
                 ),
-                ),
-                priority=94 if move_kind == "ask_practice_followup" else 88,
-                related_goal_ids=[],
-                related_journey_ids=[],
-                related_experiment_ids=[],
-                related_practice_session_ids=self._ids([practice_id]) if practice is not None else [],
-                related_symbol_ids=[],
+            ),
+            priority=94 if move_kind == "ask_practice_followup" else 88,
+            related_goal_ids=[],
+            related_journey_ids=[],
+            related_experiment_ids=[],
+            related_practice_session_ids=self._ids([practice_id]) if practice is not None else [],
+            related_symbol_ids=[],
             related_body_state_ids=[],
             related_relational_scene_ids=[],
             evidence_ids=practice_evidence_ids,
@@ -1230,9 +1231,7 @@ class CoachEngine:
     ) -> tuple[CoachLoopSummary | None, CoachWithheldMoveSummary | None]:
         del recent_practices, dashboard
         active_journeys = [
-            item
-            for item in journeys
-            if str(item.get("status") or "").strip() == "active"
+            item for item in journeys if str(item.get("status") or "").strip() == "active"
         ] or [
             item
             for item in self._dict_list(method_context.get("activeJourneys"))
@@ -1269,13 +1268,13 @@ class CoachEngine:
                 answer_mode="free_text",
                 skip_behavior="cooldown",
                 anchor_refs=cast(MethodStateAnchorRefs, {"journeyId": journey_id}),
-                ),
-                priority=90,
-                related_goal_ids=self._ids(journey.get("relatedGoalIds")),
-                related_journey_ids=self._ids([journey_id]),
-                related_experiment_ids=[],
-                related_practice_session_ids=[],
-                related_symbol_ids=self._ids(journey.get("relatedSymbolIds")),
+            ),
+            priority=90,
+            related_goal_ids=self._ids(journey.get("relatedGoalIds")),
+            related_journey_ids=self._ids([journey_id]),
+            related_experiment_ids=[],
+            related_practice_session_ids=[],
+            related_symbol_ids=self._ids(journey.get("relatedSymbolIds")),
             related_body_state_ids=[],
             related_relational_scene_ids=[],
             evidence_ids=[],
@@ -1310,9 +1309,7 @@ class CoachEngine:
         grounding_recommendation = str(grounding.get("recommendation") or "").strip()
         recent_outcome_trend = str(practice_loop.get("recentOutcomeTrend") or "").strip()
         skipped_count = sum(
-            1
-            for item in recent_practices[:3]
-            if str(item.get("status") or "").strip() == "skipped"
+            1 for item in recent_practices[:3] if str(item.get("status") or "").strip() == "skipped"
         )
         if (
             depth_level != "grounding_only"
@@ -1350,8 +1347,7 @@ class CoachEngine:
             move_kind="offer_resource",
             title="Resource support",
             summary=(
-                "A gentler resource fits the current pacing better "
-                "than a stronger symbolic move."
+                "A gentler resource fits the current pacing better than a stronger symbolic move."
             ),
             prompt_frame={
                 "stance": "grounding_first",
@@ -1375,14 +1371,14 @@ class CoachEngine:
                         else {}
                     ),
                 ),
-                ),
-                priority=96 if depth_level == "grounding_only" else 86,
-                related_goal_ids=[],
-                related_journey_ids=[],
-                related_experiment_ids=[],
-                related_practice_session_ids=(
-                    self._ids([practice.get("id")]) if isinstance(practice, dict) else []
-                ),
+            ),
+            priority=96 if depth_level == "grounding_only" else 86,
+            related_goal_ids=[],
+            related_journey_ids=[],
+            related_experiment_ids=[],
+            related_practice_session_ids=(
+                self._ids([practice.get("id")]) if isinstance(practice, dict) else []
+            ),
             related_symbol_ids=[],
             related_body_state_ids=self._ids([body_states[0].get("id")]) if body_states else [],
             related_relational_scene_ids=[],
@@ -1404,16 +1400,8 @@ class CoachEngine:
             consent_scopes=["somatic_correlation"] if source == "body_note" else [],
             reasons=self._dedupe_strings(
                 [
-                    *(
-                        ["runtime_policy_grounding_only"]
-                        if depth_level == "grounding_only"
-                        else []
-                    ),
-                    *(
-                        ["practice_repeated_skips"]
-                        if skipped_count >= 2
-                        else []
-                    ),
+                    *(["runtime_policy_grounding_only"] if depth_level == "grounding_only" else []),
+                    *(["practice_repeated_skips"] if skipped_count >= 2 else []),
                     *(
                         [f"practice_loop_recent_outcome_trend_{recent_outcome_trend}"]
                         if recent_outcome_trend
@@ -1504,14 +1492,13 @@ class CoachEngine:
             loop["status"] = status
         if cooldown_until:
             loop["cooldownUntil"] = cooldown_until
-        if (
-            str(runtime_policy.get("depthLevel") or "").strip() == "grounding_only"
-            and move_kind in {
-                "ask_goal_tension",
-                "ask_relational_scene",
-                "return_to_journey",
-            }
-        ):
+        if str(
+            runtime_policy.get("depthLevel") or ""
+        ).strip() == "grounding_only" and move_kind in {
+            "ask_goal_tension",
+            "ask_relational_scene",
+            "return_to_journey",
+        }:
             loop["status"] = "track_only"
         if not isinstance(method_context.get("methodState"), dict):
             loop["status"] = "track_only"
@@ -1561,9 +1548,7 @@ class CoachEngine:
         if isinstance(invitation, dict):
             resource = invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip()
-                if isinstance(resource, dict)
-                else ""
+                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
             )
             if resource_id:
                 refs.append({"recordType": "EmbodiedResource", "recordId": resource_id})
@@ -1606,9 +1591,7 @@ class CoachEngine:
         if not related_resource_ids and isinstance(invitation, dict):
             resource = invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip()
-                if isinstance(resource, dict)
-                else ""
+                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
             )
             if resource_id:
                 related_resource_ids = [resource_id]
@@ -1687,9 +1670,7 @@ class CoachEngine:
         }
         kind = str(loop.get("kind") or "").strip()
         dominant_rank = (
-            0
-            if "journey_followthrough_dominant" in self._strings(loop.get("reasons"))
-            else 1
+            0 if "journey_followthrough_dominant" in self._strings(loop.get("reasons")) else 1
         )
         experiment_rank = 0 if self._ids(loop.get("relatedExperimentIds")) else 1
         return (

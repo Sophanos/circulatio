@@ -2445,12 +2445,16 @@ class InMemoryCirculatioRepository(CirculatioRepository):
             )
             return items[:limit]
 
-    def _normalize_practice_session_record(self, record: PracticeSessionRecord) -> PracticeSessionRecord:
+    def _normalize_practice_session_record(
+        self, record: PracticeSessionRecord
+    ) -> PracticeSessionRecord:
         normalized = deepcopy(record)
         normalized.setdefault("relatedExperimentIds", [])
         return normalized
 
-    def _normalize_proactive_brief_record(self, record: ProactiveBriefRecord) -> ProactiveBriefRecord:
+    def _normalize_proactive_brief_record(
+        self, record: ProactiveBriefRecord
+    ) -> ProactiveBriefRecord:
         normalized = deepcopy(record)
         normalized.setdefault("relatedExperimentIds", [])
         return normalized

@@ -581,9 +581,7 @@ class ProactiveEngine:
                 "priority": int(loop.get("priority", 0) or 0),
                 "relatedJourneyIds": related_journey_ids,
                 "relatedExperimentIds": [
-                    str(item)
-                    for item in loop.get("relatedExperimentIds", [])
-                    if str(item).strip()
+                    str(item) for item in loop.get("relatedExperimentIds", []) if str(item).strip()
                 ],
                 "relatedMaterialIds": [
                     str(item) for item in loop.get("relatedMaterialIds", []) if str(item).strip()
@@ -680,7 +678,8 @@ class ProactiveEngine:
             brief_type: ProactiveBriefType = "journey_checkin"
             title_hint = str(current_experiment.get("title") or "Journey check-in")
             summary_hint = str(
-                current_experiment.get("summary") or "An active journey may be ready for a bounded check-in."
+                current_experiment.get("summary")
+                or "An active journey may be ready for a bounded check-in."
             )
             suggested_action = str(
                 current_experiment.get("suggestedActionText")
@@ -692,7 +691,9 @@ class ProactiveEngine:
                 if not current_experiment:
                     title_hint = "Gentle return"
                     summary_hint = "A journey thread may be ready for a gentle return."
-                    suggested_action = "You can return to the thread lightly, or leave it for later."
+                    suggested_action = (
+                        "You can return to the thread lightly, or leave it for later."
+                    )
                 bucket = self._day_bucket(last_touched_at or now)
             elif family == "practice_reentry" and "journey_practice_followup_due" in reasons:
                 brief_type = "practice_followup"
@@ -700,42 +701,53 @@ class ProactiveEngine:
                     title_hint = "Practice follow-up"
                     summary_hint = "A journey-linked practice may be ready for a light follow-up."
                     suggested_action = (
-                        "You can note what happened after the practice, or simply leave it for later."
+                        "You can note what happened after the practice, or simply leave it for "
+                        "later."
                     )
                 bucket = self._day_bucket(last_touched_at or now)
             elif family == "practice_reentry" and "journey_practice_repeated_skips" in reasons:
                 brief_type = "journey_checkin"
                 if not current_experiment:
                     title_hint = "Gentler re-entry"
-                    summary_hint = "Repeated skips suggest a softer journey check-in, not more pressure."
+                    summary_hint = (
+                        "Repeated skips suggest a softer journey check-in, not more pressure."
+                    )
                     suggested_action = "You can return gently, or leave it alone."
                 bucket = self._day_bucket(last_touched_at or now)
             elif move_kind == "offer_resource":
                 if not current_experiment:
                     title_hint = "Grounding support"
-                    summary_hint = "A gentler resource may fit this journey better than another push."
+                    summary_hint = (
+                        "A gentler resource may fit this journey better than another push."
+                    )
                     suggested_action = "You can try a gentler resource, or simply leave it alone."
                 bucket = self._day_bucket(last_touched_at or now)
             elif move_kind == "ask_body_checkin":
                 if not current_experiment:
                     title_hint = "Body check-in"
-                    summary_hint = "This journey can be met body-first without forcing interpretation."
-                    suggested_action = "You can note what the body is carrying, or leave it untouched."
+                    summary_hint = (
+                        "This journey can be met body-first without forcing interpretation."
+                    )
+                    suggested_action = (
+                        "You can note what the body is carrying, or leave it untouched."
+                    )
                 bucket = self._day_bucket(last_touched_at or now)
             elif move_kind == "ask_relational_scene":
                 if not current_experiment:
                     title_hint = "Relational scene"
-                    summary_hint = "A relational thread may be ready for a careful scene-first check-in."
+                    summary_hint = (
+                        "A relational thread may be ready for a careful scene-first check-in."
+                    )
             elif move_kind == "ask_goal_tension":
                 if not current_experiment:
                     title_hint = "Goal tension"
-                    summary_hint = "A live tension may be ready to be named without forcing resolution."
+                    summary_hint = (
+                        "A live tension may be ready to be named without forcing resolution."
+                    )
             seeds.append(
                 {
                     "briefType": brief_type,
-                    "triggerKey": (
-                        f"journey_followthrough:{brief_type}:{journey_id}:{bucket}"
-                    ),
+                    "triggerKey": (f"journey_followthrough:{brief_type}:{journey_id}:{bucket}"),
                     "titleHint": title_hint,
                     "summaryHint": summary_hint,
                     "suggestedActionHint": suggested_action,
@@ -763,11 +775,7 @@ class ProactiveEngine:
                         if reasons
                         else f"journey_followthrough:{family or 'cross_family'}"
                     ),
-                    **(
-                        {"coachMoveKind": cast(CoachMoveKind, move_kind)}
-                        if move_kind
-                        else {}
-                    ),
+                    **({"coachMoveKind": cast(CoachMoveKind, move_kind)} if move_kind else {}),
                 }
             )
         return seeds

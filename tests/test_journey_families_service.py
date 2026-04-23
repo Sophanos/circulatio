@@ -60,6 +60,37 @@ class JourneyFamiliesServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_embodied_recurrence_alive_today_case_keeps_body_pacing(self) -> None:
+        async def run() -> None:
+            case = load_journey_case("embodied_recurrence_002")
+            repository, service, llm = build_service_fixture()
+            await seed_history_seed(
+                case=case,
+                repository=repository,
+                service=service,
+                user_id="user_1",
+            )
+
+            summary = await service.generate_alive_today(
+                user_id="user_1",
+                window_start="2026-04-12T00:00:00Z",
+                window_end="2026-04-19T23:59:59Z",
+            )
+            coach_state = llm.alive_today_calls[0]["methodContextSnapshot"]["coachState"]
+
+            self.assertTrue(summary["summary"]["userFacingResponse"])
+            self.assertEqual(len(llm.alive_today_calls), 1)
+            self.assertIn(
+                coach_state["selectedMove"]["kind"],
+                {"ask_body_checkin", "offer_resource"},
+            )
+            self.assertIn(
+                coach_state["globalConstraints"]["depthLevel"],
+                {"standard", "gentle", "grounding_only"},
+            )
+
+        asyncio.run(run())
+
     def test_embodied_recurrence_case_can_store_body_state_without_interpretation(self) -> None:
         async def run() -> None:
             case = load_journey_case("embodied_recurrence_003")
@@ -79,6 +110,35 @@ class JourneyFamiliesServiceTests(unittest.TestCase):
 
             self.assertEqual(stored["bodyState"]["activation"], "overwhelming")
             self.assertEqual(runs, [])
+
+        asyncio.run(run())
+
+    def test_symbol_body_pressure_journey_page_case_stays_read_mostly(self) -> None:
+        async def run() -> None:
+            case = load_journey_case("symbol_body_pressure_002")
+            repository, service, _ = build_service_fixture()
+            await seed_history_seed(
+                case=case,
+                repository=repository,
+                service=service,
+                user_id="user_1",
+            )
+
+            before_practices = await repository.list_practice_sessions("user_1")
+            page = await service.generate_journey_page(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                }
+            )
+            after_practices = await repository.list_practice_sessions("user_1")
+            reviews = await repository.list_weekly_reviews("user_1")
+
+            self.assertEqual(page["title"], "Journey page")
+            self.assertIn("continuity", page)
+            self.assertEqual(len(after_practices), len(before_practices))
+            self.assertEqual(reviews, [])
 
         asyncio.run(run())
 

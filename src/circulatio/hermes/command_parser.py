@@ -816,7 +816,11 @@ class CirculatioCommandParser:
                 index += 1
                 continue
             raise ValidationError(f"Unknown /circulation journey experiment start option: {token}")
-        if not payload.get("briefId") and not payload.get("journeyId") and not payload.get("journeyLabel"):
+        if (
+            not payload.get("briefId")
+            and not payload.get("journeyId")
+            and not payload.get("journeyLabel")
+        ):
             raise ValidationError(
                 "/circulation journey experiment start requires --brief-id or a journey reference."
             )

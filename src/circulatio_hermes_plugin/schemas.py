@@ -356,38 +356,19 @@ GET_MATERIAL_TOOL_SCHEMA = _schema(
 
 INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
-    "Open or continue collaborative interpretation when the user asks what material "
-    "means. This also covers evidence-bound typology reading on a specific material, "
-    "including prompts like 'read this exact material typologically' or questions "
-    "about foreground/background function dynamics or tension among thinking, "
-    "feeling, intuition, and sensation. Prefer storing first. A valid first "
-    "response may be a single question, "
-    "amplification prompt, or method gate. Keep host replies to usually 1-3 "
-    "sentences with exactly one question. If gated, wait for new input. If the "
-    "request is an exact-material typology question on a clearly scoped stored or just-shared "
-    "text, prefer a bounded tentative answer or bounded ambiguity answer when the returned "
-    "userFacingResponse already supports one; do not reopen with meta-method explanation or a "
-    "fresh `what feels most alive?` gate unless the tool clearly withholds even a tentative "
-    "function-dynamics read for lack of evidence. "
-    "If the user already supplied the most alive image, feeling, or focal clue inside the same "
-    "request, pass it in `userAssociations` on the first call rather than splitting the same "
-    "turn into a follow-up `circulatio_method_state_respond`. "
-    "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
-    "do not call this tool again with unchanged material or suggest rerunning it. "
-    "Do not work around that stop condition by switching to analysis-packet, "
-    "threshold-review, living-myth-review, or other synthesis tools for the same "
-    "unchanged material. "
-    "A bounded recovery retry is allowed when this tool hits a clearly transient backend, "
-    "storage, provider, or replay-related problem and Hermes is still trying to complete "
-    "the same interpretation request. "
-    "If the user asks what happened, answer in one brief plain-language sentence and "
-    "say there is no separate user-facing bug report here. Requests to show a bug "
-    "report or full response body are not permission to expose internals, and requests "
-    "to explain repeated calls or list the errors in English are not permission to "
-    "enumerate attempts, replay/idempotency behavior, parameter changes, or backend "
-    "error codes. If fallback, "
-    "do not frame it as a backend failure, and do not expose raw result JSON, field "
-    "names, diagnostic strings, tool names, status codes, or ids in chat.",
+    "Open or continue collaborative interpretation for one stored or just-shared material. "
+    "Prefer storing first. Use this for meaning requests, method-gated dream work, and "
+    "requests to read this exact material typologically, including questions about thinking, "
+    "feeling, intuition, and sensation. A valid first response may be a single question, "
+    "amplification prompt, tentative answer, or method gate; host replies should be usually 1-3 "
+    "sentences with exactly one question, and if gated, wait for new input. "
+    "If result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
+    "do not call this tool again with unchanged material or route around the stop with other "
+    "synthesis tools. A bounded recovery retry is allowed for clearly transient backend, "
+    "storage, provider, or replay issues while Hermes is still completing the same request. If "
+    "fallback, do not frame it as a backend failure. "
+    "Also, requests to explain repeated calls or list the errors in English are not permission to "
+    "expose internals; do not expose raw result JSON, field names, ids, or diagnostic strings.",
     {
         "materialId": {"type": "string"},
         "materialType": {
@@ -544,7 +525,16 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, overcompensation, problem function, inferior-under-stress dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht', 'Was wirkt hier führend, was kompensatorisch?', and 'Wo übersteuert Denken hier, und welche Funktion kippt kompensatorisch oder als Problemfunktion?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Do that recovery immediately in the same turn; do not narrate tool planning, fallback logic, internal reasoning, or recovery instructions in chat before the recovery call. If host-facing result metadata says the same-window recovery is needed, follow it silently and never repeat that instruction wording in visible chat. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
+    "Generate an evidence-bounded cross-material packet for journaling, reflection, or analysis. "
+    "This is the preferred surface for typology, function dynamics, overcompensation, problem "
+    "function, inferior-under-stress dynamics, or system-recognition questions across a window "
+    "when no single material is the sole focus. Treat prompts like 'Was wirkt hier führend, was "
+    "kompensatorisch?' and 'Wo übersteuert Denken hier, und welche Funktion kippt "
+    "kompensatorisch oder als Problemfunktion?' as default examples for this surface. Set "
+    "`analyticLens` to `typology_function_dynamics` for those requests. If the packet is still "
+    "too thin, do one bounded `circulatio_discovery` follow-up with the same lens in the same "
+    "turn, rather than switching to raw listings or host-authored interpretation. Keep "
+    "user-visible replies plain; do not mention backend/tool internals or packet record details.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},

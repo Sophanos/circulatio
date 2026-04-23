@@ -730,6 +730,14 @@ class CirculatioAgentBridge:
             else deepcopy(command_result.get("analysisPacket"))
         )
         packet_record = command_result.get("analysisPacket")
+        if (
+            isinstance(packet, dict)
+            and isinstance(packet_record, dict)
+            and "packetId" not in packet
+        ):
+            packet_id = self._optional_string(packet_record.get("id"))
+            if packet_id:
+                packet["packetId"] = packet_id
         if isinstance(packet, dict):
             result["analysisPacket"] = packet
         return self._response(
@@ -1939,7 +1947,9 @@ class CirculatioAgentBridge:
             affected_entity_ids=[item["id"] for item in experiments],
         )
 
-    async def get_journey_experiment(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
+    async def get_journey_experiment(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
         payload = request["payload"]
         experiment_id = self._optional_string(payload.get("experimentId"))
         if not experiment_id:
@@ -2546,9 +2556,7 @@ class CirculatioAgentBridge:
         for key in ("relatedPracticeSessionIds", "relatedBriefIds"):
             values = [
                 item
-                for item in (
-                    self._optional_string(value) for value in experiment.get(key, [])
-                )
+                for item in (self._optional_string(value) for value in experiment.get(key, []))
                 if item is not None
             ]
             if values:
@@ -2602,6 +2610,9 @@ class CirculatioAgentBridge:
         if not isinstance(packet, dict):
             return {}
         summary: dict[str, object] = {}
+        packet_id = self._optional_string(packet.get("packetId"))
+        if packet_id:
+            summary["packetId"] = packet_id
         packet_title = self._optional_string(packet.get("packetTitle"))
         if packet_title:
             summary["packetTitle"] = packet_title
@@ -2659,8 +2670,19 @@ class CirculatioAgentBridge:
                 summary["functionDynamics"] = function_summary
             if status in {"signals_only", "insufficient_evidence"}:
                 summary["replyPlan"] = "bounded_discovery_same_window"
-        if "replyPlan" not in summary and self._optional_string(packet.get("source")) == "bounded_fallback":
+                summary["recoveryHint"] = (
+                    "Use a single bounded discovery read in the same window before making a "
+                    "stronger typology claim."
+                )
+        if (
+            "replyPlan" not in summary
+            and self._optional_string(packet.get("source")) == "bounded_fallback"
+        ):
             summary["replyPlan"] = "bounded_discovery_same_window"
+        if "recoveryHint" not in summary:
+            recovery_hint = self._optional_string(packet.get("recoveryHint"))
+            if recovery_hint:
+                summary["recoveryHint"] = recovery_hint
         if summary.get("functionDynamics"):
             summary["replyStyle"] = "tentative_typology"
             summary["maxSentences"] = 5
@@ -2731,16 +2753,26 @@ class CirculatioAgentBridge:
             )
             function_status = self._optional_string(function_dynamics.get("status"))
             if function_status == "readable":
-                return "Use the returned function-dynamics summary for a brief tentative typology answer."
+                return (
+                    "Use the returned function-dynamics summary for a brief tentative typology "
+                    "answer."
+                )
             if function_status in {"signals_only", "insufficient_evidence"}:
-                return "Make one same-window recovery read for this typology request, then answer briefly."
+                return (
+                    "Make one same-window recovery read for this typology request, then answer "
+                    "briefly."
+                )
         if (
             isinstance(packet, dict)
             and self._optional_string(packet.get("source")) == "bounded_fallback"
         ):
-            return "Make one same-window recovery read for this typology request, then answer briefly."
+            return (
+                "Make one same-window recovery read for this typology request, then answer briefly."
+            )
         if "bounded packet" in message.lower():
-            return "Make one same-window recovery read for this typology request, then answer briefly."
+            return (
+                "Make one same-window recovery read for this typology request, then answer briefly."
+            )
         return message
 
     def _pending_proposals_message(self, *, count: int, capture_run: bool, review: bool) -> str:
@@ -2914,7 +2946,10 @@ class CirculatioAgentBridge:
                 "materialId",
                 "runId",
                 "safetyStatus",
+                "llmInterpretationHealth",
                 "clarifyingQuestion",
+                "depthEngineHealth",
+                "methodGate",
                 "continuationState",
             ):
                 if key in result:
@@ -3080,7 +3115,7 @@ class CirculatioAgentBridge:
                 ],
             )
         if isinstance(exc, ConflictError):
-            message = "This reflection is not available right now. Please try again shortly."
+            message = str(exc)
             return self._response(
                 request=request,
                 status="conflict",

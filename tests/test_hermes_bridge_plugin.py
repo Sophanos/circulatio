@@ -40,10 +40,12 @@ from circulatio_hermes_plugin.tools import (
     discovery_tool,
     generate_practice_recommendation_tool,
     generate_rhythmic_briefs_tool,
+    get_journey_experiment_tool,
     get_journey_tool,
     get_material_tool,
     interpret_material_tool,
     journey_page_tool,
+    list_journey_experiments_tool,
     list_journeys_tool,
     list_materials_tool,
     list_pending_review_proposals_tool,
@@ -57,10 +59,12 @@ from circulatio_hermes_plugin.tools import (
     reject_hypotheses_tool,
     reject_proposals_tool,
     reject_review_proposals_tool,
+    respond_journey_experiment_tool,
     respond_practice_recommendation_tool,
     respond_rhythmic_brief_tool,
     revise_entity_tool,
     set_journey_status_tool,
+    start_journey_experiment_tool,
     store_body_state_tool,
     store_dream_tool,
     store_event_tool,
@@ -1616,6 +1620,10 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "circulatio_get_journey",
                 "circulatio_update_journey",
                 "circulatio_set_journey_status",
+                "circulatio_journey_experiment_start",
+                "circulatio_journey_experiment_respond",
+                "circulatio_journey_experiment_list",
+                "circulatio_journey_experiment_get",
                 "circulatio_list_materials",
                 "circulatio_get_material",
                 "circulatio_interpret_material",
@@ -2010,6 +2018,132 @@ class HermesBridgePluginTests(unittest.TestCase):
             self.assertEqual(response["status"], "conflict")
             self.assertEqual(response["errors"][0]["code"], "conflict")
             self.assertIn("Ambiguous journey label", response["message"])
+
+        asyncio.run(run())
+
+    def test_journey_experiment_start_creates_experiment(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            created = json.loads(
+                await create_journey_tool(
+                    {"label": "Laundry return"},
+                    **self._tool_kwargs(call_id="tool_journey_experiment_create"),
+                )
+            )
+            started = json.loads(
+                await start_journey_experiment_tool(
+                    {
+                        "journeyId": created["result"]["journeyId"],
+                        "source": "manual",
+                        "title": "Current tending",
+                        "summary": "Stay with the thread lightly.",
+                        "bodyFirst": True,
+                        "preferredMoveKind": "ask_body_checkin",
+                    },
+                    **self._tool_kwargs(call_id="tool_journey_experiment_start"),
+                )
+            )
+            runtime = get_runtime("default")
+            experiments = await runtime.repository.list_journey_experiments("hermes:default:local")
+
+            self.assertEqual(started["status"], "ok")
+            self.assertTrue(started["result"]["experimentId"])
+            self.assertEqual(started["result"]["journeyExperiment"]["status"], "active")
+            self.assertEqual(len(experiments), 1)
+            self.assertEqual(experiments[0]["id"], started["result"]["experimentId"])
+
+        asyncio.run(run())
+
+    def test_journey_experiment_respond_transitions_status(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            created = json.loads(
+                await create_journey_tool(
+                    {"label": "Laundry return"},
+                    **self._tool_kwargs(call_id="tool_journey_experiment_transition_create"),
+                )
+            )
+            started = json.loads(
+                await start_journey_experiment_tool(
+                    {
+                        "journeyId": created["result"]["journeyId"],
+                        "source": "manual",
+                        "title": "Current tending",
+                        "summary": "Stay with the thread lightly.",
+                    },
+                    **self._tool_kwargs(call_id="tool_journey_experiment_transition_start"),
+                )
+            )
+            quiet = json.loads(
+                await respond_journey_experiment_tool(
+                    {
+                        "experimentId": started["result"]["experimentId"],
+                        "action": "quiet",
+                    },
+                    **self._tool_kwargs(call_id="tool_journey_experiment_quiet"),
+                )
+            )
+            resumed = json.loads(
+                await respond_journey_experiment_tool(
+                    {
+                        "experimentId": started["result"]["experimentId"],
+                        "action": "resume",
+                    },
+                    **self._tool_kwargs(call_id="tool_journey_experiment_resume"),
+                )
+            )
+
+            self.assertEqual(quiet["status"], "ok")
+            self.assertEqual(quiet["result"]["journeyExperiment"]["status"], "quiet")
+            self.assertEqual(resumed["status"], "ok")
+            self.assertEqual(resumed["result"]["journeyExperiment"]["status"], "active")
+
+        asyncio.run(run())
+
+    def test_journey_experiment_list_and_get(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            created = json.loads(
+                await create_journey_tool(
+                    {"label": "Laundry return"},
+                    **self._tool_kwargs(call_id="tool_journey_experiment_list_create"),
+                )
+            )
+            started = json.loads(
+                await start_journey_experiment_tool(
+                    {
+                        "journeyId": created["result"]["journeyId"],
+                        "source": "manual",
+                        "title": "Current tending",
+                        "summary": "Stay with the thread lightly.",
+                    },
+                    **self._tool_kwargs(call_id="tool_journey_experiment_list_start"),
+                )
+            )
+            listed = json.loads(
+                await list_journey_experiments_tool(
+                    {"journeyId": created["result"]["journeyId"]},
+                    **self._tool_kwargs(call_id="tool_journey_experiment_list"),
+                )
+            )
+            loaded = json.loads(
+                await get_journey_experiment_tool(
+                    {"experimentId": started["result"]["experimentId"]},
+                    **self._tool_kwargs(call_id="tool_journey_experiment_get"),
+                )
+            )
+
+            self.assertEqual(listed["status"], "ok")
+            self.assertEqual(listed["result"]["experimentCount"], 1)
+            self.assertEqual(
+                listed["result"]["journeyExperiments"][0]["id"],
+                started["result"]["experimentId"],
+            )
+            self.assertEqual(loaded["status"], "ok")
+            self.assertEqual(
+                loaded["result"]["journeyExperiment"]["id"],
+                started["result"]["experimentId"],
+            )
 
         asyncio.run(run())
 
