@@ -260,6 +260,18 @@ def evaluate_expectations(
             "tool sequence prefix mismatch: "
             f"expected {prefix}, got {tool_calls[: len(prefix)]}"
         )
+    allowed_prefixes = [
+        [str(tool_name) for tool_name in prefix_items]
+        for prefix_items in expected.get("allowedToolSequencePrefixes", [])
+        if isinstance(prefix_items, list)
+    ]
+    if allowed_prefixes and not any(
+        tool_calls[: len(prefix_items)] == prefix_items for prefix_items in allowed_prefixes
+    ):
+        findings.append(
+            "tool sequence did not match any allowed prefix: "
+            f"allowed={allowed_prefixes}, got={tool_calls}"
+        )
     required_tools = [str(item) for item in expected.get("requiredTools", [])]
     for tool_name in required_tools:
         if tool_name not in tool_calls:
@@ -268,9 +280,22 @@ def evaluate_expectations(
     for tool_name in forbidden_tools:
         if tool_name in tool_calls:
             findings.append(f"forbidden tool called: {tool_name}")
+    max_tool_occurrences = expected.get("maxToolOccurrences", {})
+    if isinstance(max_tool_occurrences, dict):
+        for tool_name, max_count in max_tool_occurrences.items():
+            if not isinstance(max_count, int):
+                continue
+            actual_count = sum(1 for call in tool_calls if call == str(tool_name))
+            if actual_count > max_count:
+                findings.append(
+                    f"tool called too often: {tool_name} {actual_count} > {max_count}"
+                )
     for snippet in [str(item) for item in expected.get("requiredReplySubstrings", [])]:
         if snippet not in host_reply:
             findings.append(f"reply missing substring: {snippet}")
+    for pattern in [str(item) for item in expected.get("requiredReplyRegexes", [])]:
+        if not re.search(pattern, host_reply):
+            findings.append(f"reply missing regex match: {pattern}")
     for snippet in [str(item) for item in expected.get("forbiddenReplySubstrings", [])]:
         if snippet in host_reply:
             findings.append(f"reply contains forbidden substring: {snippet}")

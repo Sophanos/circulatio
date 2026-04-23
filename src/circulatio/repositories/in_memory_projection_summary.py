@@ -189,6 +189,8 @@ def project_typology_summary(record: TypologyLensRecord) -> TypologyLensSummary:
         "confidence": record["confidence"],
         "status": "disconfirmed" if record["status"] == "deleted" else record["status"],
         "evidenceIds": deepcopy(record.get("evidenceIds", [])),
+        "counterevidenceIds": deepcopy(record.get("counterevidenceIds", [])),
+        "linkedMaterialIds": deepcopy(record.get("linkedMaterialIds", [])),
         "userTestPrompt": record["userTestPrompt"],
         "lastUpdated": record.get("updatedAt", record["createdAt"]),
     }

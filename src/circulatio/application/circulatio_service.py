@@ -14,6 +14,11 @@ from ..core.method_state_policy import derive_runtime_method_state_policy
 from ..core.practice_engine import PracticeEngine
 from ..core.proactive_engine import ProactiveEngine
 from ..core.resource_engine import ResourceEngine
+from ..core.typology_evidence import (
+    build_typology_evidence_digest,
+    overlay_typology_method_state,
+    render_typology_discovery_summary,
+)
 from ..domain.adaptation import AdaptationSignalEvent
 from ..domain.amplifications import AmplificationPromptRecord, PersonalAmplificationRecord
 from ..domain.clarifications import (
@@ -83,6 +88,7 @@ from ..domain.types import (
     SessionContext,
     ThreadDigest,
     ThresholdReviewInput,
+    TypologyEvidenceDigest,
     UserAdaptationProfileSummary,
     UserAssociationInput,
     WitnessStateSummary,
@@ -973,19 +979,13 @@ class CirculatioService:
             surface="generic",
         )
 
-    def _enrich_method_context_snapshot(
+    def _prepare_method_context_snapshot(
         self,
         snapshot: MethodContextSnapshot | None,
         *,
         window_start: str | None = None,
         window_end: str | None = None,
-        surface: str = "generic",
-        existing_briefs: list[ProactiveBriefRecord] | None = None,
-        recent_practices: list[PracticeSessionRecord] | None = None,
-        journeys: list[JourneyRecord] | None = None,
-        dashboard: DashboardSummary | None = None,
         adaptation_profile: UserAdaptationProfileSummary | None = None,
-        safety_context: SafetyContext | None = None,
     ) -> MethodContextSnapshot:
         enriched: MethodContextSnapshot = deepcopy(snapshot) if snapshot is not None else {}
         if window_start and not enriched.get("windowStart"):
@@ -997,6 +997,22 @@ class CirculatioService:
             enriched.get("adaptationProfile"), dict
         ):
             enriched["adaptationProfile"] = deepcopy(adaptation_profile)
+        return enriched
+
+    def _finalize_method_context_snapshot(
+        self,
+        snapshot: MethodContextSnapshot,
+        *,
+        window_end: str | None = None,
+        surface: str = "generic",
+        existing_briefs: list[ProactiveBriefRecord] | None = None,
+        recent_practices: list[PracticeSessionRecord] | None = None,
+        journeys: list[JourneyRecord] | None = None,
+        dashboard: DashboardSummary | None = None,
+        adaptation_profile: UserAdaptationProfileSummary | None = None,
+        safety_context: SafetyContext | None = None,
+    ) -> MethodContextSnapshot:
+        enriched: MethodContextSnapshot = deepcopy(snapshot)
         runtime_policy = derive_runtime_method_state_policy(enriched)
         try:
             enriched["witnessState"] = self._build_witness_state_summary(
@@ -1077,6 +1093,38 @@ class CirculatioService:
                 "reasons": ["coach_state_derivation_failed"],
             }
         return enriched
+
+    def _enrich_method_context_snapshot(
+        self,
+        snapshot: MethodContextSnapshot | None,
+        *,
+        window_start: str | None = None,
+        window_end: str | None = None,
+        surface: str = "generic",
+        existing_briefs: list[ProactiveBriefRecord] | None = None,
+        recent_practices: list[PracticeSessionRecord] | None = None,
+        journeys: list[JourneyRecord] | None = None,
+        dashboard: DashboardSummary | None = None,
+        adaptation_profile: UserAdaptationProfileSummary | None = None,
+        safety_context: SafetyContext | None = None,
+    ) -> MethodContextSnapshot:
+        prepared = self._prepare_method_context_snapshot(
+            snapshot,
+            window_start=window_start,
+            window_end=window_end,
+            adaptation_profile=adaptation_profile,
+        )
+        return self._finalize_method_context_snapshot(
+            prepared,
+            window_end=window_end,
+            surface=surface,
+            existing_briefs=existing_briefs,
+            recent_practices=recent_practices,
+            journeys=journeys,
+            dashboard=dashboard,
+            adaptation_profile=adaptation_profile,
+            safety_context=safety_context,
+        )
 
     def _sync_longitudinal_input_fields(
         self,
@@ -1474,6 +1522,7 @@ class CirculatioService:
         window_start: str,
         window_end: str,
         surface: str = "generic",
+        analytic_lens: str | None = None,
         payload: dict[str, object] | None = None,
         material_id: Id | None = None,
         include_dashboard: bool = False,
@@ -1499,9 +1548,38 @@ class CirculatioService:
             include_dashboard=include_dashboard,
         )
         dashboard = cast(DashboardSummary | None, coach_runtime.get("dashboard"))
-        method_context = self._enrich_method_context_snapshot(
+        method_context = self._prepare_method_context_snapshot(
             cast(MethodContextSnapshot | None, prepared_payload.get("methodContextSnapshot")),
             window_start=window_start,
+            window_end=window_end,
+            adaptation_profile=cast(
+                UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+            ),
+        )
+        record_thread_digests = await self._repository.build_thread_digests_from_records(
+            user_id,
+            window_start=window_start,
+            window_end=window_end,
+            material_id=material_id,
+        )
+        typology_digest = build_typology_evidence_digest(
+            payload=prepared_payload,
+            method_context=method_context,
+        )
+        method_state = (
+            deepcopy(method_context.get("methodState"))
+            if isinstance(method_context.get("methodState"), dict)
+            else {}
+        )
+        updated_typology_state = overlay_typology_method_state(
+            cast(dict[str, object] | None, method_state.get("typologyMethodState")),
+            typology_digest,
+        )
+        if updated_typology_state is not None:
+            method_state["typologyMethodState"] = deepcopy(updated_typology_state)
+            method_context["methodState"] = cast(dict[str, object], method_state)
+        method_context = self._finalize_method_context_snapshot(
+            method_context,
             window_end=window_end,
             surface=surface,
             existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
@@ -1514,12 +1592,7 @@ class CirculatioService:
             safety_context=safety_context,
         )
         thread_digests = self._merge_thread_digests(
-            await self._repository.build_thread_digests_from_records(
-                user_id,
-                window_start=window_start,
-                window_end=window_end,
-                material_id=material_id,
-            ),
+            record_thread_digests,
             self._build_coach_loop_thread_digests(method_context),
         )
         continuity = self._build_thread_aware_continuity_bundle(
@@ -1533,6 +1606,10 @@ class CirculatioService:
             continuity=continuity,
             sync_longitudinal=sync_longitudinal,
         )
+        if analytic_lens:
+            prepared_payload["analyticLens"] = analytic_lens
+        if typology_digest is not None:
+            prepared_payload["typologyEvidenceDigest"] = deepcopy(typology_digest)
         if explicit_question:
             prepared_payload["explicitQuestion"] = explicit_question
         if safety_context is not None:
@@ -1557,6 +1634,8 @@ class CirculatioService:
         }
         if method_context is not None:
             bundle["methodContextSnapshot"] = method_context
+        if typology_digest is not None:
+            bundle["typologyEvidenceDigest"] = deepcopy(typology_digest)
         if dashboard is not None:
             bundle["dashboard"] = dashboard
         if memory_snapshot is not None:
@@ -3837,6 +3916,7 @@ class CirculatioService:
             window_start=resolved_start,
             window_end=resolved_end,
             include_dashboard=True,
+            analytic_lens=self._optional_str(input_data.get("analyticLens")),
             memory_query=memory_query,
             explicit_question=explicit_question,
         )
@@ -3844,6 +3924,7 @@ class CirculatioService:
         thread_digests = cast(list[ThreadDigest], bundle["threadDigests"])
         dashboard = cast(DashboardSummary, bundle["dashboard"])
         memory_snapshot = cast(MemoryKernelSnapshot, bundle["memorySnapshot"])
+        typology_digest = cast(TypologyEvidenceDigest | None, bundle.get("typologyEvidenceDigest"))
         root_node_ids = self._normalize_discovery_root_ids(input_data.get("rootNodeIds"))
         if not root_node_ids:
             root_node_ids = self._derive_discovery_root_ids(
@@ -3866,6 +3947,8 @@ class CirculatioService:
             graph=graph,
             method_context=method_context,
             thread_digests=thread_digests,
+            analytic_lens=self._optional_str(input_data.get("analyticLens")),
+            typology_evidence_digest=typology_digest,
             max_items=max_items,
         )
         warnings = [
@@ -4348,6 +4431,7 @@ class CirculatioService:
             window_start=resolved_start,
             window_end=resolved_end,
             surface="analysis_packet",
+            analytic_lens=self._optional_str(input_data.get("analyticLens")),
             payload=cast(dict[str, object], packet_input),
             explicit_question=self._optional_str(input_data.get("explicitQuestion")),
             safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
@@ -5146,6 +5230,8 @@ class CirculatioService:
         graph: GraphQueryResult,
         method_context: MethodContextSnapshot | None,
         thread_digests: list[ThreadDigest] | None,
+        analytic_lens: str | None,
+        typology_evidence_digest: TypologyEvidenceDigest | None,
         max_items: int,
     ) -> list[DiscoverySection]:
         candidates = self._discovery_candidates(
@@ -5179,6 +5265,12 @@ class CirculatioService:
             candidates=candidates,
             max_items=max_items,
         )
+        function_dynamics = self._build_typology_function_dynamics_discovery_section(
+            method_context=method_context,
+            analytic_lens=analytic_lens,
+            typology_evidence_digest=typology_evidence_digest,
+            max_items=max_items,
+        )
         journey_threads = self._build_journey_threads_discovery_section(
             candidates=candidates,
             max_items=max_items,
@@ -5193,21 +5285,24 @@ class CirculatioService:
                     conscious_attitude,
                     body_states,
                     method_state,
+                    *([function_dynamics] if function_dynamics is not None else []),
                     journey_threads,
                 ]
             ),
             max_items=max_items,
         )
-        return [
+        sections = [
             recurring,
             dream_body_event_links,
             ripe_to_revisit,
             conscious_attitude,
             body_states,
             method_state,
-            journey_threads,
-            held_for_now,
         ]
+        if function_dynamics is not None:
+            sections.append(function_dynamics)
+        sections.extend([journey_threads, held_for_now])
+        return sections
 
     def _discovery_candidates(
         self,
@@ -6465,6 +6560,117 @@ class CirculatioService:
             "items": items,
         }
 
+    def _build_typology_function_dynamics_discovery_section(
+        self,
+        *,
+        method_context: MethodContextSnapshot | None,
+        analytic_lens: str | None,
+        typology_evidence_digest: TypologyEvidenceDigest | None,
+        max_items: int,
+    ) -> DiscoverySection | None:
+        if analytic_lens != "typology_function_dynamics":
+            return None
+        if not isinstance(method_context, dict):
+            return None
+        witness_state = (
+            method_context.get("witnessState")
+            if isinstance(method_context.get("witnessState"), dict)
+            else {}
+        )
+        if self._optional_str(witness_state.get("stance")) == "grounding_first":
+            return None
+        summary = render_typology_discovery_summary(typology_evidence_digest)
+        if not summary or typology_evidence_digest is None:
+            return None
+
+        items: list[DiscoveryDigestItem] = []
+        for label, bucket in (
+            ("Foreground", typology_evidence_digest["foreground"]),
+            ("Compensation", typology_evidence_digest["compensation"]),
+            ("Background", typology_evidence_digest["background"]),
+        ):
+            functions = [
+                str(item)
+                for item in bucket.get("functions", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            lens_ids = [
+                str(item)
+                for item in bucket.get("lensIds", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            material_ids = [
+                str(item)
+                for item in bucket.get("linkedMaterialIds", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            evidence_ids = [
+                str(item)
+                for item in bucket.get("evidenceIds", [])
+                if isinstance(item, str) and item.strip()
+            ]
+            if not (functions or lens_ids or evidence_ids):
+                continue
+            item_summary = (
+                f"{label} pressure currently clusters around {', '.join(functions)}."
+                if functions
+                else f"{label} pressure is present but remains underspecified."
+            )
+            entity_refs: dict[str, list[Id]] = {}
+            if lens_ids:
+                entity_refs["entities"] = lens_ids
+            if material_ids:
+                entity_refs["materials"] = material_ids
+            items.append(
+                {
+                    "label": label,
+                    "summary": item_summary,
+                    "criteria": [
+                        "typology_function_dynamics",
+                        "method_state_typology_method_state",
+                    ],
+                    "sourceKinds": ["method_context", "memory_kernel"],
+                    "entityRefs": entity_refs,
+                    "evidenceIds": evidence_ids,
+                }
+            )
+            if len(items) >= max_items:
+                break
+        if (
+            len(items) < max_items
+            and typology_evidence_digest.get("ambiguityNotes")
+            and isinstance(typology_evidence_digest["ambiguityNotes"], list)
+        ):
+            items.append(
+                {
+                    "label": "Ambiguity",
+                    "summary": str(typology_evidence_digest["ambiguityNotes"][0]),
+                    "criteria": [
+                        "typology_function_dynamics",
+                        "method_state_typology_method_state",
+                    ],
+                    "sourceKinds": ["method_context", "memory_kernel"],
+                    "entityRefs": {
+                        "entities": [
+                            str(item)
+                            for item in typology_evidence_digest.get("supportingRefs", [])
+                            if isinstance(item, str) and item.strip()
+                        ][:5]
+                    },
+                    "evidenceIds": [
+                        str(item)
+                        for item in typology_evidence_digest.get("counterevidenceIds", [])
+                        if isinstance(item, str) and item.strip()
+                    ],
+                }
+            )
+        return {
+            "key": "function_dynamics",
+            "title": "Function dynamics",
+            "summary": summary,
+            "items": items[:max_items],
+        }
+
     def _build_journey_threads_discovery_section(
         self,
         *,
@@ -6726,6 +6932,13 @@ class CirculatioService:
         record_id = self._optional_str(section.get("goalTensionId"))
         if record_id:
             ref_ids = self._merge_ids(ref_ids, [record_id])
+        active_lens_ids = [
+            str(value)
+            for value in section.get("activeLensIds", [])
+            if isinstance(value, str) and value
+        ]
+        if active_lens_ids:
+            ref_ids = self._merge_ids(ref_ids, active_lens_ids)
         for ref in section.get("sourceRecordRefs", []):
             if not isinstance(ref, dict):
                 continue
@@ -6735,11 +6948,18 @@ class CirculatioService:
         return ref_ids
 
     def _method_state_section_evidence_ids(self, section: dict[str, object]) -> list[Id]:
-        return [
-            str(value)
-            for value in section.get("evidenceIds", [])
-            if isinstance(value, str) and value
-        ]
+        return self._merge_ids(
+            [
+                str(value)
+                for value in section.get("evidenceIds", [])
+                if isinstance(value, str) and value
+            ],
+            [
+                str(value)
+                for value in section.get("supportingEvidenceIds", [])
+                if isinstance(value, str) and value
+            ],
+        )
 
     def _relational_field_discovery_summary(
         self,
@@ -6797,6 +7017,23 @@ class CirculatioService:
         status = self._optional_str(typology_state.get("status"))
         if status:
             fragments.append(f"Status: {status.replace('_', ' ')}.")
+        foreground_functions = [
+            str(item) for item in typology_state.get("foregroundFunctions", []) if str(item).strip()
+        ]
+        if foreground_functions:
+            fragments.append(f"Foreground: {', '.join(foreground_functions[:3])}.")
+        compensatory_functions = [
+            str(item)
+            for item in typology_state.get("compensatoryFunctions", [])
+            if str(item).strip()
+        ]
+        if compensatory_functions:
+            fragments.append(f"Compensation: {', '.join(compensatory_functions[:3])}.")
+        background_functions = [
+            str(item) for item in typology_state.get("backgroundFunctions", []) if str(item).strip()
+        ]
+        if background_functions:
+            fragments.append(f"Background: {', '.join(background_functions[:3])}.")
         prompt_bias = self._optional_str(typology_state.get("promptBias"))
         if prompt_bias and prompt_bias != "neutral":
             fragments.append(f"Prompt bias: {prompt_bias.replace('_', ' ')}.")
@@ -6806,6 +7043,13 @@ class CirculatioService:
         balancing_function = self._optional_str(typology_state.get("balancingFunction"))
         if balancing_function:
             fragments.append(f"Balancing function: {balancing_function}.")
+        ambiguity_notes = [
+            str(item).strip()
+            for item in typology_state.get("ambiguityNotes", [])
+            if str(item).strip()
+        ]
+        if ambiguity_notes:
+            fragments.append(ambiguity_notes[0])
         return " ".join(fragments) or None
 
     def _witness_state_discovery_summary(self, witness_state: dict[str, object]) -> str | None:
@@ -6854,15 +7098,7 @@ class CirculatioService:
             section = method_state.get(field_name)
             if not isinstance(section, dict):
                 continue
-            record_id = self._optional_str(section.get("goalTensionId"))
-            if record_id:
-                ref_ids = self._merge_ids(ref_ids, [record_id])
-            for ref in section.get("sourceRecordRefs", []):
-                if not isinstance(ref, dict):
-                    continue
-                record_id = self._optional_str(ref.get("recordId"))
-                if record_id:
-                    ref_ids = self._merge_ids(ref_ids, [record_id])
+            ref_ids = self._merge_ids(ref_ids, self._method_state_section_ref_ids(section))
         for tendency in method_state.get("compensationTendencies", []):
             if not isinstance(tendency, dict):
                 continue
@@ -6892,11 +7128,7 @@ class CirculatioService:
                 continue
             evidence_ids = self._merge_ids(
                 evidence_ids,
-                [
-                    str(value)
-                    for value in section.get("evidenceIds", [])
-                    if isinstance(value, str) and value
-                ],
+                self._method_state_section_evidence_ids(section),
             )
         for tendency in method_state.get("compensationTendencies", []):
             if not isinstance(tendency, dict):
@@ -9424,6 +9656,10 @@ class CirculatioService:
             list(existing.get("counterevidenceIds", [])) if existing else [],
             [str(item) for item in payload.get("counterevidenceIds", []) if str(item).strip()],
         )
+        evidence_ids = self._merge_ids(
+            list(existing.get("evidenceIds", [])) if existing else [],
+            [str(item) for item in payload.get("evidenceIds", []) if str(item).strip()],
+        )
         now = now_iso()
         role_value = cast(
             Literal["dominant", "auxiliary", "tertiary", "inferior", "compensation_link"],
@@ -9445,6 +9681,7 @@ class CirculatioService:
                     "claim": claim,
                     "confidence": confidence_value,
                     "status": status_value,
+                    "evidenceIds": evidence_ids,
                     "counterevidenceIds": counterevidence_ids,
                     "userTestPrompt": user_test_prompt,
                     "linkedMaterialIds": linked_material_ids,
@@ -9461,7 +9698,7 @@ class CirculatioService:
                 "claim": claim,
                 "confidence": confidence_value,
                 "status": status_value,
-                "evidenceIds": [],
+                "evidenceIds": evidence_ids,
                 "counterevidenceIds": counterevidence_ids,
                 "userTestPrompt": user_test_prompt,
                 "linkedMaterialIds": linked_material_ids,

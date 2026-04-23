@@ -53,7 +53,7 @@ class PromptFragmentsProvider(Protocol):
 
     def method_state_routing_instruction_block(self) -> dict[str, str]: ...
 
-    def analysis_packet_instruction_block(self) -> dict[str, str]: ...
+    def analysis_packet_instruction_block(self, analytic_lens: str | None = None) -> dict[str, str]: ...
 
 
 def _fragments(provider: PromptFragmentsProvider | None) -> PromptFragmentsProvider:
@@ -399,10 +399,18 @@ def build_analysis_packet_messages(
 ) -> list[dict[str, str]]:
     active_fragments = _fragments(fragments)
     memory = normalize_hermes_memory_context(input_data.get("hermesMemoryContext"))
-    payload = {
+    analytic_lens = str(input_data.get("analyticLens") or "generic")
+    symbolic_memory: dict[str, object] = {
+        "recurringSymbols": memory["recurringSymbols"][:8],
+        "recentMaterialSummaries": memory["recentMaterialSummaries"][:8],
+    }
+    if analytic_lens == "typology_function_dynamics":
+        symbolic_memory["typologyLensSummaries"] = memory["typologyLensSummaries"][:8]
+    payload: dict[str, object] = {
         "windowStart": input_data["windowStart"],
         "windowEnd": input_data["windowEnd"],
         "packetFocus": input_data.get("packetFocus"),
+        "analyticLens": analytic_lens,
         "explicitQuestion": input_data.get("explicitQuestion"),
         "lifeContextSnapshot": compact_life_context_snapshot(input_data.get("lifeContextSnapshot")),
         "methodContextSnapshot": input_data.get("methodContextSnapshot"),
@@ -425,12 +433,11 @@ def build_analysis_packet_messages(
         ),
         "recentPracticeOutcomes": list(input_data.get("recentPracticeOutcomes", [])),
         "evidence": list(input_data.get("evidence", [])),
-        "symbolicMemory": {
-            "recurringSymbols": memory["recurringSymbols"][:8],
-            "recentMaterialSummaries": memory["recentMaterialSummaries"][:8],
-        },
-        "instructions": active_fragments.analysis_packet_instruction_block(),
+        "symbolicMemory": symbolic_memory,
+        "instructions": active_fragments.analysis_packet_instruction_block(analytic_lens),
     }
+    if analytic_lens == "typology_function_dynamics" and input_data.get("typologyEvidenceDigest"):
+        payload["typologyEvidenceDigest"] = input_data.get("typologyEvidenceDigest")
     system = (
         "You write bounded Circulatio analysis packets. Return JSON only. "
         "Keep the packet evidence-grounded, concise, and useful for reflection or analysis rather than exhaustive. "

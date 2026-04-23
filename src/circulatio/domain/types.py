@@ -1110,6 +1110,8 @@ class TypologyLensSummary(TypedDict):
     confidence: Literal["low", "medium"]
     status: Literal["candidate", "user_refined", "disconfirmed"]
     evidenceIds: list[Id]
+    counterevidenceIds: list[Id]
+    linkedMaterialIds: list[Id]
     userTestPrompt: str
     lastUpdated: ISODateString
 
@@ -1324,6 +1326,13 @@ class TypologyMethodStateSummary(TypedDict, total=False):
     activeLensIds: Required[list[Id]]
     feedbackSignalCount: Required[int]
     activeFunctions: Required[list[PsychologicalFunction]]
+    foregroundFunctions: NotRequired[list[PsychologicalFunction]]
+    compensatoryFunctions: NotRequired[list[PsychologicalFunction]]
+    backgroundFunctions: NotRequired[list[PsychologicalFunction]]
+    supportingEvidenceIds: NotRequired[list[Id]]
+    counterevidenceIds: NotRequired[list[Id]]
+    ambiguityNotes: NotRequired[list[str]]
+    evidencedLensCount: NotRequired[int]
     promptBias: Required[
         Literal["body_first", "image_first", "relational_first", "reflection_first", "neutral"]
     ]
@@ -2418,6 +2427,40 @@ class TypologyHypothesis(TypedDict):
     normalizedClaimKey: str
 
 
+class TypologyRoleEvidenceBucket(TypedDict, total=False):
+    functions: Required[list[PsychologicalFunction]]
+    lensIds: Required[list[Id]]
+    evidenceIds: Required[list[Id]]
+    linkedMaterialIds: Required[list[Id]]
+
+
+class TypologyEvidenceDigest(TypedDict, total=False):
+    status: Required[Literal["insufficient_evidence", "signals_only", "hypotheses_available"]]
+    lensSummaries: Required[list[TypologyLensSummary]]
+    foreground: Required[TypologyRoleEvidenceBucket]
+    compensation: Required[TypologyRoleEvidenceBucket]
+    background: Required[TypologyRoleEvidenceBucket]
+    supportingRefs: Required[list[Id]]
+    counterevidenceIds: Required[list[Id]]
+    bodyStateIds: Required[list[Id]]
+    relationalSceneIds: Required[list[Id]]
+    practiceOutcomeIds: Required[list[Id]]
+    ambiguityNotes: Required[list[str]]
+    evidencedLensCount: Required[int]
+    feedbackSignalCount: Required[int]
+    updatedAt: Required[ISODateString]
+
+
+class PacketFunctionDynamicsSummary(TypedDict, total=False):
+    status: Required[Literal["insufficient_evidence", "signals_only", "readable"]]
+    summary: Required[str]
+    foregroundFunctions: Required[list[PsychologicalFunction]]
+    compensatoryFunctions: Required[list[PsychologicalFunction]]
+    backgroundFunctions: Required[list[PsychologicalFunction]]
+    ambiguityNotes: Required[list[str]]
+    supportingRefs: Required[list[Id]]
+
+
 class TypologyAssessment(TypedDict, total=False):
     status: Required[
         Literal["skipped", "insufficient_evidence", "signals_only", "hypotheses_available"]
@@ -2428,7 +2471,7 @@ class TypologyAssessment(TypedDict, total=False):
     possibleAuxiliaryFunction: NotRequired[PsychologicalFunction]
     possibleInferiorFunction: NotRequired[PsychologicalFunction]
     compensationLink: NotRequired[str]
-    userTestPrompt: Required[str]
+    userTestPrompt: NotRequired[str]
 
 
 class LlmInterpretationHealth(TypedDict, total=False):
@@ -2542,6 +2585,7 @@ AnalysisPacketFocus = Literal[
     "threshold",
     "dream_series",
 ]
+AnalyticLens = Literal["generic", "typology_function_dynamics"]
 
 
 class ThresholdReviewInput(TypedDict, total=False):
@@ -2648,6 +2692,8 @@ class AnalysisPacketInput(TypedDict, total=False):
     explicitQuestion: NotRequired[str]
     safetyContext: NotRequired[SafetyContext]
     packetFocus: NotRequired[AnalysisPacketFocus]
+    analyticLens: NotRequired[AnalyticLens]
+    typologyEvidenceDigest: NotRequired[TypologyEvidenceDigest]
     currentDreamSeries: NotRequired[list[DreamSeriesSummary]]
     activeThresholdProcesses: NotRequired[list[ThresholdProcessSummary]]
     bodyEchoes: NotRequired[list[BodyStateSummary]]
@@ -2668,6 +2714,7 @@ class AnalysisPacketResult(TypedDict, total=False):
     evidenceIds: Required[list[Id]]
     source: Required[Literal["llm", "bounded_fallback"]]
     userFacingResponse: Required[str]
+    functionDynamics: NotRequired[PacketFunctionDynamicsSummary]
     llmHealth: NotRequired[DepthEngineHealth]
     withheld: NotRequired[bool]
     withheldReason: NotRequired[str]

@@ -33,6 +33,7 @@ from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
     AnalysisPacketFocus,
     AnalysisPacketResult,
+    AnalyticLens,
     CirculationSummaryResult,
     FeedbackValue,
     Id,
@@ -53,6 +54,7 @@ from ..domain.types import (
     SessionContext,
     ThreadDigest,
     ThresholdReviewResult,
+    TypologyEvidenceDigest,
     UserAdaptationProfileSummary,
     UserAssociationInput,
 )
@@ -106,6 +108,7 @@ class SurfaceContextBundle(TypedDict, total=False):
     continuity: Required[ThreadAwareContinuityBundle]
     methodContextSnapshot: NotRequired[MethodContextSnapshot]
     threadDigests: Required[list[ThreadDigest]]
+    typologyEvidenceDigest: NotRequired[TypologyEvidenceDigest]
     dashboard: NotRequired[DashboardSummary]
     memorySnapshot: NotRequired[MemoryKernelSnapshot]
     recentPractices: NotRequired[list[PracticeSessionRecord]]
@@ -390,6 +393,7 @@ class GenerateDiscoveryInput(TypedDict, total=False):
     windowStart: NotRequired[str]
     windowEnd: NotRequired[str]
     explicitQuestion: NotRequired[str]
+    analyticLens: NotRequired[AnalyticLens]
     textQuery: NotRequired[str]
     rootNodeIds: NotRequired[list[Id]]
     memoryNamespaces: NotRequired[list[MemoryNamespace]]
@@ -404,6 +408,7 @@ DiscoverySectionKey = Literal[
     "conscious_attitude",
     "body_states",
     "method_state",
+    "function_dynamics",
     "journey_threads",
     "held_for_now",
 ]
@@ -916,6 +921,7 @@ class GenerateAnalysisPacketInput(TypedDict, total=False):
     windowStart: NotRequired[str]
     windowEnd: NotRequired[str]
     packetFocus: NotRequired[AnalysisPacketFocus]
+    analyticLens: NotRequired[AnalyticLens]
     explicitQuestion: NotRequired[str]
     safetyContext: NotRequired[SafetyContext]
     persist: NotRequired[bool]

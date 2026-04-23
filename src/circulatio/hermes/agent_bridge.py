@@ -1352,6 +1352,7 @@ class CirculatioAgentBridge:
                         "memoryNamespaces",
                         "rankingProfile",
                         "maxItems",
+                        "analyticLens",
                     }
                 },
             }
@@ -2478,7 +2479,35 @@ class CirculatioAgentBridge:
                 preview_sections.append(preview)
             if preview_sections:
                 summary["sectionPreview"] = preview_sections
-        if source == "bounded_fallback":
+        function_dynamics = packet.get("functionDynamics")
+        if isinstance(function_dynamics, dict):
+            function_summary: dict[str, object] = {}
+            status = self._optional_string(function_dynamics.get("status"))
+            if status:
+                function_summary["status"] = status
+            summary_text = self._optional_string(function_dynamics.get("summary"))
+            if summary_text:
+                function_summary["summary"] = summary_text
+            for source_key, target_key in (
+                ("foregroundFunctions", "foregroundFunctions"),
+                ("compensatoryFunctions", "compensatoryFunctions"),
+                ("backgroundFunctions", "backgroundFunctions"),
+            ):
+                values = function_dynamics.get(source_key)
+                if isinstance(values, list):
+                    visible = [str(item).strip() for item in values if str(item).strip()]
+                    if visible:
+                        function_summary[target_key] = visible[:4]
+            if function_summary:
+                summary["functionDynamics"] = function_summary
+            if status in {"signals_only", "insufficient_evidence"}:
+                summary["recoveryHint"] = (
+                    "If the user's request still needs a clearer foreground/background answer, "
+                    "do one bounded circulatio_discovery read over the same window and explicit "
+                    "question before answering. Do not fall back to raw material listing or "
+                    "host-authored interpretation."
+                )
+        if "recoveryHint" not in summary and source == "bounded_fallback":
             summary["recoveryHint"] = (
                 "If the user's request is still too open for a foreground/background answer, "
                 "do one bounded circulatio_discovery read over the same window and explicit "
@@ -2544,6 +2573,26 @@ class CirculatioAgentBridge:
         return fallback_messages.get(kind, message)
 
     def _analysis_packet_message(self, message: str, packet: object) -> str:
+        if isinstance(packet, dict):
+            function_dynamics = (
+                packet.get("functionDynamics")
+                if isinstance(packet.get("functionDynamics"), dict)
+                else {}
+            )
+            function_status = self._optional_string(function_dynamics.get("status"))
+            if function_status == "readable":
+                return (
+                    "A concise cross-material function-dynamics answer is already available "
+                    "from evidence in this window. Answer from it directly without widening "
+                    "the read surface."
+                )
+            if function_status in {"signals_only", "insufficient_evidence"}:
+                return (
+                    "A concise cross-material evidence digest is available from material that is "
+                    "already here. If that is still too thin for a foreground/background answer, "
+                    "do one bounded read across the same window before answering rather than "
+                    "asking for clarification or listing raw materials."
+                )
         if (
             isinstance(packet, dict)
             and self._optional_string(packet.get("source")) == "bounded_fallback"

@@ -232,6 +232,15 @@ ANALYSIS_PACKET_PROVENANCE_POLICY = (
     "existing ids from the payload only. Do not invent ids or derive metadata from free "
     "text."
 )
+ANALYSIS_PACKET_TYPOLOGY_POLICY = (
+    "When analyticLens is typology_function_dynamics, focus on foreground pressure, "
+    "compensation, background support, bodily load, and openings within the current window."
+)
+ANALYSIS_PACKET_TYPOLOGY_RESTRAINT_POLICY = (
+    "Never use identity language or stable type assignment. Surface ambiguity explicitly, "
+    "require supporting refs for every function-dynamics claim, and describe typology only "
+    "as tentative function pressure in this window."
+)
 
 
 def interpretation_instruction_block() -> dict[str, str]:
@@ -326,13 +335,19 @@ def method_state_routing_instruction_block() -> dict[str, str]:
     }
 
 
-def analysis_packet_instruction_block() -> dict[str, str]:
-    return {
+def analysis_packet_instruction_block(
+    analytic_lens: str | None = None,
+) -> dict[str, str]:
+    block = {
         "style": ANALYSIS_PACKET_STYLE_POLICY,
         "packetPolicy": ANALYSIS_PACKET_POLICY,
         "boundaryPolicy": ANALYSIS_PACKET_BOUNDARY_POLICY,
         "provenancePolicy": ANALYSIS_PACKET_PROVENANCE_POLICY,
     }
+    if analytic_lens == "typology_function_dynamics":
+        block["typologyPolicy"] = ANALYSIS_PACKET_TYPOLOGY_POLICY
+        block["typologyRestraintPolicy"] = ANALYSIS_PACKET_TYPOLOGY_RESTRAINT_POLICY
+    return block
 
 
 __all__ = [
@@ -341,6 +356,8 @@ __all__ = [
     "ANALYSIS_PACKET_POLICY",
     "ANALYSIS_PACKET_PROVENANCE_POLICY",
     "ANALYSIS_PACKET_STYLE_POLICY",
+    "ANALYSIS_PACKET_TYPOLOGY_POLICY",
+    "ANALYSIS_PACKET_TYPOLOGY_RESTRAINT_POLICY",
     "ALIVE_TODAY_STYLE_POLICY",
     "CLARIFICATION_INTENT_POLICY",
     "CLARIFICATION_ROUTING_POLICY",

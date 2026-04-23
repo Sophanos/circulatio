@@ -277,9 +277,18 @@ class CirculatioCommandParser:
         index = 1
         while index < len(tokens):
             token = tokens[index]
-            if token in {"--window-start", "--window-end", "--focus", "--persist"}:
+            if token in {
+                "--window-start",
+                "--window-end",
+                "--focus",
+                "--persist",
+                "--analytic-lens",
+                "--lens",
+            }:
                 if token == "--focus":
                     payload["packetFocus"] = self._require_value(tokens, index, token)
+                elif token in {"--analytic-lens", "--lens"}:
+                    payload["analyticLens"] = self._require_value(tokens, index, token)
                 elif token == "--persist":
                     payload["persist"] = (
                         self._require_value(tokens, index, token).lower() != "false"
@@ -343,6 +352,10 @@ class CirculatioCommandParser:
                         "recurrence, or importance."
                     )
                 payload["rankingProfile"] = profile
+                index += 2
+                continue
+            if token in {"--analytic-lens", "--lens"}:
+                payload["analyticLens"] = self._require_value(tokens, index, token)
                 index += 2
                 continue
             if token.startswith("--"):

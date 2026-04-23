@@ -114,6 +114,39 @@ class LlmDreamSeriesSuggestionCandidate(TypedDict, total=False):
     compensationTrajectory: NotRequired[str]
 
 
+class LlmTypologySignalCandidate(TypedDict, total=False):
+    id: NotRequired[str]
+    category: Required[str]
+    function: Required[str]
+    orientation: Required[str]
+    statement: Required[str]
+    strength: Required[str]
+    evidenceIds: Required[list[str]]
+
+
+class LlmTypologyHypothesisCandidate(TypedDict, total=False):
+    id: NotRequired[str]
+    claim: Required[str]
+    role: Required[str]
+    function: Required[str]
+    confidence: Required[str]
+    evidenceIds: Required[list[str]]
+    counterevidenceIds: NotRequired[list[str]]
+    userTestPrompt: Required[str]
+    normalizedClaimKey: NotRequired[str]
+
+
+class LlmTypologyAssessmentCandidate(TypedDict, total=False):
+    status: Required[str]
+    typologySignals: NotRequired[list[LlmTypologySignalCandidate]]
+    typologyHypotheses: NotRequired[list[LlmTypologyHypothesisCandidate]]
+    possibleDominantFunction: NotRequired[str]
+    possibleAuxiliaryFunction: NotRequired[str]
+    possibleInferiorFunction: NotRequired[str]
+    compensationLink: NotRequired[str]
+    userTestPrompt: NotRequired[str]
+
+
 class LlmClarificationIntent(TypedDict, total=False):
     refKey: Required[str]
     questionText: Required[str]
@@ -276,6 +309,7 @@ class LlmInterpretationOutput(TypedDict, total=False):
     methodGate: NotRequired[LlmMethodGateCandidate]
     amplificationPrompts: NotRequired[list[LlmAmplificationPromptCandidate]]
     dreamSeriesSuggestions: NotRequired[list[LlmDreamSeriesSuggestionCandidate]]
+    typologyAssessment: NotRequired[LlmTypologyAssessmentCandidate]
     individuation: NotRequired[LlmIndividuationCandidateSet]
     practiceRecommendation: Required[LlmPracticeCandidate]
     proposalCandidates: Required[list[LlmProposalCandidate]]
@@ -434,12 +468,23 @@ class LlmAnalysisPacketSection(TypedDict, total=False):
     items: Required[list[dict[str, object]]]
 
 
+class LlmAnalysisPacketFunctionDynamicsSummary(TypedDict, total=False):
+    status: Required[str]
+    summary: Required[str]
+    foregroundFunctions: Required[list[str]]
+    compensatoryFunctions: Required[list[str]]
+    backgroundFunctions: Required[list[str]]
+    ambiguityNotes: NotRequired[list[str]]
+    supportingRefs: Required[list[str]]
+
+
 class LlmAnalysisPacketOutput(TypedDict, total=False):
     packetTitle: Required[str]
     sections: Required[list[LlmAnalysisPacketSection]]
     includedMaterialIds: NotRequired[list[str]]
     includedRecordRefs: NotRequired[list[dict[str, object]]]
     evidenceIds: NotRequired[list[str]]
+    functionDynamics: NotRequired[LlmAnalysisPacketFunctionDynamicsSummary]
     userFacingResponse: Required[str]
     supportingRefs: Required[list[str]]
 

@@ -31,6 +31,7 @@ from ..domain.types import (
     MethodGateResult,
     MotifMention,
     Observation,
+    PacketFunctionDynamicsSummary,
     PersonalSymbolWritePayload,
     SymbolMention,
     ThresholdReviewInput,
@@ -103,7 +104,6 @@ _PACKET_RECORD_FIELDS = {
     "innerOuterCorrespondences": "InnerOuterCorrespondence",
     "activeMythicQuestions": "MythicQuestion",
 }
-
 _MATERIAL_EVIDENCE_TYPES = {"material_text_span", "dream_text_span", "prior_material"}
 
 
@@ -145,6 +145,7 @@ def llm_output_has_content(output: LlmInterpretationOutput) -> bool:
             bool(output.get("methodGate")),
             bool(output.get("amplificationPrompts")),
             bool(output.get("dreamSeriesSuggestions")),
+            bool(output.get("typologyAssessment")),
             bool(output.get("individuation")),
             bool(output.get("practiceRecommendation")),
             bool(output.get("clarificationPlan")),
@@ -1910,8 +1911,14 @@ def build_typology_assessment_from_llm(candidate: object) -> TypologyAssessment 
             )
             orientation = _sanitize_choice(
                 signal.get("orientation"),
-                allowed={"introverted", "extraverted", "ambiguous"},
-                default="ambiguous",
+                allowed={
+                    "conscious_adaptation",
+                    "support",
+                    "compensatory_pressure",
+                    "overuse",
+                    "unknown",
+                },
+                default="unknown",
             )
             result["typologySignals"].append(
                 {
@@ -2252,6 +2259,57 @@ def build_review_memory_write_plan(
     )
 
 
+def build_packet_function_dynamics_from_llm(
+    candidate: object,
+    *,
+    supporting_ref_map: dict[str, list[str]],
+) -> PacketFunctionDynamicsSummary | None:
+    if not isinstance(candidate, dict):
+        return None
+    status = _sanitize_choice(
+        candidate.get("status"),
+        allowed={"insufficient_evidence", "signals_only", "readable"},
+        default="insufficient_evidence",
+    )
+    summary = truncate_text(candidate.get("summary"), 280)
+    if not summary:
+        return None
+
+    def sanitize_functions(field_name: str) -> list[str]:
+        raw = candidate.get(field_name)
+        if not isinstance(raw, list):
+            return []
+        return [
+            item
+            for item in [
+                _sanitize_choice(
+                    value,
+                    allowed={"thinking", "feeling", "sensation", "intuition"},
+                    default="",
+                )
+                for value in raw
+            ]
+            if item
+        ][:4]
+
+    supporting_refs = _string_list(candidate.get("supportingRefs"), limit=12, item_limit=80)
+    if not supporting_refs:
+        return None
+    evidence_ids = evidence_ids_for_refs(supporting_refs, supporting_ref_map)
+    if status != "insufficient_evidence" and not evidence_ids:
+        return None
+    result: PacketFunctionDynamicsSummary = {
+        "status": cast(object, status),
+        "summary": summary,
+        "foregroundFunctions": cast(list, sanitize_functions("foregroundFunctions")),
+        "compensatoryFunctions": cast(list, sanitize_functions("compensatoryFunctions")),
+        "backgroundFunctions": cast(list, sanitize_functions("backgroundFunctions")),
+        "ambiguityNotes": _string_list(candidate.get("ambiguityNotes"), limit=4, item_limit=160),
+        "supportingRefs": supporting_refs,
+    }
+    return result
+
+
 def build_analysis_packet_provenance(
     *,
     input_data: AnalysisPacketInput,
@@ -2272,6 +2330,26 @@ def build_analysis_packet_provenance(
                     "recordType": record_type,
                     "recordId": record_id,
                 }
+    for item in cast(
+        list[dict[str, object]],
+        input_data.get("hermesMemoryContext", {}).get("typologyLensSummaries", []),
+    ):
+        record_id = str(item.get("id") or "").strip()
+        if record_id:
+            available_record_refs[record_id] = {
+                "recordType": "TypologyLens",
+                "recordId": record_id,
+            }
+    for item in cast(
+        list[dict[str, object]],
+        input_data.get("typologyEvidenceDigest", {}).get("lensSummaries", []),
+    ):
+        record_id = str(item.get("id") or "").strip()
+        if record_id:
+            available_record_refs[record_id] = {
+                "recordType": "TypologyLens",
+                "recordId": record_id,
+            }
 
     included_material_ids = [
         item
@@ -2295,6 +2373,13 @@ def build_analysis_packet_provenance(
     ]
 
     supporting_refs = [str(value).strip() for value in llm_output.get("supportingRefs", [])]
+    function_dynamics = llm_output.get("functionDynamics")
+    if isinstance(function_dynamics, dict):
+        function_dynamic_refs = [
+            str(value).strip() for value in function_dynamics.get("supportingRefs", [])
+        ]
+        if function_dynamic_refs:
+            supporting_refs = list(dict.fromkeys([*supporting_refs, *function_dynamic_refs]))
     if not included_material_ids:
         included_material_ids = [
             ref_id for ref_id in supporting_refs if ref_id and ref_id in material_ids_available

@@ -20,6 +20,74 @@ CLARIFICATION_PLAN_SCHEMA = {
     "required": ["questionText", "intent", "captureTarget", "expectedAnswerKind"],
 }
 
+TYPOLOGY_ASSESSMENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status": {
+            "type": "string",
+            "enum": ["insufficient_evidence", "signals_only", "hypotheses_available"],
+        },
+        "typologySignals": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string"},
+                    "function": {"type": "string"},
+                    "orientation": {
+                        "type": "string",
+                        "enum": [
+                            "conscious_adaptation",
+                            "support",
+                            "compensatory_pressure",
+                            "overuse",
+                            "unknown",
+                        ],
+                    },
+                    "statement": {"type": "string"},
+                    "strength": {"type": "string"},
+                    "evidenceIds": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": [
+                    "category",
+                    "function",
+                    "orientation",
+                    "statement",
+                    "strength",
+                    "evidenceIds",
+                ],
+            },
+        },
+        "typologyHypotheses": {"type": "array"},
+        "userTestPrompt": {"type": "string"},
+    },
+    "required": ["status"],
+}
+
+ANALYSIS_PACKET_FUNCTION_DYNAMICS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status": {
+            "type": "string",
+            "enum": ["insufficient_evidence", "signals_only", "readable"],
+        },
+        "summary": {"type": "string"},
+        "foregroundFunctions": {"type": "array", "items": {"type": "string"}},
+        "compensatoryFunctions": {"type": "array", "items": {"type": "string"}},
+        "backgroundFunctions": {"type": "array", "items": {"type": "string"}},
+        "ambiguityNotes": {"type": "array", "items": {"type": "string"}},
+        "supportingRefs": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "status",
+        "summary",
+        "foregroundFunctions",
+        "compensatoryFunctions",
+        "backgroundFunctions",
+        "supportingRefs",
+    ],
+}
+
 INTERPRETATION_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -33,6 +101,7 @@ INTERPRETATION_OUTPUT_SCHEMA = {
         "methodGate": {"type": "object"},
         "amplificationPrompts": {"type": "array"},
         "dreamSeriesSuggestions": {"type": "array"},
+        "typologyAssessment": TYPOLOGY_ASSESSMENT_SCHEMA,
         "individuation": {"type": "object"},
         "practiceRecommendation": {"type": "object"},
         "proposalCandidates": {"type": "array"},
@@ -161,6 +230,7 @@ ANALYSIS_PACKET_OUTPUT_SCHEMA = {
         "includedMaterialIds": {"type": "array"},
         "includedRecordRefs": {"type": "array"},
         "evidenceIds": {"type": "array"},
+        "functionDynamics": ANALYSIS_PACKET_FUNCTION_DYNAMICS_SCHEMA,
         "userFacingResponse": {"type": "string"},
         "supportingRefs": {"type": "array"},
     },

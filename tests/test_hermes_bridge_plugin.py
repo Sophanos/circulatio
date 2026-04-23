@@ -747,6 +747,123 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_analysis_packet_tool_surfaces_readable_function_dynamics_without_recovery_hint(
+        self,
+    ) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            runtime = get_runtime("default")
+            await runtime.repository.create_typology_lens(
+                {
+                    "id": "typology_bridge_1",
+                    "userId": "hermes:default:local",
+                    "role": "dominant",
+                    "function": "thinking",
+                    "claim": "Reflection tends to lead.",
+                    "confidence": "medium",
+                    "status": "candidate",
+                    "evidenceIds": ["evidence_1"],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Does reflection lead first?",
+                    "linkedMaterialIds": ["material_1"],
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:00:00Z",
+                }
+            )
+            response = json.loads(
+                await analysis_packet_tool(
+                    {
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "analyticLens": "typology_function_dynamics",
+                    },
+                    **self._tool_kwargs(call_id="tool_packet_typology_readable"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(response["result"]["functionDynamics"]["status"], "readable")
+            self.assertNotIn("recoveryHint", response["result"])
+
+        asyncio.run(run())
+
+    def test_analysis_packet_tool_adds_recovery_hint_for_signals_only_function_dynamics(
+        self,
+    ) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            runtime = get_runtime("default")
+            await runtime.repository.create_typology_lens(
+                {
+                    "id": "typology_bridge_2",
+                    "userId": "hermes:default:local",
+                    "role": "inferior",
+                    "function": "sensation",
+                    "claim": "Body contact drops out under strain.",
+                    "confidence": "low",
+                    "status": "user_refined",
+                    "evidenceIds": [],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Does sensation fall away first?",
+                    "linkedMaterialIds": [],
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:00:00Z",
+                }
+            )
+            response = json.loads(
+                await analysis_packet_tool(
+                    {
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "analyticLens": "typology_function_dynamics",
+                    },
+                    **self._tool_kwargs(call_id="tool_packet_typology_signals"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(response["result"]["functionDynamics"]["status"], "signals_only")
+            self.assertIn("recoveryHint", response["result"])
+
+        asyncio.run(run())
+
+    def test_discovery_tool_preserves_typology_analytic_lens(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            runtime = get_runtime("default")
+            await runtime.repository.create_typology_lens(
+                {
+                    "id": "typology_bridge_3",
+                    "userId": "hermes:default:local",
+                    "role": "dominant",
+                    "function": "intuition",
+                    "claim": "Images stay foregrounded.",
+                    "confidence": "medium",
+                    "status": "candidate",
+                    "evidenceIds": ["evidence_1"],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Do images arrive before analysis?",
+                    "linkedMaterialIds": [],
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:00:00Z",
+                }
+            )
+            response = json.loads(
+                await discovery_tool(
+                    {
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "analyticLens": "typology_function_dynamics",
+                    },
+                    **self._tool_kwargs(call_id="tool_discovery_typology_lens"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            discovery = response["result"]["discovery"]
+            self.assertTrue(
+                any(section["key"] == "function_dynamics" for section in discovery["sections"])
+            )
+
+        asyncio.run(run())
+
     def test_review_proposal_tools_cover_living_myth_approval_and_threshold_rejection(self) -> None:
         async def run() -> None:
             self._install_in_memory_runtime()

@@ -726,6 +726,229 @@ class CirculatioCoreTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_analysis_packet_typology_llm_path_returns_function_dynamics_and_lens_provenance(
+        self,
+    ) -> None:
+        async def run() -> None:
+            repo = InMemoryGraphMemoryRepository()
+            llm = FakeCirculatioLlm()
+            core = CirculatioCore(repo, llm=llm)
+            result = await core.generate_analysis_packet(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T00:00:00Z",
+                    "analyticLens": "typology_function_dynamics",
+                    "hermesMemoryContext": {
+                        "typologyLensSummaries": [
+                            {
+                                "id": "typology_1",
+                                "role": "dominant",
+                                "function": "thinking",
+                                "claim": "Reflection leads first.",
+                                "confidence": "medium",
+                                "status": "candidate",
+                                "evidenceIds": ["evidence_1"],
+                                "counterevidenceIds": [],
+                                "linkedMaterialIds": ["material_1"],
+                                "userTestPrompt": "Does reflection lead before feeling catches up?",
+                                "lastUpdated": "2026-04-18T09:00:00Z",
+                            }
+                        ],
+                        "recentTypologySignals": [],
+                    },
+                    "typologyEvidenceDigest": {
+                        "status": "hypotheses_available",
+                        "lensSummaries": [
+                            {
+                                "id": "typology_1",
+                                "role": "dominant",
+                                "function": "thinking",
+                                "claim": "Reflection leads first.",
+                                "confidence": "medium",
+                                "status": "candidate",
+                                "evidenceIds": ["evidence_1"],
+                                "counterevidenceIds": [],
+                                "linkedMaterialIds": ["material_1"],
+                                "userTestPrompt": "Does reflection lead before feeling catches up?",
+                                "lastUpdated": "2026-04-18T09:00:00Z",
+                            }
+                        ],
+                        "foreground": {
+                            "functions": ["thinking"],
+                            "lensIds": ["typology_1"],
+                            "evidenceIds": ["evidence_1"],
+                            "linkedMaterialIds": ["material_1"],
+                        },
+                        "compensation": {
+                            "functions": ["feeling"],
+                            "lensIds": [],
+                            "evidenceIds": [],
+                            "linkedMaterialIds": [],
+                        },
+                        "background": {
+                            "functions": [],
+                            "lensIds": [],
+                            "evidenceIds": [],
+                            "linkedMaterialIds": [],
+                        },
+                        "supportingRefs": ["typology_1", "material_1"],
+                        "counterevidenceIds": [],
+                        "bodyStateIds": [],
+                        "relationalSceneIds": [],
+                        "practiceOutcomeIds": [],
+                        "ambiguityNotes": [],
+                        "evidencedLensCount": 1,
+                        "feedbackSignalCount": 0,
+                        "updatedAt": "2026-04-18T09:00:00Z",
+                    },
+                    "evidence": [
+                        {
+                            "id": "evidence_1",
+                            "type": "dream_text_span",
+                            "sourceId": "material_1",
+                            "quoteOrSummary": "Reflection kept leading the field.",
+                            "timestamp": "2026-04-18T08:00:00Z",
+                            "privacyClass": "approved_summary",
+                            "reliability": "high",
+                        }
+                    ],
+                }
+            )
+            self.assertEqual(result["functionDynamics"]["status"], "readable")
+            self.assertIn("thinking", result["functionDynamics"]["foregroundFunctions"])
+            self.assertEqual(result["includedMaterialIds"], ["material_1"])
+            self.assertIn(
+                {"recordType": "TypologyLens", "recordId": "typology_1"},
+                result["includedRecordRefs"],
+            )
+
+        asyncio.run(run())
+
+    def test_analysis_packet_typology_fallback_builds_function_dynamics_section(self) -> None:
+        async def run() -> None:
+            repo = InMemoryGraphMemoryRepository()
+            core = CirculatioCore(repo, llm=None)
+            result = await core.generate_analysis_packet(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T00:00:00Z",
+                    "analyticLens": "typology_function_dynamics",
+                    "typologyEvidenceDigest": {
+                        "status": "hypotheses_available",
+                        "lensSummaries": [
+                            {
+                                "id": "typology_1",
+                                "role": "dominant",
+                                "function": "intuition",
+                                "claim": "Image pressure leads.",
+                                "confidence": "medium",
+                                "status": "candidate",
+                                "evidenceIds": ["evidence_1"],
+                                "counterevidenceIds": [],
+                                "linkedMaterialIds": ["material_1"],
+                                "userTestPrompt": "Do images arrive before explanation?",
+                                "lastUpdated": "2026-04-18T09:00:00Z",
+                            }
+                        ],
+                        "foreground": {
+                            "functions": ["intuition"],
+                            "lensIds": ["typology_1"],
+                            "evidenceIds": ["evidence_1"],
+                            "linkedMaterialIds": ["material_1"],
+                        },
+                        "compensation": {
+                            "functions": ["sensation"],
+                            "lensIds": [],
+                            "evidenceIds": [],
+                            "linkedMaterialIds": [],
+                        },
+                        "background": {
+                            "functions": [],
+                            "lensIds": [],
+                            "evidenceIds": [],
+                            "linkedMaterialIds": [],
+                        },
+                        "supportingRefs": ["typology_1", "material_1"],
+                        "counterevidenceIds": [],
+                        "bodyStateIds": [],
+                        "relationalSceneIds": [],
+                        "practiceOutcomeIds": [],
+                        "ambiguityNotes": [],
+                        "evidencedLensCount": 1,
+                        "feedbackSignalCount": 0,
+                        "updatedAt": "2026-04-18T09:00:00Z",
+                    },
+                    "evidence": [
+                        {
+                            "id": "evidence_1",
+                            "type": "dream_text_span",
+                            "sourceId": "material_1",
+                            "quoteOrSummary": "Image pressure kept returning.",
+                            "timestamp": "2026-04-18T08:00:00Z",
+                            "privacyClass": "approved_summary",
+                            "reliability": "high",
+                        }
+                    ],
+                }
+            )
+            self.assertEqual(result["source"], "bounded_fallback")
+            self.assertEqual(result["functionDynamics"]["status"], "readable")
+            self.assertIn("Function dynamics", [section["title"] for section in result["sections"]])
+
+        asyncio.run(run())
+
+    def test_analysis_packet_safety_block_prevents_typology_fallback_section(self) -> None:
+        async def run() -> None:
+            repo = InMemoryGraphMemoryRepository()
+            core = CirculatioCore(repo, llm=None)
+            result = await core.generate_analysis_packet(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T00:00:00Z",
+                    "analyticLens": "typology_function_dynamics",
+                    "explicitQuestion": "I want to kill myself, what function is foreground?",
+                    "typologyEvidenceDigest": {
+                        "status": "hypotheses_available",
+                        "lensSummaries": [],
+                        "foreground": {
+                            "functions": ["thinking"],
+                            "lensIds": ["typology_1"],
+                            "evidenceIds": ["evidence_1"],
+                            "linkedMaterialIds": ["material_1"],
+                        },
+                        "compensation": {
+                            "functions": ["feeling"],
+                            "lensIds": [],
+                            "evidenceIds": [],
+                            "linkedMaterialIds": [],
+                        },
+                        "background": {
+                            "functions": [],
+                            "lensIds": [],
+                            "evidenceIds": [],
+                            "linkedMaterialIds": [],
+                        },
+                        "supportingRefs": ["typology_1", "material_1"],
+                        "counterevidenceIds": [],
+                        "bodyStateIds": [],
+                        "relationalSceneIds": [],
+                        "practiceOutcomeIds": [],
+                        "ambiguityNotes": [],
+                        "evidencedLensCount": 1,
+                        "feedbackSignalCount": 0,
+                        "updatedAt": "2026-04-18T09:00:00Z",
+                    },
+                    "evidence": [],
+                }
+            )
+            self.assertFalse(any(section["title"] == "Function dynamics" for section in result["sections"]))
+            self.assertNotIn("functionDynamics", result)
+
+        asyncio.run(run())
+
     def test_generate_practice_falls_back_when_llm_unavailable(self) -> None:
         async def run() -> None:
             repo = InMemoryGraphMemoryRepository()

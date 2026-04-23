@@ -59,9 +59,11 @@ from .interpretation_mapping import (
     build_method_gate_from_llm,
     build_motif_mentions_from_llm,
     build_observations_from_llm,
+    build_packet_function_dynamics_from_llm,
     build_practice_from_llm,
     build_proposals_from_llm,
     build_review_memory_write_plan,
+    build_supporting_ref_map,
     build_symbol_mentions_from_llm,
     build_typology_assessment_from_llm,
     try_llm_interpretation,
@@ -75,6 +77,7 @@ from .method_state_policy import (
 )
 from .practice_engine import PracticeEngine
 from .safety_gate import SafetyGate
+from .typology_evidence import build_typology_packet_fallback
 
 LOGGER = logging.getLogger(__name__)
 
@@ -464,9 +467,7 @@ class CirculatioCore:
         if selected_loop_key:
             result["selectedCoachLoopKey"] = selected_loop_key
         coach_move_kind = str(
-            (llm_alive_today or {}).get("coachMoveKind")
-            or selected_move.get("kind")
-            or ""
+            (llm_alive_today or {}).get("coachMoveKind") or selected_move.get("kind") or ""
         ).strip()
         if coach_move_kind:
             result["coachMoveKind"] = cast(CoachMoveKind, coach_move_kind)
@@ -835,6 +836,12 @@ class CirculatioCore:
         }
         synthetic = self._synthetic_analysis_packet_material_input(normalized_input)
         safety = self._safety_gate.assess(synthetic)
+        analytic_lens = str(normalized_input.get("analyticLens") or "generic").strip() or "generic"
+        typology_digest = (
+            cast(dict[str, object], normalized_input.get("typologyEvidenceDigest"))
+            if isinstance(normalized_input.get("typologyEvidenceDigest"), dict)
+            else None
+        )
         llm_output = None
         if safety["depthWorkAllowed"] and self._llm is not None:
             try:
@@ -852,7 +859,22 @@ class CirculatioCore:
                     llm_output=cast(dict[str, object], llm_output),
                 )
             )
-            return {
+            function_dynamics = None
+            if analytic_lens == "typology_function_dynamics":
+                supporting_ref_map = build_supporting_ref_map(
+                    payload=normalized_input,
+                    evidence_items=cast(
+                        list[dict[str, object]],
+                        normalized_input.get("evidence", []),
+                    ),
+                )
+                function_dynamics = build_packet_function_dynamics_from_llm(
+                    llm_output.get("functionDynamics"),
+                    supporting_ref_map=supporting_ref_map,
+                )
+                if function_dynamics is None:
+                    _, function_dynamics = build_typology_packet_fallback(typology_digest)
+            result: AnalysisPacketResult = {
                 "packetTitle": str(llm_output.get("packetTitle", "")).strip() or "Analysis packet",
                 "sections": cast(list[dict[str, object]], llm_output.get("sections", [])),
                 "includedMaterialIds": included_material_ids,
@@ -866,9 +888,13 @@ class CirculatioCore:
                     "source": "llm",
                 },
             }
+            if function_dynamics is not None:
+                result["functionDynamics"] = function_dynamics
+            return result
         sections: list[dict[str, object]] = []
         included_record_refs: list[dict[str, object]] = []
         evidence_ids: list[str] = []
+        function_dynamics = None
         if normalized_input.get("activeThresholdProcesses"):
             for item in normalized_input.get("activeThresholdProcesses", [])[:5]:
                 record_id = str(item.get("id") or "").strip()
@@ -946,6 +972,28 @@ class CirculatioCore:
                     ],
                 }
             )
+        if analytic_lens == "typology_function_dynamics" and safety["depthWorkAllowed"]:
+            function_dynamics_section, function_dynamics = build_typology_packet_fallback(
+                typology_digest
+            )
+            if function_dynamics_section is not None:
+                sections.append(function_dynamics_section)
+                for item in function_dynamics_section.get("items", []):
+                    if not isinstance(item, dict):
+                        continue
+                    for record_ref in item.get("relatedRecordRefs", []):
+                        if not isinstance(record_ref, dict):
+                            continue
+                        record_type = str(record_ref.get("recordType") or "").strip()
+                        record_id = str(record_ref.get("recordId") or "").strip()
+                        if record_type and record_id:
+                            included_record_refs.append(
+                                {"recordType": record_type, "recordId": record_id}
+                            )
+                    for evidence_id in item.get("evidenceIds", []):
+                        candidate = str(evidence_id or "").strip()
+                        if candidate and candidate not in evidence_ids:
+                            evidence_ids.append(candidate)
         if not sections:
             sections.append(
                 {
@@ -978,23 +1026,38 @@ class CirculatioCore:
                 continue
             seen_record_refs.add(key)
             deduped_record_refs.append(item)
-        return {
+        user_facing_response = (
+            "A bounded packet is available using existing approved summaries "
+            "rather than new symbolic synthesis."
+        )
+        if isinstance(function_dynamics, dict):
+            status = str(function_dynamics.get("status") or "").strip()
+            if status == "readable":
+                user_facing_response = (
+                    "A bounded function-dynamics packet is available from evidence already in view."
+                )
+            elif status == "signals_only":
+                user_facing_response = (
+                    "A bounded packet is available with tentative "
+                    "function-dynamics signals from the current window."
+                )
+        result: AnalysisPacketResult = {
             "packetTitle": "Analysis packet",
             "sections": cast(list[dict[str, object]], sections),
             "includedMaterialIds": included_material_ids,
             "includedRecordRefs": cast(list[dict[str, str]], deduped_record_refs),
             "evidenceIds": evidence_ids,
             "source": "bounded_fallback",
-            "userFacingResponse": (
-                "A bounded packet is available using existing approved summaries "
-                "rather than new symbolic synthesis."
-            ),
+            "userFacingResponse": user_facing_response,
             "llmHealth": {
                 "status": "fallback",
                 "reason": "bounded_analysis_packet_fallback",
                 "source": "fallback",
             },
         }
+        if function_dynamics is not None:
+            result["functionDynamics"] = function_dynamics
+        return result
 
     async def generate_practice(
         self,
@@ -1125,9 +1188,12 @@ class CirculatioCore:
                 "source": "llm" if llm_output else "fallback",
             },
         }
-        resource_invitation = self._resource_invitation_from_value(
-            llm_output.get("resourceInvitation") if llm_output else None
-        ) or selected_resource_invitation
+        resource_invitation = (
+            self._resource_invitation_from_value(
+                llm_output.get("resourceInvitation") if llm_output else None
+            )
+            or selected_resource_invitation
+        )
         if resource_invitation is not None:
             result["resourceInvitation"] = resource_invitation
         return result
@@ -1140,14 +1206,12 @@ class CirculatioCore:
         safety = self._safety_gate.assess(synthetic)
         seed = cast(dict[str, object], input_data.get("seed", {}))
         brief_type = str(seed.get("briefType") or "daily")
-        resource_invitation = self._resource_invitation_from_value(
-            seed.get("resourceInvitation")
-        )
+        resource_invitation = self._resource_invitation_from_value(seed.get("resourceInvitation"))
         runtime_policy = derive_runtime_method_state_policy(input_data.get("methodContextSnapshot"))
-        if (
-            runtime_policy.get("depthLevel") == "grounding_only"
-            and brief_type not in {"practice_followup", "resource_invitation"}
-        ):
+        if runtime_policy.get("depthLevel") == "grounding_only" and brief_type not in {
+            "practice_followup",
+            "resource_invitation",
+        }:
             return {
                 "withheld": True,
                 "withheldReason": "method_state_policy_blocks_symbolic_brief",
@@ -1339,8 +1403,7 @@ class CirculatioCore:
         if isinstance(method_context, dict) and method_context.get("recentBodyStates"):
             return "A recent body signal is being held without forcing meaning."
         return (
-            "Nothing needs to be forced right now. "
-            "Circulatio is holding the live threads lightly."
+            "Nothing needs to be forced right now. Circulatio is holding the live threads lightly."
         )
 
     def _alive_today_fallback_question(self, *, selected_move: dict[str, object]) -> str:

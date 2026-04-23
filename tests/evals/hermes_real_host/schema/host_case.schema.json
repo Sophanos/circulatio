@@ -70,6 +70,14 @@
           "items": { "type": "string" },
           "default": []
         },
+        "allowedToolSequencePrefixes": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "default": []
+        },
         "requiredTools": {
           "type": "array",
           "items": { "type": "string" },
@@ -80,7 +88,20 @@
           "items": { "type": "string" },
           "default": []
         },
+        "maxToolOccurrences": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "default": {}
+        },
         "requiredReplySubstrings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "requiredReplyRegexes": {
           "type": "array",
           "items": { "type": "string" },
           "default": []

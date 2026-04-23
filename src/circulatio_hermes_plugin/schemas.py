@@ -154,11 +154,15 @@ DASHBOARD_SUMMARY_TOOL_SCHEMA = _schema(
 
 DISCOVERY_TOOL_SCHEMA = _schema(
     "circulatio_discovery",
-    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings. Use this as the single bounded recovery read when a cross-material typology, function-dynamics, or system-recognition request needs more evidence after a thin or fallback-shaped analysis packet. Answer from this digest rather than from raw material listings.",
+    "Build a bounded, read-only discovery digest from Circulatio dashboard, memory-kernel, and graph reads. This surface does not approve, reject, write, interpret, diagnose, or assign deterministic symbolic meanings. Use this as the single bounded recovery read when a cross-material typology, function-dynamics, or system-recognition request needs more evidence after a thin or fallback-shaped analysis packet. Preserve the same `analyticLens` used on the packet when recovering typology/function-dynamics requests. Answer from this digest rather than from raw material listings.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
         "explicitQuestion": {"type": "string"},
+        "analyticLens": {
+            "type": "string",
+            "enum": ["generic", "typology_function_dynamics"],
+        },
         "textQuery": {"type": "string"},
         "rootNodeIds": _ID_ARRAY_PROPERTY,
         "memoryNamespaces": {"type": "array", "items": {"type": "string"}},
@@ -456,7 +460,7 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht' and 'Was wirkt hier führend, was kompensatorisch?' as default examples for this surface unless one specific material was just given. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
+    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht' and 'Was wirkt hier führend, was kompensatorisch?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -465,6 +469,10 @@ ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
             "enum": ["analysis", "journaling", "therapy_session", "threshold", "dream_series"],
         },
         "explicitQuestion": {"type": "string"},
+        "analyticLens": {
+            "type": "string",
+            "enum": ["generic", "typology_function_dynamics"],
+        },
         "persist": {"type": "boolean"},
         "safetyContext": {"type": "object"},
     },

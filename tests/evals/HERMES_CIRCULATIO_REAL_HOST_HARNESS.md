@@ -217,6 +217,28 @@ Expected:
 - explicit approval actions stay explicit
 - no silent durable approval
 
+### D1. Typology Packet Recovery
+
+Probe cross-material typology or function-dynamics prompts such as:
+
+- `Hilf mir typologisch zu verstehen, was hier im Vordergrund steht.`
+- `Was wirkt hier führend, was kompensatorisch?`
+
+Expected pass conditions:
+
+- host starts with `circulatio_analysis_packet`
+- packet-only success is valid when the returned packet already contains readable function-dynamics coverage
+- packet plus exactly one `circulatio_discovery` follow-up is valid when the packet is still thin
+- the same analytic lens is preserved across packet and bounded discovery recovery
+- visible host reply stays in bounded foreground / compensation / tension language
+
+FAIL if:
+
+- host bounces to clarification before the bounded packet path
+- host widens to `circulatio_dashboard_summary` or `circulatio_list_materials`
+- host performs more than one discovery follow-up
+- visible host reply leaks tool / schema / provider internals
+
 ### E. Method-State / Direct Capture
 
 Probe representative direct-capture operations:

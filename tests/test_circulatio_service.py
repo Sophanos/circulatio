@@ -2528,6 +2528,119 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            material = await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "I kept overexplaining while missing what my body was doing.",
+                    "materialDate": "2026-04-18T08:00:00Z",
+                }
+            )
+            await repository.create_typology_lens(
+                {
+                    "id": "typology_lens_1",
+                    "userId": "user_1",
+                    "role": "dominant",
+                    "function": "thinking",
+                    "claim": "Reflection organizes the field first.",
+                    "confidence": "medium",
+                    "status": "candidate",
+                    "evidenceIds": ["evidence_1"],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Does thought lead before the body is noticed?",
+                    "linkedMaterialIds": [material["id"]],
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:00:00Z",
+                }
+            )
+            await repository.create_typology_lens(
+                {
+                    "id": "typology_lens_2",
+                    "userId": "user_1",
+                    "role": "inferior",
+                    "function": "sensation",
+                    "claim": "Body contact drops out under strain.",
+                    "confidence": "low",
+                    "status": "user_refined",
+                    "evidenceIds": ["evidence_2"],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Does sensation fall away under pressure?",
+                    "linkedMaterialIds": [material["id"]],
+                    "createdAt": "2026-04-18T09:10:00Z",
+                    "updatedAt": "2026-04-18T09:10:00Z",
+                }
+            )
+            discovery = await service.generate_discovery(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-22T23:59:59Z",
+                    "analyticLens": "typology_function_dynamics",
+                    "maxItems": 20,
+                }
+            )
+            function_section = next(
+                section for section in discovery["sections"] if section["key"] == "function_dynamics"
+            )
+            self.assertIn("Foreground", {item["label"] for item in function_section["items"]})
+            criteria = {
+                criterion for item in function_section["items"] for criterion in item["criteria"]
+            }
+            self.assertIn("typology_function_dynamics", criteria)
+            self.assertIn("method_state_typology_method_state", criteria)
+
+        asyncio.run(run())
+
+    def test_generate_discovery_omits_typology_function_dynamics_when_grounding_first(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.capture_reality_anchors(
+                {
+                    "userId": "user_1",
+                    "summary": "Outer life is too thin for depth.",
+                    "anchorSummary": "Ground first before typology framing.",
+                    "workDailyLifeContinuity": "strained",
+                    "sleepBodyRegulation": "strained",
+                    "relationshipContact": "thin",
+                    "reflectiveCapacity": "fragile",
+                    "groundingRecommendation": "grounding_first",
+                }
+            )
+            await repository.create_typology_lens(
+                {
+                    "id": "typology_grounding_1",
+                    "userId": "user_1",
+                    "role": "dominant",
+                    "function": "intuition",
+                    "claim": "Images keep leading.",
+                    "confidence": "medium",
+                    "status": "candidate",
+                    "evidenceIds": ["evidence_1"],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Do images lead before interpretation?",
+                    "linkedMaterialIds": [],
+                    "createdAt": "2026-04-18T09:00:00Z",
+                    "updatedAt": "2026-04-18T09:00:00Z",
+                }
+            )
+            discovery = await service.generate_discovery(
+                {
+                    "userId": "user_1",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-22T23:59:59Z",
+                    "analyticLens": "typology_function_dynamics",
+                    "maxItems": 20,
+                }
+            )
+            self.assertFalse(
+                any(section["key"] == "function_dynamics" for section in discovery["sections"])
+            )
+
+        asyncio.run(run())
+
     def test_living_myth_review_practice_respects_grounding_first_method_state(self) -> None:
         async def run() -> None:
             _, service, _ = self._service()
@@ -2657,6 +2770,23 @@ class CirculatioServiceTests(unittest.TestCase):
                     "updatedAt": "2026-04-18T10:00:00Z",
                 }
             )
+            await repository.create_typology_lens(
+                {
+                    "id": "typology_packet_1",
+                    "userId": "user_1",
+                    "role": "dominant",
+                    "function": "intuition",
+                    "claim": "Images and emerging patterning lead the field.",
+                    "confidence": "medium",
+                    "status": "candidate",
+                    "evidenceIds": ["evidence_1"],
+                    "counterevidenceIds": [],
+                    "userTestPrompt": "Do images lead before analysis settles?",
+                    "linkedMaterialIds": [material["id"]],
+                    "createdAt": "2026-04-18T10:05:00Z",
+                    "updatedAt": "2026-04-18T10:05:00Z",
+                }
+            )
 
             review_workflow = await service.generate_living_myth_review(
                 {
@@ -2700,6 +2830,7 @@ class CirculatioServiceTests(unittest.TestCase):
                     "userId": "user_1",
                     "windowStart": "2026-04-12T00:00:00Z",
                     "windowEnd": "2026-04-19T23:59:59Z",
+                    "analyticLens": "typology_function_dynamics",
                     "persist": False,
                 }
             )
@@ -2717,6 +2848,12 @@ class CirculatioServiceTests(unittest.TestCase):
                 review_input["latestSymbolicWellbeing"]["id"],
             )
             self.assertEqual(packet_input["activeJourneys"][0]["id"], journey["id"])
+            self.assertEqual(packet_input["analyticLens"], "typology_function_dynamics")
+            self.assertIn("typologyEvidenceDigest", packet_input)
+            self.assertEqual(
+                packet_input["typologyEvidenceDigest"]["status"],
+                "hypotheses_available",
+            )
             self.assertEqual(
                 packet_input["witnessState"]["stance"],
                 packet_input["methodContextSnapshot"]["witnessState"]["stance"],
@@ -3745,6 +3882,7 @@ class CirculatioServiceTests(unittest.TestCase):
                         "claim": "Concrete facts can drop out when conflict spikes.",
                         "confidence": "low",
                         "status": "user_refined",
+                        "evidenceIds": ["evidence_1"],
                         "userTestPrompt": "When conflict spikes, do concrete facts get fuzzy first?",
                     },
                 }
@@ -3755,6 +3893,43 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(len(lenses), 1)
             self.assertEqual(lenses[0]["function"], "sensation")
             self.assertEqual(lenses[0]["status"], "user_refined")
+            self.assertEqual(lenses[0]["evidenceIds"], ["evidence_1"])
+
+        asyncio.run(run())
+
+    def test_answer_clarification_typology_feedback_merges_evidence_ids(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "That still fits.",
+                    "captureTargetOverride": "typology_feedback",
+                    "answerPayload": {
+                        "role": "inferior",
+                        "function": "sensation",
+                        "claim": "Concrete facts can drop out when conflict spikes.",
+                        "confidence": "low",
+                        "status": "user_refined",
+                        "evidenceIds": ["evidence_1"],
+                        "userTestPrompt": "When conflict spikes, do concrete facts get fuzzy first?",
+                    },
+                }
+            )
+            await service.answer_clarification(
+                {
+                    "userId": "user_1",
+                    "answerText": "The same frame still fits.",
+                    "captureTargetOverride": "typology_feedback",
+                    "answerPayload": {
+                        "claim": "Concrete facts can drop out when conflict spikes.",
+                        "evidenceIds": ["evidence_2"],
+                        "userTestPrompt": "When conflict spikes, do concrete facts get fuzzy first?",
+                    },
+                }
+            )
+            lenses = await repository.list_typology_lenses("user_1")
+            self.assertEqual(lenses[0]["evidenceIds"], ["evidence_1", "evidence_2"])
 
         asyncio.run(run())
 

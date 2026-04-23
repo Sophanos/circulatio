@@ -843,6 +843,60 @@ class FakeCirculatioLlm:
             ):
                 material_ids.append(source_id)
         return {
+            **(
+                {
+                    "functionDynamics": {
+                        "status": (
+                            "readable"
+                            if (
+                                isinstance(payload.get("typologyEvidenceDigest"), dict)
+                                and int(
+                                    payload["typologyEvidenceDigest"].get(
+                                        "evidencedLensCount", 0
+                                    )
+                                    or 0
+                                )
+                                > 0
+                            )
+                            else "signals_only"
+                        ),
+                        "summary": "Foreground pressure and compensation are visible in bounded form.",
+                        "foregroundFunctions": (
+                            payload["typologyEvidenceDigest"]
+                            .get("foreground", {})
+                            .get("functions", [])
+                            if isinstance(payload.get("typologyEvidenceDigest"), dict)
+                            else []
+                        ),
+                        "compensatoryFunctions": (
+                            payload["typologyEvidenceDigest"]
+                            .get("compensation", {})
+                            .get("functions", [])
+                            if isinstance(payload.get("typologyEvidenceDigest"), dict)
+                            else []
+                        ),
+                        "backgroundFunctions": (
+                            payload["typologyEvidenceDigest"]
+                            .get("background", {})
+                            .get("functions", [])
+                            if isinstance(payload.get("typologyEvidenceDigest"), dict)
+                            else []
+                        ),
+                        "ambiguityNotes": (
+                            payload["typologyEvidenceDigest"].get("ambiguityNotes", [])
+                            if isinstance(payload.get("typologyEvidenceDigest"), dict)
+                            else []
+                        ),
+                        "supportingRefs": (
+                            payload["typologyEvidenceDigest"].get("supportingRefs", [])
+                            if isinstance(payload.get("typologyEvidenceDigest"), dict)
+                            else []
+                        ),
+                    }
+                }
+                if payload.get("analyticLens") == "typology_function_dynamics"
+                else {}
+            ),
             "packetTitle": "Analysis packet",
             "sections": [
                 {

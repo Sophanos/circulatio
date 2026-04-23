@@ -1155,21 +1155,92 @@ def _derive_typology_method_state_summary(
     feedback_signal_count = sum(
         1 for item in lenses if item.get("status") in {"user_refined", "disconfirmed"}
     )
-    status: Literal["candidate_available", "signals_only"] = (
-        "candidate_available" if active_lens_ids else "signals_only"
-    )
     allowed_functions = {"thinking", "feeling", "sensation", "intuition"}
+    role_buckets = {
+        "foreground": {"dominant", "auxiliary"},
+        "compensation": {"inferior", "compensation_link"},
+        "background": {"tertiary"},
+    }
+
+    def bucket_functions(role_names: set[str]) -> list[PsychologicalFunction]:
+        return [
+            cast(PsychologicalFunction, item)
+            for item in _dedupe(
+                [
+                    str(lens.get("function") or "").strip()
+                    for lens in active_lenses
+                    if str(lens.get("role") or "").strip() in role_names
+                    and str(lens.get("function") or "").strip() in allowed_functions
+                ]
+            )[:4]
+        ]
+
     active_functions = [
         cast(PsychologicalFunction, item)
         for item in _dedupe(
             [
                 str(item.get("function") or "").strip()
                 for item in active_lenses
-                if item.get("function")
+                if str(item.get("function") or "").strip() in allowed_functions
             ]
         )[:4]
-        if item in allowed_functions
     ]
+    foreground_functions = bucket_functions(role_buckets["foreground"])
+    compensatory_functions = bucket_functions(role_buckets["compensation"])
+    background_functions = bucket_functions(role_buckets["background"])
+    evidence_ids = _dedupe(
+        [
+            str(evidence_id)
+            for lens in active_lenses
+            for evidence_id in lens.get("evidenceIds", [])
+            if str(evidence_id).strip()
+        ]
+    )
+    counterevidence_ids = _dedupe(
+        [
+            str(evidence_id)
+            for lens in lenses
+            for evidence_id in lens.get("counterevidenceIds", [])
+            if str(evidence_id).strip()
+        ]
+    )
+    evidenced_lens_count = sum(
+        1
+        for lens in active_lenses
+        if any(str(evidence_id).strip() for evidence_id in lens.get("evidenceIds", []))
+    )
+    if evidenced_lens_count > 0 and active_lens_ids:
+        status: Literal["insufficient_evidence", "signals_only", "candidate_available"] = (
+            "candidate_available"
+        )
+    elif active_lens_ids or feedback_signal_count > 0:
+        status = "signals_only"
+    else:
+        status = "insufficient_evidence"
+    ambiguity_notes: list[str] = []
+    for label, functions in (
+        ("foreground", foreground_functions),
+        ("compensatory", compensatory_functions),
+        ("background", background_functions),
+    ):
+        if len(functions) > 1:
+            ambiguity_notes.append(
+                f"Multiple {label} functions remain active in this window."
+            )
+    active_pairs = {
+        (str(lens.get("role") or "").strip(), str(lens.get("function") or "").strip())
+        for lens in active_lenses
+    }
+    if any(
+        lens.get("status") == "disconfirmed"
+        and (
+            str(lens.get("role") or "").strip(),
+            str(lens.get("function") or "").strip(),
+        )
+        in active_pairs
+        for lens in lenses
+    ):
+        ambiguity_notes.append("Active and disconfirmed typology signals are both present.")
     balancing_function = next(
         (
             cast(PsychologicalFunction, str(item.get("function") or "").strip())
@@ -1219,10 +1290,17 @@ def _derive_typology_method_state_summary(
         "activeLensIds": active_lens_ids,
         "feedbackSignalCount": feedback_signal_count,
         "activeFunctions": active_functions,
+        "foregroundFunctions": foreground_functions,
+        "compensatoryFunctions": compensatory_functions,
+        "backgroundFunctions": background_functions,
+        "supportingEvidenceIds": evidence_ids,
+        "counterevidenceIds": counterevidence_ids,
+        "ambiguityNotes": ambiguity_notes,
+        "evidencedLensCount": evidenced_lens_count,
         "promptBias": prompt_bias,
         "practiceBias": practice_bias,
         "caution": "Typology remains tentative and should stay evidence-backed.",
-        "confidence": "medium" if feedback_signal_count >= 2 else "low",
+        "confidence": "medium" if evidenced_lens_count > 0 or feedback_signal_count >= 2 else "low",
         "updatedAt": max(
             str(item.get("updatedAt") or item.get("createdAt") or now_iso()) for item in lenses
         ),
