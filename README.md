@@ -156,30 +156,6 @@ Expected:
 
 ---
 
-### Library / tests (optional)
-
-If you want to run the test suite or evaluate method quality locally:
-
-```bash
-cd "$CIRCULATIO_PATH"
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-python -m pytest tests/
-```
-
-**Already installed?**
-```bash
-pip install -e ".[dev]" --upgrade
-```
-
-**Evaluate method quality:**
-```bash
-.venv/bin/python scripts/evaluate_circulatio_method.py --strict
-```
-
----
-
 ### Troubleshooting
 
 | Symptom | Cause | Fix |
