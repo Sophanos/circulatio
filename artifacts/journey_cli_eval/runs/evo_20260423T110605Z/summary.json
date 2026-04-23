@@ -1,0 +1,86 @@
+{
+  "adapterSummaries": {
+    "fake": {
+      "blockingFailures": 0,
+      "failCount": 0,
+      "maxScore": 13,
+      "passCount": 1,
+      "score": 13,
+      "scorePercent": 1.0,
+      "skipped": false
+    }
+  },
+  "adapterVersions": {
+    "fake": "built-in"
+  },
+  "adaptersRequested": [
+    "fake"
+  ],
+  "adaptersRun": [
+    "fake"
+  ],
+  "adaptersSkipped": {},
+  "artifactHashes": {
+    "JOURNEY_FAMILIES.md": "bdb89ba55a43a736b89b333e0ee21026a54dfa3cbff9888a56c593260be4b263",
+    "SKILL.md": "ece81f330261a2f27346acb3ff3acb05ce3545461f325e52ae38bb47f7cbe24f",
+    "prompt_fragments.py": "ab7fdf0afa9848be4227e6bbd1d0c77ff72cb94585408fb773c120a3f49722d0",
+    "schemas.py": "c3af2a3cd10fbe2b543824750b79dd3eae0792a6e9a0235065de47fd09bd29e6"
+  },
+  "caseConsensus": {
+    "embodied_recurrence_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    }
+  },
+  "caseIds": [
+    "embodied_recurrence_001"
+  ],
+  "commandConfigHash": "d921308eeae82fa96b5a272d17e1deb4e1e80fcf2df76db4806b4afe60ff8201",
+  "createdAt": "2026-04-23T11:06:05.107923+00:00",
+  "datasets": [
+    "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl"
+  ],
+  "dryRun": false,
+  "gitSha": "047d38080db84b5efba937874e417b5a39dfd4af",
+  "missingRequiredAdapters": [],
+  "repoRoot": "/Users/mibook/circulatio",
+  "results": [
+    {
+      "adapter": "fake",
+      "case_id": "embodied_recurrence_001",
+      "dataset": "baseline.jsonl",
+      "findings": [],
+      "gate_type": "deterministic",
+      "max_score": 13,
+      "passed": true,
+      "result_kind": "journey_cli",
+      "score": 13,
+      "severity": "blocking",
+      "signals": {
+        "adapter": "fake",
+        "normalizationWarnings": [],
+        "parseStatus": "parsed",
+        "turnSignals": [
+          {
+            "findingsDelta": 0,
+            "selectedTools": [
+              "circulatio_store_body_state"
+            ],
+            "turnId": "t1"
+          }
+        ]
+      },
+      "split": "dev",
+      "trace_ids": [
+        "cfc51475-b9be-4c04-9a74-7d16c4f3cc06"
+      ]
+    }
+  ],
+  "runDir": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T110605Z",
+  "runId": "evo_20260423T110605Z",
+  "splitFilter": []
+}

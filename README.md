@@ -39,7 +39,7 @@ Expected:
 In Hermes, first store a dream:
 
 ```text
-Ich habe geträumt, ein schwarzer Hund stand reglos vor meiner Haustür.
+I dreamed a black dog stood motionless at my front door.
 ```
 
 Expected shape:
@@ -50,7 +50,7 @@ Expected shape:
 Then ask for interpretation:
 
 ```text
-Lass uns den Traum interpretieren.
+Let's interpret the dream.
 ```
 
 Expected shape:
@@ -60,9 +60,9 @@ Expected shape:
 Example reply shape:
 
 ```text
-Der Traum ist gespeichert, und ich möchte mit dir gemeinsam hineingehen.
+The dream is saved, and I want to go into it together with you.
 
-Welcher Moment oder welches Bild fühlt sich darin gerade am lebendigsten an?
+Which moment or image feels most alive to you right now?
 ```
 
 ---
