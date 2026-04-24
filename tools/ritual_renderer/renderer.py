@@ -24,6 +24,14 @@ RENDERER_VERSION = "ritual-renderer.v1"
 MANIFEST_SCHEMA_VERSION = "hermes_ritual_artifact.v1"
 
 
+def artifact_id_for_plan(plan: dict[str, object]) -> str:
+    stable_hash = str(plan.get("stableHash") or "").strip()
+    if not stable_hash:
+        encoded = json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode()
+        stable_hash = hashlib.sha256(encoded).hexdigest()
+    return f"ritual_artifact_{stable_hash[:16]}"
+
+
 def render_plan_file(
     *,
     plan_path: str | Path,
@@ -89,11 +97,7 @@ class RitualRenderer:
             raise ValueError("Plan voiceScript is required.")
 
     def _artifact_id(self, plan: dict[str, object]) -> str:
-        stable_hash = str(plan.get("stableHash") or "").strip()
-        if not stable_hash:
-            encoded = json.dumps(plan, sort_keys=True, ensure_ascii=False, default=str).encode()
-            stable_hash = hashlib.sha256(encoded).hexdigest()
-        return f"ritual_artifact_{stable_hash[:16]}"
+        return artifact_id_for_plan(plan)
 
     def _public_base(self, artifact_id: str) -> str:
         return str(self._options.get("publicBasePath") or f"/artifacts/{artifact_id}").rstrip("/")
@@ -659,4 +663,4 @@ class RitualRenderer:
         return f"{hours:02}:{minutes:02}:{seconds:02}.{millis:03}"
 
 
-__all__ = ["RitualRenderer", "render_plan_file"]
+__all__ = ["artifact_id_for_plan", "render_plan_file", "RitualRenderer"]

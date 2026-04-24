@@ -82,14 +82,19 @@ duplicate requests return the original response.
 - If the user asks for a personalized ritual, embodied ritual, weekly ritual,
   spoken reflection, breath plus symbolic container, meditation from their week,
   or cinema/audio ritual from Circulatio material, call `circulatio_plan_ritual`.
-  Use one planning call with `requestedSurfaces`; do not call one backend tool
-  per visual mode.
+  Use one planning call with object-shaped `requestedSurfaces` values like
+  `{ "breath": { "enabled": true } }`; do not call one backend tool per visual
+  mode.
 - If the user only asks to breathe or settle without symbolic context, still use
   `circulatio_plan_ritual` with `ritualIntent` set to `breath_container` or
   `meditation_container`; do not force interpretation.
-- For image, video, or external provider generation, require explicit user
-  wording and the matching render policy. Otherwise default to text, captions,
-  breath, and meditation.
+- For image, cinema, or external provider generation, require explicit user
+  wording and the matching render policy. Use `cinema`, not `video`, and do not
+  request music by default. Otherwise default to text, captions, breath, and
+  meditation.
+- The local plugin returns a concrete Hermes Rituals artifact URL after safe
+  mock/dry-run rendering. Use `openLocal` only when the user explicitly asks to
+  open it locally.
 - Scheduled ritual surfacing is a `ritual_invitation` rhythmic brief invitation.
   Actual ritual planning happens only after the user accepts the invitation;
   scheduled cron must not call `circulatio_plan_ritual` or render media.

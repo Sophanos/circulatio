@@ -529,12 +529,113 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                 },
             },
         },
-        "requestedSurfaces": {"type": "object"},
+        "requestedSurfaces": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "text": {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
+                "audio": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "voiceId": {"type": "string"},
+                        "tone": {
+                            "type": "string",
+                            "enum": ["neutral", "clear", "gentle", "holding", "steady"],
+                        },
+                        "pace": {"type": "string", "enum": ["normal", "measured", "slow"]},
+                    },
+                },
+                "captions": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "format": {"type": "string", "enum": ["webvtt", "segments"]},
+                    },
+                },
+                "breath": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "request": {
+                            "type": "object",
+                            "properties": {
+                                "pattern": {
+                                    "type": "string",
+                                    "enum": [
+                                        "steadying",
+                                        "lengthened_exhale",
+                                        "box_breath",
+                                        "orienting",
+                                    ],
+                                },
+                                "techniqueName": {"type": "string"},
+                                "cycles": {"type": "integer"},
+                                "maxDurationSeconds": {"type": "integer"},
+                            },
+                        },
+                    },
+                },
+                "meditation": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "request": {
+                            "type": "object",
+                            "properties": {
+                                "fieldType": {
+                                    "type": "string",
+                                    "enum": [
+                                        "coherence_convergence",
+                                        "attention_anchor",
+                                        "threshold_stillness",
+                                        "image_afterglow",
+                                    ],
+                                },
+                                "durationMs": {"type": "integer"},
+                                "instructionDensity": {
+                                    "type": "string",
+                                    "enum": ["none", "sparse", "phase_label"],
+                                },
+                            },
+                        },
+                    },
+                },
+                "image": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "styleIntent": {
+                            "type": "string",
+                            "enum": [
+                                "symbolic_non_literal",
+                                "abstract",
+                                "photographic",
+                                "user_provided",
+                            ],
+                        },
+                        "allowExternalGeneration": {"type": "boolean"},
+                    },
+                },
+                "cinema": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "allowExternalGeneration": {"type": "boolean"},
+                        "maxDurationSeconds": {"type": "integer"},
+                    },
+                },
+            },
+        },
         "renderPolicy": {"type": "object"},
         "completionPolicy": {"type": "object"},
         "privacyClass": {"type": "string"},
         "locale": {"type": "string"},
         "safetyContext": {"type": "object"},
+        "openLocal": {
+            "type": "boolean",
+            "description": "Open the local artifact URL after safe local rendering. Local host only.",
+        },
     },
 )
 

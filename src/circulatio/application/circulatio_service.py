@@ -65,6 +65,7 @@ from ..domain.presentation import (
     RitualIntent,
     RitualRenderPolicy,
 )
+from ..domain.presentation_surfaces import normalize_requested_ritual_surfaces
 from ..domain.proactive import ProactiveBriefRecord, ProactiveBriefType
 from ..domain.readiness import ConsentPreferenceRecord
 from ..domain.records import DeletionMode
@@ -4252,6 +4253,9 @@ class CirculatioService:
                 source_type="surface_result",
                 title="Alive today ritual",
             )
+        requested_surfaces, requested_surface_warnings = self._normalize_requested_ritual_surfaces(
+            input_data.get("requestedSurfaces")
+        )
         planning_input: PresentationRitualPlanningInput = {
             "userId": input_data["userId"],
             "generatedAt": now_iso(),
@@ -4262,9 +4266,7 @@ class CirculatioService:
             "sourceType": source_type,
             "sourceRefs": source_refs,
             "sourceDigest": source_digest,
-            "requestedSurfaces": self._normalize_requested_ritual_surfaces(
-                input_data.get("requestedSurfaces")
-            ),
+            "requestedSurfaces": requested_surfaces,
             "renderPolicy": self._normalize_ritual_render_policy(input_data.get("renderPolicy")),
             "completionPolicy": self._normalize_ritual_completion_policy(
                 input_data.get("completionPolicy")
@@ -4275,7 +4277,11 @@ class CirculatioService:
         if input_data.get("safetyContext") is not None:
             planning_input["safetyContext"] = deepcopy(input_data["safetyContext"])
         result = await self._core.plan_presentation_ritual(planning_input)
-        merged_warnings = list(dict.fromkeys([*source_ref_warnings, *result.get("warnings", [])]))
+        merged_warnings = list(
+            dict.fromkeys(
+                [*source_ref_warnings, *requested_surface_warnings, *result.get("warnings", [])]
+            )
+        )
         workflow = cast(PlanRitualWorkflowResult, deepcopy(result))
         workflow["warnings"] = merged_warnings
         workflow["continuity"] = continuity
@@ -4321,12 +4327,12 @@ class CirculatioService:
             raise ValidationError(f"Unsupported narrativeMode: {candidate}")
         return cast(NarrativeMode, candidate)
 
-    def _normalize_requested_ritual_surfaces(self, value: object | None) -> RequestedRitualSurfaces:
-        if value is None:
-            return {}
-        if not isinstance(value, dict):
+    def _normalize_requested_ritual_surfaces(
+        self, value: object | None
+    ) -> tuple[RequestedRitualSurfaces, list[str]]:
+        if value is not None and not isinstance(value, dict):
             raise ValidationError("requestedSurfaces must be an object.")
-        return cast(RequestedRitualSurfaces, deepcopy(value))
+        return normalize_requested_ritual_surfaces(value)
 
     def _normalize_ritual_render_policy(self, value: object | None) -> RitualRenderPolicy:
         if value is None:

@@ -185,6 +185,68 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_plan_ritual_normalizes_boolean_surface_aliases_without_writes(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            workflow = await service.plan_ritual(
+                {
+                    "userId": "user_1",
+                    "ritualIntent": "alive_today",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "requestedSurfaces": {
+                        "breath": True,
+                        "meditation": True,
+                        "captions": True,
+                        "music": True,
+                        "video": True,
+                    },
+                    "renderPolicy": {"videoAllowed": False},
+                }
+            )
+
+            plan = workflow["plan"]
+            self.assertEqual(plan["schemaVersion"], "circulatio.presentation.plan.v1")
+            self.assertTrue(plan["breath"]["enabled"])
+            self.assertTrue(plan["meditation"]["enabled"])
+            self.assertFalse(plan["visualPromptPlan"]["cinema"]["enabled"])
+            self.assertIn("captions", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn("breath", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn("meditation", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertNotIn("music", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn("requested_surface_boolean_normalized:breath", workflow["warnings"])
+            self.assertIn("requested_surface_boolean_normalized:meditation", workflow["warnings"])
+            self.assertIn("requested_surface_boolean_normalized:captions", workflow["warnings"])
+            self.assertIn("requested_surface_alias_normalized:video->cinema", workflow["warnings"])
+            self.assertIn("requested_surface_boolean_normalized:cinema", workflow["warnings"])
+            self.assertIn("requested_surface_unsupported_omitted:music", workflow["warnings"])
+            self.assertIn("cinema_disabled_without_video_allowed", workflow["warnings"])
+            self.assertEqual(len(llm.alive_today_calls), 1)
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+
+        asyncio.run(run())
+
+    def test_plan_ritual_invalid_nested_request_shape_is_warning_only(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            workflow = await service.plan_ritual(
+                {
+                    "userId": "user_1",
+                    "ritualIntent": "alive_today",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "requestedSurfaces": {"breath": {"enabled": True, "request": "box"}},
+                }
+            )
+
+            self.assertEqual(workflow["plan"]["breath"]["pattern"], "lengthened_exhale")
+            self.assertIn(
+                "requested_surface_invalid_request_omitted:breath.request",
+                workflow["warnings"],
+            )
+
+        asyncio.run(run())
+
     def test_record_ritual_completion_is_idempotent_and_literal_only(self) -> None:
         async def run() -> None:
             repository, service, llm = self._service()

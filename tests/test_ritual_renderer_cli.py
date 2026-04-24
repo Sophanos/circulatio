@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tools.ritual_renderer.renderer import artifact_id_for_plan
+
 
 class RitualRendererCliTests(unittest.TestCase):
     def test_render_ritual_artifact_dry_run_writes_manifest_and_captions(self) -> None:
@@ -28,6 +30,8 @@ class RitualRendererCliTests(unittest.TestCase):
                     str(out_dir),
                     "--mock-providers",
                     "--dry-run",
+                    "--public-base",
+                    "/artifacts/ritual_artifact_abcdef1234567890",
                 ],
                 cwd=root,
                 check=True,
@@ -49,7 +53,17 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertTrue(manifest["surfaces"]["meditation"]["enabled"])
             self.assertTrue(manifest["surfaces"]["captions"]["segments"])
             self.assertEqual(manifest["render"]["providers"], ["mock"])
+            self.assertEqual(
+                manifest["surfaces"]["captions"]["tracks"][0]["src"],
+                "/artifacts/ritual_artifact_abcdef1234567890/captions.vtt",
+            )
             self.assertIn("WEBVTT", captions_path.read_text(encoding="utf-8"))
+
+    def test_artifact_id_for_plan_uses_stable_hash_prefix(self) -> None:
+        self.assertEqual(
+            artifact_id_for_plan(self._fixture_plan()),
+            "ritual_artifact_abcdef1234567890",
+        )
 
     def test_chutes_speech_profile_without_token_writes_warning_manifest(self) -> None:
         root = Path(__file__).resolve().parents[1]

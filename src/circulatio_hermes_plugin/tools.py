@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 
-from circulatio.hermes.agent_bridge_contracts import BridgeOperation
+from circulatio.domain.presentation_surfaces import normalize_requested_ritual_surfaces
+from circulatio.hermes.agent_bridge_contracts import BridgeOperation, BridgeResponseEnvelope
 
 from .commands import _boot_failure_response, build_tool_request
+from .ritual_handoff import HermesRitualArtifactHandoff
 from .runtime import get_runtime
 
 _TOOL_METADATA_KEYS = {
@@ -39,13 +41,13 @@ def _tool_payload(
     return payload
 
 
-async def _dispatch_tool(
+async def _dispatch_tool_envelope(
     *,
     operation: BridgeOperation,
     tool_name: str,
     arguments: dict[str, object] | None,
     kwargs: dict[str, object],
-) -> str:
+) -> BridgeResponseEnvelope:
     payload = _tool_payload(arguments, kwargs)
     request = build_tool_request(
         operation=operation,
@@ -54,9 +56,24 @@ async def _dispatch_tool(
         kwargs=kwargs,
     )
     try:
-        response = await get_runtime(request["source"].get("profile")).bridge.dispatch(request)
+        return await get_runtime(request["source"].get("profile")).bridge.dispatch(request)
     except Exception as exc:
-        response = _boot_failure_response(request=request, exc=exc)
+        return _boot_failure_response(request=request, exc=exc)
+
+
+async def _dispatch_tool(
+    *,
+    operation: BridgeOperation,
+    tool_name: str,
+    arguments: dict[str, object] | None,
+    kwargs: dict[str, object],
+) -> str:
+    response = await _dispatch_tool_envelope(
+        operation=operation,
+        tool_name=tool_name,
+        arguments=arguments,
+        kwargs=kwargs,
+    )
     return json.dumps(response, sort_keys=True, ensure_ascii=False)
 
 
@@ -390,12 +407,53 @@ async def analysis_packet_tool(arguments: dict[str, object] | None = None, **kwa
 
 
 async def plan_ritual_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
-    return await _dispatch_tool(
+    payload = _tool_payload(arguments, kwargs)
+    open_local = bool(payload.pop("openLocal", False))
+    surface_warnings: list[str] = []
+    if "requestedSurfaces" in payload:
+        requested_surfaces, surface_warnings = normalize_requested_ritual_surfaces(
+            payload.get("requestedSurfaces")
+        )
+        payload["requestedSurfaces"] = requested_surfaces
+    response = await _dispatch_tool_envelope(
         operation="circulatio.presentation.plan_ritual",
         tool_name="circulatio_plan_ritual",
-        arguments=arguments,
+        arguments=payload,
         kwargs=kwargs,
     )
+    _merge_response_warnings(response, surface_warnings)
+    handoff = HermesRitualArtifactHandoff().render_from_bridge_response(
+        response,
+        open_local=open_local,
+    )
+    _merge_response_warnings(response, handoff.get("warnings", []))
+    if handoff.get("status") == "ok":
+        result = response.setdefault("result", {})
+        if isinstance(result, dict):
+            result["artifactUrl"] = handoff["artifactUrl"]
+            result["artifact"] = handoff["artifact"]
+        response["message"] = (
+            "Prepared and rendered a local Hermes Rituals artifact: "
+            f"{handoff['artifactUrl']}"
+        )
+    elif handoff.get("status") == "render_failed":
+        result = response.setdefault("result", {})
+        if isinstance(result, dict):
+            result["artifact"] = handoff.get("artifact", {"status": "render_failed"})
+        response["status"] = "retryable_error" if handoff.get("retryable") else "error"
+        response["message"] = "Prepared a ritual plan, but local artifact rendering failed."
+    return json.dumps(response, sort_keys=True, ensure_ascii=False)
+
+
+def _merge_response_warnings(response: BridgeResponseEnvelope, warnings: object) -> None:
+    if not isinstance(warnings, list) or not warnings:
+        return
+    result = response.setdefault("result", {})
+    if not isinstance(result, dict):
+        return
+    existing = result.get("warnings", [])
+    merged = [*(existing if isinstance(existing, list) else []), *warnings]
+    result["warnings"] = list(dict.fromkeys(str(item) for item in merged if str(item)))
 
 
 async def record_ritual_completion_tool(

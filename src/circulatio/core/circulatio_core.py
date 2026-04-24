@@ -21,6 +21,7 @@ from ..domain.presentation import (
     RitualRenderPolicy,
     VoiceScriptSegment,
 )
+from ..domain.presentation_surfaces import normalize_requested_ritual_surfaces
 from ..domain.types import (
     AnalysisPacketInput,
     AnalysisPacketResult,
@@ -589,14 +590,16 @@ class CirculatioCore:
         self,
         input_data: PresentationRitualPlanningInput,
     ) -> PresentationRitualPlanResult:
-        requested = self._presentation_requested_surfaces(input_data.get("requestedSurfaces", {}))
+        requested, surface_warnings = self._presentation_requested_surfaces(
+            input_data.get("requestedSurfaces", {})
+        )
         render_policy = self._presentation_render_policy(input_data.get("renderPolicy", {}))
         safety_context = input_data.get("safetyContext", {})
         activation = str(safety_context.get("userReportedActivation") or "").strip()
         grounding_only = activation in {"high", "overwhelming"} or bool(
             safety_context.get("intoxicationReported")
         )
-        warnings: list[str] = []
+        warnings: list[str] = list(surface_warnings)
         blocked_surfaces: list[str] = []
         if grounding_only:
             warnings.append("presentation_grounding_only_safety_adjustment")
@@ -778,16 +781,19 @@ class CirculatioCore:
     def _presentation_requested_surfaces(
         self,
         requested: RequestedRitualSurfaces,
-    ) -> RequestedRitualSurfaces:
-        normalized = dict(requested)
-        normalized["text"] = {"enabled": True}
+    ) -> tuple[RequestedRitualSurfaces, list[str]]:
+        normalized, warnings = normalize_requested_ritual_surfaces(requested)
+        normalized = dict(normalized)
+        text_config = dict(normalized.get("text", {}))
+        text_config["enabled"] = True
+        normalized["text"] = text_config
         normalized.setdefault("captions", {"enabled": True, "format": "segments"})
         normalized.setdefault("breath", {"enabled": True, "request": {}})
         normalized.setdefault("meditation", {"enabled": True, "request": {}})
         normalized.setdefault("audio", {"enabled": False})
         normalized.setdefault("image", {"enabled": False})
         normalized.setdefault("cinema", {"enabled": False, "maxDurationSeconds": 30})
-        return cast(RequestedRitualSurfaces, normalized)
+        return cast(RequestedRitualSurfaces, normalized), warnings
 
     def _presentation_render_policy(self, policy: RitualRenderPolicy) -> RitualRenderPolicy:
         normalized = dict(policy)

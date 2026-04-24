@@ -6,7 +6,9 @@ import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from typing import get_args
+from unittest import mock
 
 sys.path.insert(0, os.path.abspath("src"))
 
@@ -201,6 +203,27 @@ class HermesBridgePluginTests(unittest.TestCase):
                 return line[len(prefix) :].strip()
         self.fail(f"Missing rendered line starting with {prefix!r}")
 
+    def _ritual_handoff_env(
+        self,
+        temp: Path,
+        *,
+        mode: str = "render_static",
+        renderer_script: Path | None = None,
+        base_url: str = "http://localhost:3000",
+    ) -> dict[str, str]:
+        root = Path(__file__).resolve().parents[1]
+        return {
+            "CIRCULATIO_REPO_ROOT": str(root),
+            "CIRCULATIO_RITUAL_ARTIFACT_ROOT": str(temp / "public" / "artifacts"),
+            "CIRCULATIO_RITUAL_PLAN_ROOT": str(temp / "artifacts" / "rituals" / "plans"),
+            "CIRCULATIO_RENDERER_SCRIPT": str(
+                renderer_script or root / "scripts" / "render_ritual_artifact.py"
+            ),
+            "CIRCULATIO_RITUALS_BASE_URL": base_url,
+            "CIRCULATIO_RITUAL_HANDOFF_MODE": mode,
+            "CIRCULATIO_RITUAL_OPEN": "0",
+        }
+
     def test_tool_dispatch_accepts_payload_fields_as_kwargs(self) -> None:
         async def run() -> None:
             self._install_in_memory_runtime()
@@ -217,36 +240,171 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_plan_ritual_tool_dispatches_to_presentation_operation(self) -> None:
+    def test_plan_ritual_tool_renders_local_artifact_and_returns_url(self) -> None:
         async def run() -> None:
             self._install_in_memory_runtime()
-            response = json.loads(
-                await plan_ritual_tool(
-                    {
-                        "ritualIntent": "weekly_integration",
-                        "narrativeMode": "hybrid",
-                        "windowStart": "2026-04-12T00:00:00Z",
-                        "windowEnd": "2026-04-19T23:59:59Z",
-                        "requestedSurfaces": {
-                            "breath": {"enabled": True},
-                            "meditation": {"enabled": True},
-                            "captions": {"enabled": True},
-                            "cinema": {"enabled": False},
-                        },
-                    },
-                    **self._tool_kwargs(call_id="tool_plan_ritual"),
+            with tempfile.TemporaryDirectory() as tempdir:
+                temp = Path(tempdir)
+                with mock.patch.dict(os.environ, self._ritual_handoff_env(temp), clear=False):
+                    response = json.loads(
+                        await plan_ritual_tool(
+                            {
+                                "ritualIntent": "weekly_integration",
+                                "narrativeMode": "hybrid",
+                                "windowStart": "2026-04-12T00:00:00Z",
+                                "windowEnd": "2026-04-19T23:59:59Z",
+                                "requestedSurfaces": {
+                                    "breath": {"enabled": True},
+                                    "meditation": {"enabled": True},
+                                    "captions": {"enabled": True},
+                                    "cinema": {"enabled": False},
+                                },
+                            },
+                            **self._tool_kwargs(call_id="tool_plan_ritual"),
+                        )
+                    )
+                artifact = response["result"]["artifact"]
+                artifact_root = temp / "public" / "artifacts"
+                plan_root = temp / "artifacts" / "rituals" / "plans"
+                manifest_path = artifact_root / artifact["artifactId"] / "manifest.json"
+                captions_path = artifact_root / artifact["artifactId"] / "captions.vtt"
+                plan_path = plan_root / f"{response['result']['planId']}.json"
+
+                self.assertEqual(response["status"], "ok")
+                self.assertTrue(
+                    response["result"]["artifactUrl"].startswith(
+                        "http://localhost:3000/artifacts/"
+                    )
                 )
-            )
-            self.assertEqual(response["status"], "ok")
-            self.assertEqual(
-                response["result"]["plan"]["schemaVersion"],
-                "circulatio.presentation.plan.v1",
-            )
-            self.assertEqual(
-                response["result"]["renderRequest"]["rendererVersion"],
-                "ritual-renderer.v1",
-            )
-            self.assertIn("captions", response["result"]["renderRequest"]["allowedSurfaces"])
+                self.assertTrue(artifact["artifactId"].startswith("ritual_artifact_"))
+                self.assertTrue(manifest_path.exists())
+                self.assertTrue(captions_path.exists())
+                self.assertTrue(plan_path.exists())
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                self.assertEqual(manifest["schemaVersion"], "hermes_ritual_artifact.v1")
+                self.assertEqual(manifest["planId"], response["result"]["planId"])
+                self.assertIn("captions", response["result"]["renderRequest"]["allowedSurfaces"])
+
+        asyncio.run(run())
+
+    def test_plan_ritual_tool_normalizes_malformed_surfaces_before_handoff(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            with tempfile.TemporaryDirectory() as tempdir:
+                temp = Path(tempdir)
+                with mock.patch.dict(os.environ, self._ritual_handoff_env(temp), clear=False):
+                    response = json.loads(
+                        await plan_ritual_tool(
+                            {
+                                "ritualIntent": "weekly_integration",
+                                "narrativeMode": "hybrid",
+                                "windowStart": "2026-04-12T00:00:00Z",
+                                "windowEnd": "2026-04-19T23:59:59Z",
+                                "requestedSurfaces": {
+                                    "breath": True,
+                                    "meditation": True,
+                                    "captions": True,
+                                    "music": True,
+                                    "video": True,
+                                },
+                            },
+                            **self._tool_kwargs(call_id="tool_plan_ritual_malformed"),
+                        )
+                    )
+                warnings = response["result"]["warnings"]
+                self.assertEqual(response["status"], "ok")
+                self.assertIn("artifactUrl", response["result"])
+                self.assertIn("requested_surface_boolean_normalized:breath", warnings)
+                self.assertIn("requested_surface_alias_normalized:video->cinema", warnings)
+                self.assertIn("requested_surface_unsupported_omitted:music", warnings)
+
+        asyncio.run(run())
+
+    def test_plan_ritual_tool_plan_only_mode_preserves_plan_without_manifest(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            with tempfile.TemporaryDirectory() as tempdir:
+                temp = Path(tempdir)
+                env = self._ritual_handoff_env(temp, mode="plan_only")
+                with mock.patch.dict(os.environ, env, clear=False):
+                    response = json.loads(
+                        await plan_ritual_tool(
+                            {"ritualIntent": "weekly_integration"},
+                            **self._tool_kwargs(call_id="tool_plan_ritual_plan_only"),
+                        )
+                    )
+                self.assertEqual(response["status"], "ok")
+                self.assertIn("plan", response["result"])
+                self.assertNotIn("artifactUrl", response["result"])
+                self.assertFalse((temp / "public" / "artifacts").exists())
+
+        asyncio.run(run())
+
+    def test_plan_ritual_tool_surfaces_renderer_failure_with_plan(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            with tempfile.TemporaryDirectory() as tempdir:
+                temp = Path(tempdir)
+                env = self._ritual_handoff_env(
+                    temp,
+                    renderer_script=temp / "missing_renderer.py",
+                )
+                with mock.patch.dict(os.environ, env, clear=False):
+                    response = json.loads(
+                        await plan_ritual_tool(
+                            {"ritualIntent": "weekly_integration"},
+                            **self._tool_kwargs(call_id="tool_plan_ritual_render_failure"),
+                        )
+                    )
+                self.assertEqual(response["status"], "retryable_error")
+                self.assertIn("plan", response["result"])
+                self.assertNotIn("artifactUrl", response["result"])
+                self.assertEqual(response["result"]["artifact"]["status"], "render_failed")
+                self.assertIn("ritual_handoff_render_failed", response["result"]["warnings"])
+
+        asyncio.run(run())
+
+    def test_plan_ritual_tool_open_local_is_opt_in(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            with tempfile.TemporaryDirectory() as tempdir:
+                temp = Path(tempdir)
+                with mock.patch.dict(os.environ, self._ritual_handoff_env(temp), clear=False):
+                    with mock.patch("circulatio_hermes_plugin.ritual_handoff.webbrowser.open") as opener:
+                        response = json.loads(
+                            await plan_ritual_tool(
+                                {"ritualIntent": "weekly_integration"},
+                                **self._tool_kwargs(call_id="tool_plan_ritual_no_open"),
+                            )
+                        )
+                        opener.assert_not_called()
+                        self.assertFalse(response["result"]["artifact"]["opened"])
+
+                    with mock.patch(
+                        "circulatio_hermes_plugin.ritual_handoff.webbrowser.open",
+                        return_value=True,
+                    ) as opener:
+                        response = json.loads(
+                            await plan_ritual_tool(
+                                {"ritualIntent": "weekly_integration", "openLocal": True},
+                                **self._tool_kwargs(call_id="tool_plan_ritual_open"),
+                            )
+                        )
+                        opener.assert_called_once()
+                        self.assertTrue(response["result"]["artifact"]["opened"])
+
+                    with mock.patch(
+                        "circulatio_hermes_plugin.ritual_handoff.webbrowser.open",
+                        side_effect=RuntimeError("no browser"),
+                    ):
+                        response = json.loads(
+                            await plan_ritual_tool(
+                                {"ritualIntent": "weekly_integration", "openLocal": True},
+                                **self._tool_kwargs(call_id="tool_plan_ritual_open_failure"),
+                            )
+                        )
+                        self.assertEqual(response["status"], "ok")
+                        self.assertIn("ritual_handoff_open_failed", response["result"]["warnings"])
 
         asyncio.run(run())
 

@@ -109,13 +109,19 @@ Current backend implication:
 ## Phase 1 Local Artifact Flow
 
 ```text
-Hermes host/tool call
+Hermes chat/tool call
+-> circulatio_plan_ritual
+-> plugin normalizes requestedSurfaces
 -> circulatio.presentation.plan_ritual
 -> PresentationRitualPlan JSON
--> scripts/render_ritual_artifact.py --mock-providers --dry-run
--> hermes_ritual_artifact.v1 manifest.json
--> Hermes Rituals frontend /artifacts/{artifactId}
+-> plugin persists artifacts/rituals/plans/{planId}.json
+-> plugin invokes scripts/render_ritual_artifact.py --mock-providers --dry-run --public-base /artifacts/{artifactId}
+-> apps/hermes-rituals-web/public/artifacts/{artifactId}/manifest.json
+-> plugin returns http://localhost:3000/artifacts/{artifactId}
+-> optional local browser open
 ```
+
+This is a local host handoff, not Circulatio core persistence and not provider-backed rendering. The plugin writes local handoff files and static artifacts for development; Circulatio core still only compiles the typed plan.
 
 Phase 1 enabled surfaces are text, `voiceScript`-as-plan, captions, breath, and meditation. Audio is mock/placeholder by default. Chutes provider-backed speech, captions, image, music, and video are available only when the renderer is called with:
 - an explicit `--provider-profile chutes_*`
@@ -130,11 +136,10 @@ Circulatio still emits plans only. It does not call Chutes, does not store media
 
 Before Phase 2 starts, stabilize these leftovers:
 
-1. Manual Hermes "save plan, run renderer, return URL" must become a real product path.
-2. Completion UI and routes must not imply Circulatio sync until Phase 3 lands.
-3. Fallback captions must remain first-class artifact output.
-4. Music and video must remain behind stricter product gates.
-5. Planned/deferred statuses in this document and linked docs must stay current.
+1. Completion UI and routes must not imply Circulatio sync until Phase 3 lands.
+2. Fallback captions must remain first-class artifact output.
+3. Music and video must remain behind stricter product gates.
+4. Planned/deferred statuses in this document and linked docs must stay current.
 
 ---
 
