@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from typing import cast
 
@@ -10,6 +12,14 @@ from ..domain.normalization import (
     normalize_options,
     normalize_session_context,
     validate_material_input,
+)
+from ..domain.presentation import (
+    PresentationRitualPlanningInput,
+    PresentationRitualPlanResult,
+    PresentationSourceRef,
+    RequestedRitualSurfaces,
+    RitualRenderPolicy,
+    VoiceScriptSegment,
 )
 from ..domain.types import (
     AnalysisPacketInput,
@@ -574,6 +584,434 @@ class CirculatioCore:
             "practiceSuggestion": practice,
             "userFacingResponse": response,
         }
+
+    async def plan_presentation_ritual(
+        self,
+        input_data: PresentationRitualPlanningInput,
+    ) -> PresentationRitualPlanResult:
+        requested = self._presentation_requested_surfaces(input_data.get("requestedSurfaces", {}))
+        render_policy = self._presentation_render_policy(input_data.get("renderPolicy", {}))
+        safety_context = input_data.get("safetyContext", {})
+        activation = str(safety_context.get("userReportedActivation") or "").strip()
+        grounding_only = activation in {"high", "overwhelming"} or bool(
+            safety_context.get("intoxicationReported")
+        )
+        warnings: list[str] = []
+        blocked_surfaces: list[str] = []
+        if grounding_only:
+            warnings.append("presentation_grounding_only_safety_adjustment")
+            blocked_surfaces.extend(["cinema", "intense_breath_holds"])
+        video_allowed = bool(render_policy.get("videoAllowed", False))
+        external_allowed = bool(render_policy.get("externalProvidersAllowed", False))
+        if requested.get("cinema", {}).get("enabled") and not video_allowed:
+            requested["cinema"] = {**requested.get("cinema", {}), "enabled": False}
+            blocked_surfaces.append("cinema")
+            warnings.append("cinema_disabled_without_video_allowed")
+        if grounding_only and requested.get("cinema", {}).get("enabled"):
+            requested["cinema"] = {**requested.get("cinema", {}), "enabled": False}
+        image_requested = bool(requested.get("image", {}).get("enabled"))
+        if image_requested and not external_allowed:
+            requested["image"] = {**requested.get("image", {}), "enabled": False}
+            blocked_surfaces.append("image")
+            warnings.append("image_disabled_without_external_providers")
+        duration = self._presentation_duration(render_policy)
+        source_digest = input_data["sourceDigest"]
+        source_refs = input_data.get("sourceRefs", [])
+        source_ref_ids = self._presentation_source_ref_ids(source_refs)
+        title = str(source_digest.get("title") or "Weekly ritual").strip() or "Weekly ritual"
+        summary = str(source_digest.get("summary") or "").strip()
+        if not summary:
+            summary = "A short ritual from the material already available in Circulatio."
+        active_themes = [
+            str(item)
+            for item in source_digest.get("activeThemes", [])
+            if str(item).strip()
+        ]
+        recurring_symbols = [
+            str(item) for item in source_digest.get("recurringSymbols", []) if str(item).strip()
+        ]
+        segments = self._presentation_voice_segments(
+            summary=summary,
+            active_themes=active_themes,
+            recurring_symbols=recurring_symbols,
+            source_ref_ids=source_ref_ids,
+            requested=requested,
+            grounding_only=grounding_only,
+        )
+        body = "\n\n".join(segment["text"] for segment in segments if segment.get("text"))
+        plan_id = create_id("ritual_plan")
+        breath = self._presentation_breath_spec(requested, grounding_only=grounding_only)
+        meditation = self._presentation_meditation_spec(
+            requested,
+            source_ref_ids=source_ref_ids,
+            target_seconds=duration["targetSeconds"],
+            grounding_only=grounding_only,
+        )
+        image_plan = self._presentation_image_plan(
+            requested=requested,
+            external_allowed=external_allowed,
+            source_digest=source_digest,
+            source_ref_ids=source_ref_ids,
+        )
+        cinema_plan = {
+            "enabled": bool(requested.get("cinema", {}).get("enabled")),
+            "storyboard": [],
+            "maxDurationSeconds": min(
+                int(requested.get("cinema", {}).get("maxDurationSeconds", 30) or 30), 30
+            ),
+        }
+        render_mode = cast(str, render_policy.get("mode", "dry_run_manifest"))
+        frontend_route = "/artifacts/{artifactId}"
+        evidence_ids = [str(item) for item in source_digest.get("evidenceIds", []) if str(item)]
+        context_snapshot_ids = [
+            str(item) for item in source_digest.get("contextSnapshotIds", []) if str(item)
+        ]
+        thread_keys = [str(item) for item in source_digest.get("threadKeys", []) if str(item)]
+        provider_restrictions = ["no_raw_material_to_external_provider"]
+        if not external_allowed:
+            provider_restrictions.append("external_providers_disabled")
+        plan = {
+            "id": plan_id,
+            "schemaVersion": "circulatio.presentation.plan.v1",
+            "userId": input_data["userId"],
+            "title": title,
+            "ritualIntent": input_data["ritualIntent"],
+            "narrativeMode": input_data["narrativeMode"],
+            "sourceType": input_data["sourceType"],
+            "sourceRefs": source_refs,
+            "generatedAt": input_data["generatedAt"],
+            "windowStart": input_data["windowStart"],
+            "windowEnd": input_data["windowEnd"],
+            "privacyClass": input_data.get("privacyClass", "private"),
+            "locale": input_data.get("locale", "en-US"),
+            "duration": duration,
+            "text": {
+                "summary": self._presentation_compact_text(summary, limit=220),
+                "body": body,
+            },
+            "voiceScript": {
+                "segments": segments,
+                "silenceMarkers": [
+                    {
+                        "afterSegmentId": "seg_breath",
+                        "durationMs": 8000,
+                        "purpose": "settling",
+                    }
+                ],
+                "contraindications": ["high_activation"] if grounding_only else [],
+            },
+            "speechMarkupPlan": {
+                "format": "structured_intent",
+                "ssmlAllowed": False,
+                "pausePolicy": "renderer_may_render_pauses",
+            },
+            "breath": breath,
+            "meditation": meditation,
+            "visualPromptPlan": {"image": image_plan, "cinema": cinema_plan},
+            "interactionSpec": {
+                "finishPrompt": str(
+                    input_data.get("completionPolicy", {}).get(
+                        "reflectionPrompt",
+                        "What did you notice in your body or attention after this?",
+                    )
+                ),
+                "captureReactionTime": False,
+                "captureBodyResponse": True,
+                "maxPrompts": 1,
+            },
+            "deliveryPolicy": {
+                "renderMode": render_mode,
+                "frontendRoute": frontend_route,
+                **(
+                    {"expiresAt": render_policy["delivery"]["expiresAt"]}
+                    if isinstance(render_policy.get("delivery"), dict)
+                    and render_policy["delivery"].get("expiresAt")
+                    else {}
+                ),
+            },
+            "safetyBoundary": {
+                "depthWorkAllowed": not grounding_only,
+                "blockedSurfaces": list(dict.fromkeys(blocked_surfaces)),
+                "groundingInstruction": (
+                    "Stop if this increases activation; orient to the room."
+                ),
+                "providerRestrictions": provider_restrictions,
+            },
+            "provenance": {
+                "evidenceIds": evidence_ids,
+                "contextSnapshotIds": context_snapshot_ids,
+                "threadKeys": thread_keys,
+                "generatedFromSurface": input_data["sourceType"],
+            },
+        }
+        stable_hash = self._presentation_stable_hash(plan)
+        plan["stableHash"] = stable_hash
+        allowed_surfaces = ["text"]
+        for surface in ("captions", "breath", "meditation", "audio", "image", "cinema"):
+            if requested.get(surface, {}).get("enabled"):
+                allowed_surfaces.append(surface)
+        cost_estimate = {
+            "currency": "USD",
+            "totalEstimated": 0.0,
+            "components": [
+                {
+                    "surface": surface,
+                    "providerKind": "mock",
+                    "estimated": 0.0,
+                    "cacheKey": f"{stable_hash}:{surface}:mock",
+                }
+                for surface in allowed_surfaces
+                if surface != "text"
+            ],
+            "budgetExceeded": False,
+        }
+        render_request = {
+            "planId": plan_id,
+            "rendererVersion": "ritual-renderer.v1",
+            "allowedSurfaces": allowed_surfaces,
+            "artifactCacheKey": stable_hash,
+            "dryRunAvailable": True,
+        }
+        return {
+            "plan": plan,
+            "costEstimate": cost_estimate,
+            "renderRequest": render_request,
+            "warnings": warnings,
+        }
+
+    def _presentation_requested_surfaces(
+        self,
+        requested: RequestedRitualSurfaces,
+    ) -> RequestedRitualSurfaces:
+        normalized = dict(requested)
+        normalized["text"] = {"enabled": True}
+        normalized.setdefault("captions", {"enabled": True, "format": "segments"})
+        normalized.setdefault("breath", {"enabled": True, "request": {}})
+        normalized.setdefault("meditation", {"enabled": True, "request": {}})
+        normalized.setdefault("audio", {"enabled": False})
+        normalized.setdefault("image", {"enabled": False})
+        normalized.setdefault("cinema", {"enabled": False, "maxDurationSeconds": 30})
+        return cast(RequestedRitualSurfaces, normalized)
+
+    def _presentation_render_policy(self, policy: RitualRenderPolicy) -> RitualRenderPolicy:
+        normalized = dict(policy)
+        normalized.setdefault("mode", "dry_run_manifest")
+        normalized.setdefault("defaultDurationSeconds", 300)
+        normalized.setdefault("maxDurationSeconds", 480)
+        normalized.setdefault("externalProvidersAllowed", False)
+        normalized.setdefault("providerAllowlist", ["mock", "local"])
+        normalized.setdefault("videoAllowed", False)
+        normalized.setdefault("maxCost", {"currency": "USD", "amount": 0})
+        normalized.setdefault(
+            "cachePolicy", {"read": True, "write": True, "cacheScope": "local_dev"}
+        )
+        normalized.setdefault(
+            "sourceDataPolicy",
+            {
+                "allowRawMaterialTextInPlan": False,
+                "allowRawMaterialTextToProviders": False,
+                "providerPromptPolicy": "derived_user_facing_only",
+            },
+        )
+        return cast(RitualRenderPolicy, normalized)
+
+    def _presentation_duration(self, render_policy: RitualRenderPolicy) -> dict[str, int]:
+        default_seconds = int(render_policy.get("defaultDurationSeconds", 300) or 300)
+        max_seconds = int(render_policy.get("maxDurationSeconds", 480) or 480)
+        target_seconds = min(max(default_seconds, 60), max(max_seconds, 60))
+        return {
+            "targetSeconds": target_seconds,
+            "minSeconds": min(180, target_seconds),
+            "maxSeconds": max(max_seconds, target_seconds),
+        }
+
+    def _presentation_voice_segments(
+        self,
+        *,
+        summary: str,
+        active_themes: list[str],
+        recurring_symbols: list[str],
+        source_ref_ids: list[str],
+        requested: RequestedRitualSurfaces,
+        grounding_only: bool,
+    ) -> list[VoiceScriptSegment]:
+        tone = "steady"
+        pace = "measured"
+        segments: list[VoiceScriptSegment] = [
+            {
+                "id": "seg_opening",
+                "role": "opening",
+                "text": "Let this arrive as material already held, not as a task to solve.",
+                "pace": pace,
+                "tone": tone,
+                "pauseAfterMs": 1200,
+                "sourceRefIds": source_ref_ids,
+            }
+        ]
+        if requested.get("breath", {}).get("enabled"):
+            breath_text = (
+                "Keep the breath natural and orient to the room."
+                if grounding_only
+                else "Take a few measured breaths, letting the exhale be slightly longer."
+            )
+            segments.append(
+                {
+                    "id": "seg_breath",
+                    "role": "breath_instruction",
+                    "text": breath_text,
+                    "pace": pace,
+                    "tone": tone,
+                    "pauseAfterMs": 1600,
+                    "sourceRefIds": [],
+                    **({"safetyNote": "grounding_only"} if grounding_only else {}),
+                }
+            )
+        source_lines = [summary]
+        if active_themes:
+            source_lines.append("Active themes: " + ", ".join(active_themes[:4]) + ".")
+        if recurring_symbols:
+            source_lines.append("Recurring images: " + ", ".join(recurring_symbols[:4]) + ".")
+        segments.append(
+            {
+                "id": "seg_source",
+                "role": "source_reflection",
+                "text": self._presentation_compact_text(" ".join(source_lines), limit=620),
+                "pace": pace,
+                "tone": tone,
+                "pauseAfterMs": 1800,
+                "sourceRefIds": source_ref_ids,
+            }
+        )
+        if requested.get("meditation", {}).get("enabled"):
+            segments.append(
+                {
+                    "id": "seg_meditation",
+                    "role": "meditation_instruction",
+                    "text": (
+                        "Let the field settle around what is already known. "
+                        "Nothing else has to be produced."
+                    ),
+                    "pace": pace,
+                    "tone": tone,
+                    "pauseAfterMs": 2200,
+                    "sourceRefIds": source_ref_ids,
+                }
+            )
+        segments.append(
+            {
+                "id": "seg_closing",
+                "role": "closing",
+                "text": "When you are ready, notice one body response and leave the rest unforced.",
+                "pace": pace,
+                "tone": tone,
+                "pauseAfterMs": 1000,
+                "sourceRefIds": source_ref_ids,
+            }
+        )
+        return segments
+
+    def _presentation_breath_spec(
+        self,
+        requested: RequestedRitualSurfaces,
+        *,
+        grounding_only: bool,
+    ) -> dict[str, object]:
+        breath = requested.get("breath", {})
+        request = breath.get("request", {}) if isinstance(breath.get("request"), dict) else {}
+        pattern = str(request.get("pattern") or "lengthened_exhale")
+        if grounding_only:
+            pattern = "orienting"
+        if pattern == "box_breath" and not grounding_only:
+            inhale, hold, exhale, rest = 4, 4, 4, 0
+        elif pattern == "steadying" and not grounding_only:
+            inhale, hold, exhale, rest = 4, 1, 6, 2
+        else:
+            inhale, hold, exhale, rest = 4, 0, 6, 2
+        cycles = int(request.get("cycles", 5) or 5)
+        return {
+            "enabled": bool(breath.get("enabled", True)),
+            "pattern": pattern,
+            "inhaleSeconds": inhale,
+            "holdSeconds": 0 if grounding_only else hold,
+            "exhaleSeconds": exhale,
+            "restSeconds": rest,
+            "cycles": min(max(cycles, 1), 12),
+            "visualForm": "pacer",
+            "syncMarkers": [],
+        }
+
+    def _presentation_meditation_spec(
+        self,
+        requested: RequestedRitualSurfaces,
+        *,
+        source_ref_ids: list[str],
+        target_seconds: int,
+        grounding_only: bool,
+    ) -> dict[str, object]:
+        meditation = requested.get("meditation", {})
+        request = (
+            meditation.get("request", {}) if isinstance(meditation.get("request"), dict) else {}
+        )
+        duration_ms = int(request.get("durationMs", min(target_seconds * 1000, 180000)) or 180000)
+        return {
+            "enabled": bool(meditation.get("enabled", True)),
+            "fieldType": str(request.get("fieldType") or "coherence_convergence"),
+            "durationMs": max(min(duration_ms, target_seconds * 1000), 30000),
+            "sourceRefs": source_ref_ids,
+            "macroProgressPolicy": "session_progress",
+            "microMotion": "convergence",
+            "instructionDensity": str(request.get("instructionDensity") or "sparse"),
+            "safetyBoundary": (
+                "grounding_only" if grounding_only else "grounding_only_if_activation_high"
+            ),
+            "syncMarkers": [],
+        }
+
+    def _presentation_image_plan(
+        self,
+        *,
+        requested: RequestedRitualSurfaces,
+        external_allowed: bool,
+        source_digest: dict[str, object],
+        source_ref_ids: list[str],
+    ) -> dict[str, object]:
+        enabled = bool(requested.get("image", {}).get("enabled")) and external_allowed
+        prompt = ""
+        if enabled:
+            prompt = self._presentation_compact_text(
+                "Abstract non-literal ritual field from: "
+                + str(source_digest.get("summary") or "held Circulatio material"),
+                limit=240,
+            )
+        return {
+            "enabled": enabled,
+            **({"prompt": prompt} if prompt else {}),
+            "privacyNotes": ["no raw dream text", "derived user-facing summary only"],
+            "sourceRefIds": source_ref_ids,
+        }
+
+    def _presentation_source_ref_ids(self, refs: list[PresentationSourceRef]) -> list[str]:
+        result: list[str] = []
+        for item in refs:
+            candidate = str(item.get("id") or item.get("recordId") or "").strip()
+            if candidate and candidate not in result:
+                result.append(candidate)
+        return result
+
+    def _presentation_compact_text(self, text: str, *, limit: int) -> str:
+        normalized = " ".join(str(text).split())
+        if len(normalized) <= limit:
+            return normalized
+        return normalized[: limit - 3].rstrip() + "..."
+
+    def _presentation_stable_hash(self, plan: dict[str, object]) -> str:
+        stable = {
+            key: value
+            for key, value in plan.items()
+            if key not in {"id", "generatedAt", "stableHash"}
+        }
+        encoded = json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str).encode()
+        return hashlib.sha256(encoded).hexdigest()
 
     async def generate_threshold_review(
         self,

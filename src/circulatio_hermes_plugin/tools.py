@@ -6,6 +6,36 @@ from copy import deepcopy
 from .commands import _boot_failure_response, build_tool_request
 from .runtime import get_runtime
 
+_TOOL_METADATA_KEYS = {
+    "args",
+    "command",
+    "command_args",
+    "messageId",
+    "message_id",
+    "platform",
+    "profile",
+    "profile_name",
+    "raw_args",
+    "sessionId",
+    "session_id",
+    "source_platform",
+    "tool_call_id",
+    "user_args",
+    "user_id",
+    "userId",
+}
+
+
+def _tool_payload(
+    arguments: dict[str, object] | None, kwargs: dict[str, object]
+) -> dict[str, object]:
+    payload = deepcopy(arguments or {})
+    for key, value in kwargs.items():
+        if key in _TOOL_METADATA_KEYS or key in payload:
+            continue
+        payload[key] = deepcopy(value)
+    return payload
+
 
 async def _dispatch_tool(
     *,
@@ -14,7 +44,7 @@ async def _dispatch_tool(
     arguments: dict[str, object] | None,
     kwargs: dict[str, object],
 ) -> str:
-    payload = deepcopy(arguments or {})
+    payload = _tool_payload(arguments, kwargs)
     request = build_tool_request(
         operation=operation,
         payload=payload,
@@ -352,6 +382,15 @@ async def analysis_packet_tool(arguments: dict[str, object] | None = None, **kwa
     return await _dispatch_tool(
         operation="circulatio.packet.analysis",
         tool_name="circulatio_analysis_packet",
+        arguments=arguments,
+        kwargs=kwargs,
+    )
+
+
+async def plan_ritual_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
+    return await _dispatch_tool(
+        operation="circulatio.presentation.plan_ritual",
+        tool_name="circulatio_plan_ritual",
         arguments=arguments,
         kwargs=kwargs,
     )

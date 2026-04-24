@@ -4,7 +4,7 @@ import logging
 import re
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
-from typing import Literal, cast
+from typing import Literal, cast, get_args
 
 from ..adapters.context_adapter import BuildContextInput, BuildPracticeContextInput, ContextAdapter
 from ..core.adaptation_engine import AdaptationEngine
@@ -50,6 +50,18 @@ from ..domain.method_state import (
 from ..domain.normalization import normalize_options, normalize_session_context
 from ..domain.patterns import PatternHistoryEntry
 from ..domain.practices import PracticeSessionRecord
+from ..domain.presentation import (
+    NarrativeMode,
+    PresentationPrivacyClass,
+    PresentationRitualPlanningInput,
+    PresentationSourceDigest,
+    PresentationSourceRef,
+    PresentationSourceType,
+    RequestedRitualSurfaces,
+    RitualCompletionPolicy,
+    RitualIntent,
+    RitualRenderPolicy,
+)
 from ..domain.proactive import ProactiveBriefRecord
 from ..domain.readiness import ConsentPreferenceRecord
 from ..domain.records import DeletionMode
@@ -60,6 +72,7 @@ from ..domain.types import (
     AdaptationPreferenceScope,
     AmplificationSourceSummary,
     AnalysisPacketInput,
+    AnalysisPacketResult,
     CirculationSummaryInput,
     CirculationSummaryResult,
     CoachCaptureContract,
@@ -140,6 +153,8 @@ from .workflow_types import (
     MaterialWorkflowResult,
     MethodStateWorkflowResult,
     PatternHistoryResult,
+    PlanRitualInput,
+    PlanRitualWorkflowResult,
     PracticeMutationResult,
     PracticeWorkflowResult,
     ProcessMethodStateResponseInput,
@@ -470,11 +485,12 @@ class CirculatioService:
         record: PersonalAmplificationRecord = {
             "id": create_id("personal_amplification"),
             "userId": input_data["userId"],
-            "canonicalName": (
-                input_data.get("canonicalName") or prompt.get("canonicalName") if prompt else ""
+            "canonicalName": str(
+                input_data.get("canonicalName")
+                or (prompt.get("canonicalName") if prompt else "")
             ).strip(),
-            "surfaceText": (
-                input_data.get("surfaceText") or prompt.get("surfaceText") if prompt else ""
+            "surfaceText": str(
+                input_data.get("surfaceText") or (prompt.get("surfaceText") if prompt else "")
             ).strip(),
             "associationText": association_text,
             "memoryRefs": list(input_data.get("memoryRefs", [])),
@@ -3018,7 +3034,7 @@ class CirculatioService:
             anchor_refs=anchor_refs_for_load,
         )
         clarification_prompt: ClarificationPromptRecord | None = None
-        if source == "clarifying_answer":
+        if source in {"clarifying_answer", "amplification_answer"}:
             clarification_prompt = (
                 await self._resolve_clarification_prompt_for_method_state_response(
                     user_id=user_id,
@@ -3026,12 +3042,15 @@ class CirculatioService:
                     anchors=anchors,
                 )
             )
+            if clarification_prompt is not None:
+                anchors["clarificationPrompt"] = deepcopy(clarification_prompt)
         expected_targets = self._resolve_expected_capture_targets(
             source=source,
             expected_targets=input_data.get("expectedTargets", []),
             anchors=anchors,
         )
         context_only_fallback = self._is_context_only_fallback_clarification(
+            source=source,
             anchors=anchors,
             prompt=clarification_prompt,
             expected_targets=expected_targets,
@@ -3118,7 +3137,16 @@ class CirculatioService:
             "followUpPrompts": [],
             "routingWarnings": [],
         }
-        if expected_targets and self._method_state_llm is not None:
+        fallback_candidate = None
+        if source == "amplification_answer" and "personal_amplification" in expected_targets:
+            fallback_candidate = self._fallback_personal_amplification_candidate(
+                response_text=response_text,
+                clarification_prompt=clarification_prompt,
+                anchors=anchors,
+            )
+        if fallback_candidate is not None:
+            routing_output["captureCandidates"] = [fallback_candidate]
+        elif expected_targets and self._method_state_llm is not None:
             routing_output = await self._method_state_llm.route_method_state_response(
                 {
                     "userId": user_id,
@@ -4009,6 +4037,356 @@ class CirculatioService:
             surface="alive_today",
         )
         return {"summary": summary, "continuity": continuity}
+
+    async def plan_ritual(self, input_data: PlanRitualInput) -> PlanRitualWorkflowResult:
+        resolved_start, resolved_end = self._resolve_ritual_window(input_data)
+        if self._parse_datetime(resolved_start) > self._parse_datetime(resolved_end):
+            raise ValidationError("Ritual windowStart cannot be after windowEnd.")
+        ritual_intent = self._normalize_ritual_intent(input_data.get("ritualIntent"))
+        narrative_mode = self._normalize_narrative_mode(input_data.get("narrativeMode"))
+        source_refs, source_ref_warnings = self._normalize_presentation_source_refs(
+            input_data.get("sourceRefs")
+        )
+        source_type: str
+        continuity: ThreadAwareContinuityBundle
+        if source_refs:
+            source_type = "explicit_refs"
+            bundle = await self._load_surface_context_bundle(
+                user_id=input_data["userId"],
+                window_start=resolved_start,
+                window_end=resolved_end,
+                surface="alive_today",
+                explicit_question=self._optional_str(input_data.get("explicitQuestion")),
+                safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+            )
+            continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
+            source_digest = self._build_explicit_presentation_source_digest(
+                source_refs=source_refs,
+                continuity=continuity,
+                window_start=resolved_start,
+                window_end=resolved_end,
+            )
+        elif ritual_intent == "weekly_integration":
+            bundle = await self._load_surface_context_bundle(
+                user_id=input_data["userId"],
+                window_start=resolved_start,
+                window_end=resolved_end,
+                surface="weekly_review",
+                explicit_question=self._optional_str(input_data.get("explicitQuestion")),
+                safety_context=cast(SafetyContext | None, input_data.get("safetyContext")),
+            )
+            continuity = cast(ThreadAwareContinuityBundle, deepcopy(bundle["continuity"]))
+            summary = await self._core.generate_weekly_review_summary(
+                cast(CirculationSummaryInput, bundle["preparedPayload"])
+            )
+            source_type = "weekly_review_summary"
+            source_digest, source_refs = self._build_summary_presentation_source(
+                summary=summary,
+                continuity=continuity,
+                source_type="weekly_review",
+                title="This week's holding ritual",
+            )
+        elif ritual_intent in {"threshold_container", "active_imagination_container"}:
+            packet = await self.generate_analysis_packet(
+                {
+                    "userId": input_data["userId"],
+                    "windowStart": resolved_start,
+                    "windowEnd": resolved_end,
+                    "packetFocus": "threshold",
+                    "explicitQuestion": self._optional_str(input_data.get("explicitQuestion")),
+                    "safetyContext": cast(SafetyContext | None, input_data.get("safetyContext")),
+                    "persist": False,
+                }
+            )
+            continuity = cast(ThreadAwareContinuityBundle, deepcopy(packet["continuity"]))
+            source_type = "analysis_packet"
+            source_digest, source_refs = self._build_analysis_packet_presentation_source(
+                packet_result=packet["result"],
+                continuity=continuity,
+            )
+        else:
+            continuity, _, summary = await self._build_ephemeral_circulation_summary(
+                user_id=input_data["userId"],
+                window_start=resolved_start,
+                window_end=resolved_end,
+                explicit_question=self._optional_str(input_data.get("explicitQuestion")),
+                surface="alive_today",
+            )
+            source_type = "alive_today"
+            source_digest, source_refs = self._build_summary_presentation_source(
+                summary=summary,
+                continuity=continuity,
+                source_type="surface_result",
+                title="Alive today ritual",
+            )
+        planning_input: PresentationRitualPlanningInput = {
+            "userId": input_data["userId"],
+            "generatedAt": now_iso(),
+            "windowStart": resolved_start,
+            "windowEnd": resolved_end,
+            "ritualIntent": ritual_intent,
+            "narrativeMode": narrative_mode,
+            "sourceType": source_type,
+            "sourceRefs": source_refs,
+            "sourceDigest": source_digest,
+            "requestedSurfaces": self._normalize_requested_ritual_surfaces(
+                input_data.get("requestedSurfaces")
+            ),
+            "renderPolicy": self._normalize_ritual_render_policy(input_data.get("renderPolicy")),
+            "completionPolicy": self._normalize_ritual_completion_policy(
+                input_data.get("completionPolicy")
+            ),
+            "privacyClass": self._normalize_presentation_privacy(input_data.get("privacyClass")),
+            "locale": self._optional_str(input_data.get("locale")) or "en-US",
+        }
+        if input_data.get("safetyContext") is not None:
+            planning_input["safetyContext"] = deepcopy(input_data["safetyContext"])
+        result = await self._core.plan_presentation_ritual(planning_input)
+        merged_warnings = list(dict.fromkeys([*source_ref_warnings, *result.get("warnings", [])]))
+        workflow = cast(PlanRitualWorkflowResult, deepcopy(result))
+        workflow["warnings"] = merged_warnings
+        workflow["continuity"] = continuity
+        return workflow
+
+    def _resolve_ritual_window(self, input_data: PlanRitualInput) -> tuple[str, str]:
+        anchor = self._optional_str(input_data.get("windowEnd")) or now_iso()
+        return self._resolve_window(
+            anchor=anchor,
+            fallback_start=self._optional_str(input_data.get("windowStart")),
+            fallback_end=self._optional_str(input_data.get("windowEnd")) or anchor,
+        )
+
+    def _normalize_ritual_intent(self, value: object | None) -> RitualIntent:
+        candidate = self._optional_str(value) or "weekly_integration"
+        allowed = {
+            "weekly_integration",
+            "alive_today",
+            "hold_container",
+            "guided_ritual",
+            "breath_container",
+            "meditation_container",
+            "image_return",
+            "active_imagination_container",
+            "journey_broadcast",
+            "threshold_container",
+        }
+        if candidate not in allowed:
+            raise ValidationError(f"Unsupported ritualIntent: {candidate}")
+        return cast(RitualIntent, candidate)
+
+    def _normalize_narrative_mode(self, value: object | None) -> NarrativeMode:
+        candidate = self._optional_str(value) or "hybrid"
+        allowed = {
+            "full_guided",
+            "sparse_guided",
+            "breath_only",
+            "meditation_only",
+            "user_script",
+            "hybrid",
+        }
+        if candidate not in allowed:
+            raise ValidationError(f"Unsupported narrativeMode: {candidate}")
+        return cast(NarrativeMode, candidate)
+
+    def _normalize_requested_ritual_surfaces(
+        self, value: object | None
+    ) -> RequestedRitualSurfaces:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValidationError("requestedSurfaces must be an object.")
+        return cast(RequestedRitualSurfaces, deepcopy(value))
+
+    def _normalize_ritual_render_policy(self, value: object | None) -> RitualRenderPolicy:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValidationError("renderPolicy must be an object.")
+        return cast(RitualRenderPolicy, deepcopy(value))
+
+    def _normalize_ritual_completion_policy(self, value: object | None) -> RitualCompletionPolicy:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValidationError("completionPolicy must be an object.")
+        return cast(RitualCompletionPolicy, deepcopy(value))
+
+    def _normalize_presentation_privacy(self, value: object | None) -> PresentationPrivacyClass:
+        candidate = self._optional_str(value) or "private"
+        if candidate in {"user_private", "approved_summary"}:
+            candidate = "private"
+        if candidate not in {"private", "sensitive", "session_only"}:
+            raise ValidationError(f"Unsupported presentation privacyClass: {candidate}")
+        return cast(PresentationPrivacyClass, candidate)
+
+    def _normalize_presentation_source_refs(
+        self, value: object | None
+    ) -> tuple[list[PresentationSourceRef], list[str]]:
+        if value is None:
+            return [], []
+        if not isinstance(value, list):
+            raise ValidationError("sourceRefs must be a list.")
+        refs: list[PresentationSourceRef] = []
+        warnings: list[str] = []
+        allowed_source_types = set(get_args(PresentationSourceType))
+        for raw in value:
+            if not isinstance(raw, dict):
+                continue
+            source_type = self._optional_str(raw.get("sourceType")) or "surface_result"
+            if source_type not in allowed_source_types:
+                warnings.append(f"unsupported_source_ref:{source_type}")
+                continue
+            approval_state = self._optional_str(raw.get("approvalState")) or "unknown"
+            if approval_state == "pending":
+                warnings.append("pending_source_ref_omitted")
+                continue
+            ref: PresentationSourceRef = {
+                "sourceType": cast(PresentationSourceType, source_type),
+                "role": cast(str, self._optional_str(raw.get("role")) or "primary"),
+                "approvalState": cast(str, approval_state),
+            }
+            for key in ("id", "recordId", "surface", "title"):
+                text = self._optional_str(raw.get(key))
+                if text:
+                    ref[key] = text  # type: ignore[literal-required]
+            evidence_ids = raw.get("evidenceIds")
+            if isinstance(evidence_ids, list):
+                ref["evidenceIds"] = [str(item) for item in evidence_ids if str(item).strip()]
+            refs.append(ref)
+        return refs, warnings
+
+    def _build_summary_presentation_source(
+        self,
+        *,
+        summary: CirculationSummaryResult,
+        continuity: ThreadAwareContinuityBundle,
+        source_type: PresentationSourceType,
+        title: str,
+    ) -> tuple[PresentationSourceDigest, list[PresentationSourceRef]]:
+        evidence_ids = self._summary_evidence_ids(summary)
+        source_ref: PresentationSourceRef = {
+            "id": summary["summaryId"],
+            "sourceType": source_type,
+            "recordId": summary["summaryId"],
+            "role": "primary",
+            "surface": source_type,
+            "title": title,
+            "evidenceIds": evidence_ids,
+            "approvalState": "read_only_generated",
+        }
+        digest: PresentationSourceDigest = {
+            "sourceType": source_type,
+            "title": title,
+            "summary": summary["userFacingResponse"],
+            "activeThemes": [str(item) for item in summary.get("activeThemes", [])][:5],
+            "recurringSymbols": [
+                str(item.get("canonicalName") or item.get("id") or "")
+                for item in summary.get("recurringSymbols", [])[:5]
+                if str(item.get("canonicalName") or item.get("id") or "").strip()
+            ],
+            "practiceSummary": self._practice_summary_text(summary.get("practiceSuggestion")),
+            "evidenceIds": evidence_ids,
+            "contextSnapshotIds": [],
+            "threadKeys": self._continuity_thread_keys(continuity),
+        }
+        return digest, [source_ref]
+
+    def _build_analysis_packet_presentation_source(
+        self,
+        *,
+        packet_result: AnalysisPacketResult,
+        continuity: ThreadAwareContinuityBundle,
+    ) -> tuple[PresentationSourceDigest, list[PresentationSourceRef]]:
+        packet_id = create_id("analysis_packet_surface")
+        evidence_ids = [str(item) for item in packet_result.get("evidenceIds", []) if str(item)]
+        title = str(packet_result.get("packetTitle") or "Analysis packet ritual")
+        source_ref: PresentationSourceRef = {
+            "id": packet_id,
+            "sourceType": "analysis_packet",
+            "recordId": packet_id,
+            "role": "primary",
+            "surface": "analysis_packet",
+            "title": title,
+            "evidenceIds": evidence_ids,
+            "approvalState": "read_only_generated",
+        }
+        digest: PresentationSourceDigest = {
+            "sourceType": "analysis_packet",
+            "title": title,
+            "summary": str(packet_result.get("userFacingResponse") or ""),
+            "activeThemes": [
+                str(section.get("title"))
+                for section in packet_result.get("sections", [])[:4]
+                if isinstance(section, dict) and str(section.get("title") or "").strip()
+            ],
+            "recurringSymbols": [],
+            "evidenceIds": evidence_ids,
+            "contextSnapshotIds": [],
+            "threadKeys": self._continuity_thread_keys(continuity),
+        }
+        return digest, [source_ref]
+
+    def _build_explicit_presentation_source_digest(
+        self,
+        *,
+        source_refs: list[PresentationSourceRef],
+        continuity: ThreadAwareContinuityBundle,
+        window_start: str,
+        window_end: str,
+    ) -> PresentationSourceDigest:
+        labels = [
+            str(item.get("title") or item.get("recordId") or item.get("sourceType") or "source")
+            for item in source_refs
+        ]
+        evidence_ids: list[str] = []
+        for item in source_refs:
+            evidence_ids = self._merge_ids(
+                evidence_ids,
+                [str(evidence_id) for evidence_id in item.get("evidenceIds", [])],
+            )
+        return {
+            "sourceType": "explicit_refs",
+            "title": "Ritual from selected Circulatio material",
+            "summary": (
+                "A ritual plan for selected Circulatio source references in the window "
+                f"{window_start} to {window_end}: "
+                + ", ".join(labels[:6])
+            ),
+            "activeThemes": labels[:5],
+            "recurringSymbols": [],
+            "evidenceIds": evidence_ids,
+            "contextSnapshotIds": [],
+            "threadKeys": self._continuity_thread_keys(continuity),
+        }
+
+    def _summary_evidence_ids(self, summary: CirculationSummaryResult) -> list[Id]:
+        evidence_ids: list[Id] = []
+        for link in summary.get("notableLifeContextLinks", []):
+            evidence_id = self._optional_str(link.get("evidenceId"))
+            if evidence_id:
+                evidence_ids = self._merge_ids(evidence_ids, [evidence_id])
+        for candidate in summary.get("activeComplexCandidates", []):
+            evidence_ids = self._merge_ids(evidence_ids, list(candidate.get("evidenceIds", [])))
+        return evidence_ids
+
+    def _practice_summary_text(self, practice: object | None) -> str | None:
+        if not isinstance(practice, dict):
+            return None
+        reason = self._optional_str(practice.get("reason"))
+        if reason:
+            return reason
+        instructions = practice.get("instructions")
+        if isinstance(instructions, list) and instructions:
+            return str(instructions[0])
+        return None
+
+    def _continuity_thread_keys(self, continuity: ThreadAwareContinuityBundle) -> list[str]:
+        result: list[str] = []
+        for digest in continuity.get("threadDigests", []):
+            key = self._optional_str(digest.get("threadKey"))
+            if key and key not in result:
+                result.append(key)
+        return result
 
     async def generate_journey_page(
         self,
@@ -9791,27 +10169,31 @@ class CirculatioService:
     def _is_context_only_fallback_clarification(
         self,
         *,
+        source: str,
         anchors: dict[str, object],
         prompt: ClarificationPromptRecord | None,
         expected_targets: list[MethodStateCaptureTargetKind],
     ) -> bool:
-        del expected_targets
+        if "personal_amplification" in expected_targets and source == "amplification_answer":
+            return False
         if prompt is not None and self._optional_str(prompt.get("captureTarget")) == "answer_only":
             return True
         routing_hints = prompt.get("routingHints") if prompt is not None else None
         if isinstance(routing_hints, dict):
+            continuation_mode = self._optional_str(routing_hints.get("continuationMode"))
+            if continuation_mode == "personal_amplification" and source == "amplification_answer":
+                return False
             if self._optional_str(routing_hints.get("source")) == "fallback_collaborative_opening":
                 return True
-            if (
-                self._optional_str(routing_hints.get("continuationMode"))
-                == "interpretation_context_only"
-            ):
+            if continuation_mode == "interpretation_context_only":
                 return True
         run = anchors.get("run")
         if not isinstance(run, dict):
             return False
         result = run.get("result")
         if not isinstance(result, dict):
+            return False
+        if source == "amplification_answer" and "personal_amplification" in expected_targets:
             return False
         llm_health = result.get("llmInterpretationHealth")
         if (
@@ -10060,10 +10442,52 @@ class CirculatioService:
                 deduped.append(item)
         return deduped
 
+    def _fallback_personal_amplification_candidate(
+        self,
+        *,
+        response_text: str,
+        clarification_prompt: ClarificationPromptRecord | None,
+        anchors: dict[str, object],
+    ) -> MethodStateCaptureCandidate | None:
+        if clarification_prompt is None:
+            return None
+        routing_hints = clarification_prompt.get("routingHints")
+        if not isinstance(routing_hints, dict):
+            return None
+        canonical_name = self._optional_str(routing_hints.get("canonicalName"))
+        surface_text = self._optional_str(routing_hints.get("surfaceText"))
+        if not canonical_name or not surface_text:
+            return None
+        run = anchors.get("run")
+        if isinstance(run, dict):
+            result = run.get("result")
+            if isinstance(result, dict):
+                method_gate = result.get("methodGate")
+                if isinstance(method_gate, dict) and "personal_association" not in [
+                    str(item) for item in method_gate.get("missingPrerequisites", [])
+                ]:
+                    return None
+        return {
+            "targetKind": "personal_amplification",
+            "application": "direct_write",
+            "confidence": "high",
+            "payload": {
+                "canonicalName": canonical_name,
+                "surfaceText": surface_text,
+                "associationText": response_text,
+            },
+            "supportingEvidenceRefs": ["response_primary"],
+            "consentScopes": [],
+            "reason": "The user answered the pending personal-association prompt.",
+        }
+
     def _method_state_anchor_summary(self, anchors: dict[str, object]) -> str | None:
         prompt = anchors.get("prompt")
         if isinstance(prompt, dict):
             return self._optional_str(prompt.get("promptText"))
+        clarification_prompt = anchors.get("clarificationPrompt")
+        if isinstance(clarification_prompt, dict):
+            return self._optional_str(clarification_prompt.get("questionText"))
         run = anchors.get("run")
         if isinstance(run, dict):
             return self._optional_str(run.get("result", {}).get("userFacingResponse"))
@@ -10301,11 +10725,29 @@ class CirculatioService:
             }
         if target_kind == "personal_amplification":
             prompt = anchors.get("prompt") if isinstance(anchors.get("prompt"), dict) else {}
+            clarification_prompt = (
+                anchors.get("clarificationPrompt")
+                if isinstance(anchors.get("clarificationPrompt"), dict)
+                else {}
+            )
+            routing_hints = (
+                clarification_prompt.get("routingHints")
+                if isinstance(clarification_prompt.get("routingHints"), dict)
+                else {}
+            )
             canonical_name = str(
-                payload.get("canonicalName") or prompt.get("canonicalName") or ""
+                payload.get("canonicalName")
+                or prompt.get("canonicalName")
+                or clarification_prompt.get("canonicalName")
+                or routing_hints.get("canonicalName")
+                or ""
             ).strip()
             surface_text = str(
-                payload.get("surfaceText") or prompt.get("surfaceText") or ""
+                payload.get("surfaceText")
+                or prompt.get("surfaceText")
+                or clarification_prompt.get("surfaceText")
+                or routing_hints.get("surfaceText")
+                or ""
             ).strip()
             association_text = str(payload.get("associationText") or "").strip()
             if not canonical_name or not surface_text or not association_text:

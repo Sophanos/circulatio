@@ -49,7 +49,7 @@ class HermesModelAdapterTests(unittest.TestCase):
                 self.assertEqual(workflow["pendingProposals"], [])
                 self.assertEqual(
                     workflow["interpretation"]["userFacingResponse"],
-                    "What image or feeling from this feels most alive right now?",
+                    "What personal association comes up around the image or feeling that feels most alive right now?",
                 )
                 self.assertEqual(
                     workflow["interpretation"]["llmInterpretationHealth"]["status"], "opened"
@@ -648,7 +648,7 @@ class HermesModelAdapterTests(unittest.TestCase):
                 self.assertEqual(workflow["pendingProposals"], [])
                 self.assertEqual(
                     workflow["interpretation"]["userFacingResponse"],
-                    "What image or feeling from this feels most alive right now?",
+                    "What personal association comes up around the image or feeling that feels most alive right now?",
                 )
                 self.assertEqual(
                     workflow["interpretation"]["llmInterpretationHealth"]["status"], "opened"

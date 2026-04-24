@@ -481,6 +481,63 @@ ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     },
 )
 
+PLAN_RITUAL_TOOL_SCHEMA = _schema(
+    "circulatio_plan_ritual",
+    "Plan one personalized ritual from existing Circulatio material and return a typed PresentationRitualPlan. Use one ritual-planning call for text, audio, captions, breath, meditation, image, and cinema surfaces; do not call separate backend tools per visual mode. Do not use this as generic meditation generation, and do not interpret newly logged material unless the user explicitly asks for meaning. Default to text, captions, breath, and meditation with mock/local rendering. Video or external image/audio generation requires explicit user wording plus renderPolicy.videoAllowed or renderPolicy.externalProvidersAllowed and budget.",
+    {
+        "windowStart": {"type": "string"},
+        "windowEnd": {"type": "string"},
+        "ritualIntent": {
+            "type": "string",
+            "enum": [
+                "weekly_integration",
+                "alive_today",
+                "hold_container",
+                "guided_ritual",
+                "breath_container",
+                "meditation_container",
+                "image_return",
+                "active_imagination_container",
+                "journey_broadcast",
+                "threshold_container",
+            ],
+        },
+        "narrativeMode": {
+            "type": "string",
+            "enum": [
+                "full_guided",
+                "sparse_guided",
+                "breath_only",
+                "meditation_only",
+                "user_script",
+                "hybrid",
+            ],
+        },
+        "explicitQuestion": {"type": "string"},
+        "sourceRefs": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "sourceType": {"type": "string"},
+                    "recordId": {"type": "string"},
+                    "role": {"type": "string"},
+                    "surface": {"type": "string"},
+                    "title": {"type": "string"},
+                    "evidenceIds": {"type": "array", "items": {"type": "string"}},
+                    "approvalState": {"type": "string"},
+                },
+            },
+        },
+        "requestedSurfaces": {"type": "object"},
+        "renderPolicy": {"type": "object"},
+        "completionPolicy": {"type": "object"},
+        "privacyClass": {"type": "string"},
+        "locale": {"type": "string"},
+        "safetyContext": {"type": "object"},
+    },
+)
+
 LIST_PENDING_REVIEW_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_list_pending_review_proposals",
     "List pending approval-gated proposals on a living myth or threshold review record. Use this when the user asks for review proposals or `Review-Vorschläge`. If reviewId is omitted, use the latest relevant review.",
@@ -941,6 +998,7 @@ TOOL_SCHEMAS = [
     THRESHOLD_REVIEW_TOOL_SCHEMA,
     LIVING_MYTH_REVIEW_TOOL_SCHEMA,
     ANALYSIS_PACKET_TOOL_SCHEMA,
+    PLAN_RITUAL_TOOL_SCHEMA,
     LIST_PENDING_REVIEW_PROPOSALS_TOOL_SCHEMA,
     APPROVE_REVIEW_PROPOSALS_TOOL_SCHEMA,
     REJECT_REVIEW_PROPOSALS_TOOL_SCHEMA,
