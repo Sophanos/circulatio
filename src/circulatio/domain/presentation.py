@@ -349,7 +349,6 @@ class PresentationRitualPlanResult(TypedDict, total=False):
     costEstimate: Required[PresentationCostEstimate]
     renderRequest: Required[PresentationRenderRequest]
     warnings: Required[list[str]]
-    continuity: NotRequired[dict[str, object]]
 
 
 class PresentationSourceDigest(TypedDict, total=False):
