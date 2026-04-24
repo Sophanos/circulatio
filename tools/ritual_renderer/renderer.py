@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
 from .contracts import CaptionSegment, RitualArtifactManifest, RitualRenderOptions
+from .providers.chutes import (
+    ChutesAsset,
+    ChutesProviderError,
+    caption_segments_from_transcription,
+    generate_image,
+    generate_music,
+    generate_video,
+    synthesize_speech,
+    transcribe_audio,
+)
 
 RENDERER_VERSION = "ritual-renderer.v1"
 MANIFEST_SCHEMA_VERSION = "hermes_ritual_artifact.v1"
@@ -39,15 +51,28 @@ class RitualRenderer:
         output = Path(out_dir)
         output.mkdir(parents=True, exist_ok=True)
         artifact_id = self._artifact_id(plan)
-        duration_ms = int(plan.get("duration", {}).get("targetSeconds", 300)) * 1000
+        public_base = self._public_base(artifact_id)
+        duration = cast(dict[str, object], plan.get("duration") or {})
+        duration_ms = int(duration.get("targetSeconds", 300)) * 1000
         captions = self._caption_segments(plan, duration_ms=duration_ms)
+        provider_assets, provider_captions, provider_warnings = self._render_provider_assets(
+            plan=plan,
+            output=output,
+            public_base=public_base,
+            duration_ms=duration_ms,
+        )
+        if provider_captions:
+            captions = provider_captions
         captions_path = output / "captions.vtt"
         captions_path.write_text(self._webvtt(captions), encoding="utf-8")
         manifest = self._manifest(
             plan=plan,
             artifact_id=artifact_id,
+            public_base=public_base,
             duration_ms=duration_ms,
             captions=captions,
+            provider_assets=provider_assets,
+            render_warnings=provider_warnings,
         )
         (output / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
@@ -70,21 +95,27 @@ class RitualRenderer:
             stable_hash = hashlib.sha256(encoded).hexdigest()
         return f"ritual_artifact_{stable_hash[:16]}"
 
+    def _public_base(self, artifact_id: str) -> str:
+        return str(self._options.get("publicBasePath") or f"/artifacts/{artifact_id}").rstrip("/")
+
     def _manifest(
         self,
         *,
         plan: dict[str, object],
         artifact_id: str,
+        public_base: str,
         duration_ms: int,
         captions: list[CaptionSegment],
+        provider_assets: dict[str, dict[str, object]],
+        render_warnings: list[str],
     ) -> RitualArtifactManifest:
-        public_base = str(
-            self._options.get("publicBasePath") or f"/artifacts/{artifact_id}"
-        ).rstrip("/")
         breath = cast(dict[str, object], plan.get("breath") or {})
         meditation = cast(dict[str, object], plan.get("meditation") or {})
         audio_surface = self._audio_surface(
-            plan=plan, public_base=public_base, duration_ms=duration_ms
+            plan=plan,
+            public_base=public_base,
+            duration_ms=duration_ms,
+            provider_assets=provider_assets,
         )
         surfaces: dict[str, object] = {
             "text": {
@@ -126,23 +157,14 @@ class RitualRenderer:
                 "microMotion": str(meditation.get("microMotion") or "convergence"),
                 "instructionDensity": str(meditation.get("instructionDensity") or "sparse"),
             },
-            "image": {
-                "enabled": False,
-                "src": None,
-                "alt": "No generated image for this artifact.",
-                "provider": None,
-            },
-            "cinema": {
-                "enabled": False,
-                "src": None,
-                "posterSrc": None,
-                "mimeType": None,
-                "durationMs": None,
-                "provider": None,
-            },
+            "image": self._image_surface(provider_assets),
+            "cinema": self._cinema_surface(provider_assets),
         }
-        if audio_surface.get("src") is None:
-            surfaces["audio"] = audio_surface
+        if "music" in provider_assets:
+            surfaces["music"] = provider_assets["music"]
+        providers = ["mock"]
+        if any(asset.get("provider") == "chutes" for asset in provider_assets.values()):
+            providers.append("chutes")
         return {
             "schemaVersion": MANIFEST_SCHEMA_VERSION,
             "artifactId": artifact_id,
@@ -186,10 +208,10 @@ class RitualRenderer:
                     )
                     or "dry_run_manifest"
                 ),
-                "providers": ["mock"],
+                "providers": providers,
                 "cacheKeys": [str(plan.get("stableHash"))] if plan.get("stableHash") else [],
                 "budget": {"currency": "USD", "estimated": 0, "actual": 0},
-                "warnings": [],
+                "warnings": render_warnings,
             },
         }
 
@@ -199,7 +221,10 @@ class RitualRenderer:
         plan: dict[str, object],
         public_base: str,
         duration_ms: int,
+        provider_assets: dict[str, dict[str, object]],
     ) -> dict[str, object]:
+        if "audio" in provider_assets:
+            return provider_assets["audio"]
         del duration_ms
         render_mode = str(
             cast(dict[str, object], plan.get("deliveryPolicy") or {}).get("renderMode") or ""
@@ -227,6 +252,328 @@ class RitualRenderer:
             "checksum": None,
             "placeholderSrc": f"{public_base}/audio.wav",
         }
+
+    def _image_surface(self, provider_assets: dict[str, dict[str, object]]) -> dict[str, object]:
+        if "image" in provider_assets:
+            return {"enabled": True, **provider_assets["image"]}
+        return {
+            "enabled": False,
+            "src": None,
+            "alt": "No generated image for this artifact.",
+            "provider": None,
+        }
+
+    def _cinema_surface(self, provider_assets: dict[str, dict[str, object]]) -> dict[str, object]:
+        if "cinema" in provider_assets:
+            return {"enabled": True, **provider_assets["cinema"]}
+        return {
+            "enabled": False,
+            "src": None,
+            "posterSrc": None,
+            "mimeType": None,
+            "durationMs": None,
+            "provider": None,
+        }
+
+    def _render_provider_assets(
+        self,
+        *,
+        plan: dict[str, object],
+        output: Path,
+        public_base: str,
+        duration_ms: int,
+    ) -> tuple[dict[str, dict[str, object]], list[CaptionSegment], list[str]]:
+        del duration_ms
+        profile = str(self._options.get("providerProfile") or "mock").strip()
+        selected = self._selected_surfaces(profile)
+        if not profile.startswith("chutes") or not selected:
+            return {}, [], []
+        warnings: list[str] = []
+        if self._options.get("dryRun"):
+            return {}, [], ["chutes_provider_skipped_in_dry_run"]
+        if self._options.get("mockProviders"):
+            return {}, [], ["chutes_provider_skipped_by_mock_providers"]
+        if not self._plan_allows_external_providers(plan):
+            return {}, [], ["chutes_provider_blocked_by_plan_policy"]
+        max_cost = float(self._options.get("maxCostUsd", 0) or 0)
+        if max_cost <= 0:
+            return {}, [], ["chutes_provider_blocked_by_zero_budget"]
+        token = os.environ.get(str(self._options.get("chutesTokenEnv") or "CHUTES_API_TOKEN"), "")
+        if not token:
+            return {}, [], ["chutes_provider_missing_api_token"]
+        timeout = int(self._options.get("requestTimeoutSeconds", 180) or 180)
+        assets: dict[str, dict[str, object]] = {}
+        captions: list[CaptionSegment] = []
+        if "audio" in selected:
+            self._try_render_chutes_audio(
+                plan=plan,
+                output=output,
+                public_base=public_base,
+                token=token,
+                timeout=timeout,
+                assets=assets,
+                captions=captions,
+                warnings=warnings,
+            )
+        if "image" in selected:
+            self._try_render_chutes_image(
+                plan=plan,
+                output=output,
+                public_base=public_base,
+                token=token,
+                timeout=timeout,
+                assets=assets,
+                warnings=warnings,
+            )
+        if "music" in selected:
+            self._try_render_chutes_music(
+                output=output,
+                public_base=public_base,
+                token=token,
+                timeout=max(timeout, 240),
+                assets=assets,
+                warnings=warnings,
+            )
+        if "cinema" in selected:
+            self._try_render_chutes_video(
+                plan=plan,
+                output=output,
+                public_base=public_base,
+                token=token,
+                timeout=max(timeout, 360),
+                assets=assets,
+                warnings=warnings,
+            )
+        return assets, captions, warnings
+
+    def _try_render_chutes_audio(
+        self,
+        *,
+        plan: dict[str, object],
+        output: Path,
+        public_base: str,
+        token: str,
+        timeout: int,
+        assets: dict[str, dict[str, object]],
+        captions: list[CaptionSegment],
+        warnings: list[str],
+    ) -> None:
+        text = self._voice_text(plan)
+        if not text:
+            warnings.append("chutes_audio_skipped_empty_voice_script")
+            return
+        try:
+            asset = synthesize_speech(
+                token=token,
+                text=text,
+                out_path=output / "audio.wav",
+                timeout_seconds=timeout,
+            )
+        except ChutesProviderError as exc:
+            warnings.append(f"chutes_audio_failed:{exc}")
+            return
+
+        assets["audio"] = {
+            **self._asset_ref(asset, public_base=public_base),
+            "voiceId": "chutes-kokoro",
+        }
+        if not (
+            self._options.get("transcribeCaptions")
+            or "captions"
+            in self._selected_surfaces(str(self._options.get("providerProfile") or ""))
+        ):
+            return
+
+        try:
+            transcription = transcribe_audio(
+                token=token,
+                audio_path=asset["path"],
+                timeout_seconds=timeout,
+            )
+        except ChutesProviderError as exc:
+            warnings.append(f"chutes_transcription_failed:{exc}")
+            return
+
+        captions.extend(
+            cast(
+                list[CaptionSegment],
+                caption_segments_from_transcription(transcription),
+            )
+        )
+        if not captions:
+            warnings.append("chutes_transcription_returned_no_timed_segments")
+
+    def _try_render_chutes_image(
+        self,
+        *,
+        plan: dict[str, object],
+        output: Path,
+        public_base: str,
+        token: str,
+        timeout: int,
+        assets: dict[str, dict[str, object]],
+        warnings: list[str],
+    ) -> None:
+        prompt = self._image_prompt(plan)
+        if not prompt:
+            warnings.append("chutes_image_skipped_no_enabled_prompt")
+            return
+        try:
+            asset = generate_image(
+                token=token,
+                prompt=prompt,
+                out_path=output / "image.png",
+                timeout_seconds=timeout,
+            )
+            assets["image"] = {
+                **self._asset_ref(asset, public_base=public_base),
+                "alt": "Generated non-literal ritual image.",
+            }
+        except ChutesProviderError as exc:
+            warnings.append(f"chutes_image_failed:{exc}")
+
+    def _try_render_chutes_music(
+        self,
+        *,
+        output: Path,
+        public_base: str,
+        token: str,
+        timeout: int,
+        assets: dict[str, dict[str, object]],
+        warnings: list[str],
+    ) -> None:
+        steps = int(self._options.get("musicSteps", 32) or 32)
+        try:
+            asset = generate_music(
+                token=token,
+                out_path=output / "music.wav",
+                steps=steps,
+                timeout_seconds=timeout,
+            )
+            assets["music"] = self._asset_ref(asset, public_base=public_base)
+        except ChutesProviderError as exc:
+            warnings.append(f"chutes_music_failed:{exc}")
+
+    def _try_render_chutes_video(
+        self,
+        *,
+        plan: dict[str, object],
+        output: Path,
+        public_base: str,
+        token: str,
+        timeout: int,
+        assets: dict[str, dict[str, object]],
+        warnings: list[str],
+    ) -> None:
+        prompt = self._video_prompt(plan)
+        image = self._video_image_payload(output=output, assets=assets)
+        if not prompt:
+            warnings.append("chutes_video_skipped_no_prompt")
+            return
+        if not image:
+            warnings.append("chutes_video_skipped_no_image_input")
+            return
+        try:
+            asset = generate_video(
+                token=token,
+                prompt=prompt,
+                image=image,
+                out_path=output / "cinema.mp4",
+                timeout_seconds=timeout,
+            )
+            assets["cinema"] = self._asset_ref(asset, public_base=public_base)
+        except ChutesProviderError as exc:
+            warnings.append(f"chutes_video_failed:{exc}")
+
+    def _selected_surfaces(self, profile: str) -> set[str]:
+        raw = {item.lower() for item in self._options.get("surfaces", [])}
+        selected = {"cinema" if item in {"video", "movie"} else item for item in raw}
+        selected = {"audio" if item in {"speech", "voice"} else item for item in selected}
+        selected = {"captions" if item in {"cc", "transcript"} else item for item in selected}
+        if selected:
+            return selected
+        defaults = {
+            "chutes_speech": {"audio"},
+            "chutes_audio": {"audio"},
+            "chutes_image": {"image"},
+            "chutes_music": {"music"},
+            "chutes_video": {"cinema"},
+            "chutes_all": {"audio", "captions", "image", "music", "cinema"},
+        }
+        return defaults.get(profile, set())
+
+    def _plan_allows_external_providers(self, plan: dict[str, object]) -> bool:
+        safety = cast(dict[str, object], plan.get("safetyBoundary") or {})
+        restrictions = {str(item) for item in safety.get("providerRestrictions", [])}
+        return "external_providers_disabled" not in restrictions
+
+    def _asset_ref(self, asset: ChutesAsset, *, public_base: str) -> dict[str, object]:
+        return {
+            "src": f"{public_base}/{asset['path'].name}",
+            "mimeType": asset["mimeType"],
+            "durationMs": None,
+            "provider": asset["provider"],
+            "model": asset["model"],
+            "checksum": self._file_sha256(asset["path"]),
+        }
+
+    def _voice_text(self, plan: dict[str, object]) -> str:
+        voice_script = cast(dict[str, object], plan.get("voiceScript") or {})
+        segments = voice_script.get("segments", [])
+        lines = []
+        for segment in cast(list[object], segments):
+            if not isinstance(segment, dict):
+                continue
+            if str(segment.get("role") or "") == "silence":
+                continue
+            text = " ".join(str(segment.get("text") or "").split())
+            if text:
+                lines.append(text)
+        return "\n\n".join(lines)
+
+    def _image_prompt(self, plan: dict[str, object]) -> str:
+        visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
+        image = cast(dict[str, object], visual.get("image") or {})
+        if not image.get("enabled"):
+            return ""
+        return " ".join(str(image.get("prompt") or "").split())
+
+    def _video_prompt(self, plan: dict[str, object]) -> str:
+        visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
+        cinema = cast(dict[str, object], visual.get("cinema") or {})
+        if not cinema.get("enabled"):
+            return ""
+        storyboard = cinema.get("storyboard")
+        if isinstance(storyboard, list) and storyboard:
+            first = storyboard[0]
+            if isinstance(first, dict):
+                prompt = " ".join(str(first.get("prompt") or first.get("text") or "").split())
+                if prompt:
+                    return prompt
+        return str(cast(dict[str, object], plan.get("text") or {}).get("summary") or "")
+
+    def _video_image_payload(
+        self,
+        *,
+        output: Path,
+        assets: dict[str, dict[str, object]],
+    ) -> str:
+        configured = str(self._options.get("videoImage") or "").strip()
+        if configured:
+            path = Path(configured)
+            if path.exists():
+                return base64.b64encode(path.read_bytes()).decode("ascii")
+            return configured
+        image_asset = assets.get("image")
+        if image_asset:
+            src = str(image_asset.get("src") or "")
+            image_path = output / Path(src).name
+            if image_path.exists():
+                return base64.b64encode(image_path.read_bytes()).decode("ascii")
+        return ""
+
+    def _file_sha256(self, path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
 
     def _caption_segments(
         self, plan: dict[str, object], *, duration_ms: int

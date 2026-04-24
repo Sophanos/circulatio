@@ -27,11 +27,13 @@ from ..domain.types import (
     CirculationSummaryInput,
     CirculationSummaryResult,
     CoachMoveKind,
+    DepthReadinessAssessment,
     InterpretationResult,
     LivingMythReviewInput,
     LivingMythReviewResult,
     MaterialInterpretationInput,
     MethodContextSnapshot,
+    MethodGateResult,
     PracticeRecommendationInput,
     PracticeRecommendationResult,
     RecordIntegrationInput,
@@ -1757,6 +1759,31 @@ class CirculatioCore:
         self, input_data: RecordIntegrationInput
     ) -> RecordIntegrationResult:
         return await self._repository.record_integration(input_data)
+
+    def _reconcile_practice_with_method_gate(
+        self,
+        *,
+        practice: dict[str, object],
+        method_gate: MethodGateResult | None,
+        depth_readiness: DepthReadinessAssessment | None,
+        safety: SafetyDisposition,
+        consent_preferences: list[dict[str, object]],
+        goal_tensions: list[dict[str, object]] | None = None,
+        body_states: list[dict[str, object]] | None = None,
+        method_context: dict[str, object] | None = None,
+        runtime_policy: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return self._practice_engine.reconcile_llm_practice(
+            practice=cast(object, practice),
+            method_gate=method_gate,
+            depth_readiness=depth_readiness,
+            safety=safety,
+            consent_preferences=consent_preferences,
+            goal_tensions=goal_tensions,
+            body_states=body_states,
+            method_context=cast(MethodContextSnapshot | None, method_context),
+            runtime_policy=runtime_policy,
+        )
 
     def _clear_safety_disposition(self) -> SafetyDisposition:
         return {"status": "clear", "flags": ["none"], "depthWorkAllowed": True}

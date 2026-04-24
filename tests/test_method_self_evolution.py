@@ -57,9 +57,7 @@ class MethodSelfEvolutionTests(unittest.TestCase):
         self.assertGreater(report["failedCases"], 0)
         self.assertEqual(report["regressionStatus"], "same")
 
-    def test_candidate_prompt_override_does_not_mutate_global_prompt_fragment_provider(
-        self,
-    ) -> None:
+    def test_candidate_prompt_override_does_not_mutate_global_prompt_fragment_provider(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         baseline = (repo_root / "src" / "circulatio" / "llm" / "prompt_fragments.py").read_text()
         marker = "TEST_RUNTIME_HINT_TOKEN"

@@ -364,7 +364,6 @@ class PracticeSessionSummary(TypedDict, total=False):
     coachLoopKind: NotRequired[CoachLoopKind]
     coachMoveKind: NotRequired[CoachMoveKind]
     relatedResourceIds: NotRequired[list[Id]]
-    relatedJourneyIds: NotRequired[list[Id]]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
     createdAt: Required[ISODateString]
     completedAt: NotRequired[ISODateString]
@@ -567,39 +566,6 @@ class JourneySummary(TypedDict, total=False):
     relatedPatternIds: Required[list[Id]]
     relatedDreamSeriesIds: Required[list[Id]]
     relatedGoalIds: Required[list[Id]]
-    relatedBodyStateIds: NotRequired[list[Id]]
-
-
-JourneyFamilyKind = Literal[
-    "embodied_recurrence",
-    "symbol_body_life_pressure",
-    "thought_loop_typology_restraint",
-    "relational_scene_recurrence",
-    "practice_reentry",
-    "cross_family",
-]
-
-
-class JourneyFollowthroughSummary(TypedDict, total=False):
-    journeyId: Required[Id]
-    family: Required[JourneyFamilyKind]
-    readiness: Required[Literal["quiet", "available", "ready"]]
-    recommendedSurface: Required[CoachSurface | Literal["none"]]
-    recommendedMoveKind: NotRequired[CoachMoveKind]
-    bodyFirst: Required[bool]
-    priority: Required[int]
-    reasons: Required[list[str]]
-    blockedEscalations: Required[list[str]]
-    relatedExperimentIds: Required[list[Id]]
-    currentExperimentStatus: NotRequired[
-        Literal["active", "quiet", "completed", "released", "archived", "deleted"]
-    ]
-    relatedPracticeSessionIds: Required[list[Id]]
-    relatedBodyStateIds: Required[list[Id]]
-    relatedGoalTensionIds: Required[list[Id]]
-    lastTouchedAt: Required[ISODateString]
-    lastBriefedAt: NotRequired[ISODateString]
-    cooldownUntil: NotRequired[ISODateString]
 
 
 LongitudinalSignalType = Literal[
@@ -1478,7 +1444,6 @@ class CoachLoopSummary(TypedDict, total=False):
     relatedMaterialIds: Required[list[Id]]
     relatedGoalIds: Required[list[Id]]
     relatedJourneyIds: Required[list[Id]]
-    relatedExperimentIds: NotRequired[list[Id]]
     relatedPracticeSessionIds: Required[list[Id]]
     relatedSymbolIds: Required[list[Id]]
     relatedBodyStateIds: Required[list[Id]]
@@ -1503,7 +1468,6 @@ class CoachMoveContract(TypedDict, total=False):
     capture: Required[CoachCaptureContract]
     blockedMoves: Required[list[str]]
     reasons: Required[list[str]]
-    relatedExperimentIds: NotRequired[list[Id]]
     relatedResourceIds: NotRequired[list[Id]]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
 
@@ -1603,7 +1567,6 @@ class MethodContextSnapshot(TypedDict, total=False):
     longitudinalSignals: NotRequired[list[LongitudinalSignalSummary]]
     adaptationProfile: NotRequired[UserAdaptationProfileSummary]
     activeJourneys: NotRequired[list[JourneySummary]]
-    activeJourneyExperiments: NotRequired[list[JourneyExperimentSummary]]
     recentPracticeSessions: NotRequired[list[PracticeSessionSummary]]
     recentDreamDynamics: NotRequired[list[DreamDynamicsSummary]]
     methodState: NotRequired[MethodStateSummary]
@@ -1657,7 +1620,6 @@ class PracticeTriggerSummary(TypedDict, total=False):
     reviewId: NotRequired[Id]
     briefId: NotRequired[Id]
     practiceSessionId: NotRequired[Id]
-    journeyId: NotRequired[Id]
     reason: NotRequired[str]
 
 
@@ -1822,28 +1784,6 @@ class PracticePlan(TypedDict, total=False):
     resourceInvitationId: NotRequired[Id]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
     relatedResourceIds: NotRequired[list[Id]]
-    relatedJourneyIds: NotRequired[list[Id]]
-    relatedExperimentIds: NotRequired[list[Id]]
-
-
-class JourneyExperimentSummary(TypedDict, total=False):
-    id: Required[Id]
-    journeyId: Required[Id]
-    title: Required[str]
-    summary: Required[str]
-    status: Required[Literal["active", "quiet", "completed", "released", "archived", "deleted"]]
-    bodyFirst: Required[bool]
-    preferredMoveKind: NotRequired[CoachMoveKind]
-    currentQuestion: NotRequired[str]
-    suggestedActionText: NotRequired[str]
-    relatedPracticeSessionIds: Required[list[Id]]
-    relatedSymbolIds: Required[list[Id]]
-    relatedGoalTensionIds: Required[list[Id]]
-    relatedBodyStateIds: Required[list[Id]]
-    relatedResourceIds: Required[list[Id]]
-    nextCheckInDueAt: NotRequired[ISODateString]
-    cooldownUntil: NotRequired[ISODateString]
-    updatedAt: Required[ISODateString]
 
 
 class PersonalSymbolWritePayload(TypedDict, total=False):

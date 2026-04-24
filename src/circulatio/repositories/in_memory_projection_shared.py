@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from ..domain.ids import now_iso
 from ..domain.memory import MemoryImportance
 from ..domain.practices import PracticeSessionRecord
-from ..domain.timestamps import parse_iso_datetime
 
 
 def _material_summary_text(record: dict[str, object]) -> str:
@@ -41,7 +40,15 @@ def _importance(
 
 
 def _parse_datetime(value: str | None) -> datetime:
-    return parse_iso_datetime(value, default=datetime.fromtimestamp(0, tz=UTC))
+    if not value:
+        return datetime.fromtimestamp(0, tz=UTC)
+    candidate = value.strip()
+    if candidate.endswith("Z"):
+        candidate = candidate[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(candidate)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _is_within_window(value: datetime, start: datetime, end: datetime) -> bool:
@@ -92,6 +99,13 @@ def _tokenize(value: object) -> list[str]:
         for token in text.replace("/", " ").replace("_", " ").replace(",", " ").split()
         if token
     ]
+
+
+def _first_or_none(values: list[object]) -> str | None:
+    if not values:
+        return None
+    first = values[0]
+    return str(first) if first is not None else None
 
 
 def _truncate(value: object, limit: int) -> str:

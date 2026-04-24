@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 
+from circulatio.hermes.agent_bridge_contracts import BridgeOperation
+
 from .commands import _boot_failure_response, build_tool_request
 from .runtime import get_runtime
 
@@ -39,7 +41,7 @@ def _tool_payload(
 
 async def _dispatch_tool(
     *,
-    operation: str,
+    operation: BridgeOperation,
     tool_name: str,
     arguments: dict[str, object] | None,
     kwargs: dict[str, object],
@@ -224,50 +226,6 @@ async def set_journey_status_tool(
     return await _dispatch_tool(
         operation="circulatio.journeys.set_status",
         tool_name="circulatio_set_journey_status",
-        arguments=arguments,
-        kwargs=kwargs,
-    )
-
-
-async def start_journey_experiment_tool(
-    arguments: dict[str, object] | None = None, **kwargs: object
-) -> str:
-    return await _dispatch_tool(
-        operation="circulatio.journey.experiment.start",
-        tool_name="circulatio_journey_experiment_start",
-        arguments=arguments,
-        kwargs=kwargs,
-    )
-
-
-async def respond_journey_experiment_tool(
-    arguments: dict[str, object] | None = None, **kwargs: object
-) -> str:
-    return await _dispatch_tool(
-        operation="circulatio.journey.experiment.respond",
-        tool_name="circulatio_journey_experiment_respond",
-        arguments=arguments,
-        kwargs=kwargs,
-    )
-
-
-async def list_journey_experiments_tool(
-    arguments: dict[str, object] | None = None, **kwargs: object
-) -> str:
-    return await _dispatch_tool(
-        operation="circulatio.journey.experiment.list",
-        tool_name="circulatio_journey_experiment_list",
-        arguments=arguments,
-        kwargs=kwargs,
-    )
-
-
-async def get_journey_experiment_tool(
-    arguments: dict[str, object] | None = None, **kwargs: object
-) -> str:
-    return await _dispatch_tool(
-        operation="circulatio.journey.experiment.get",
-        tool_name="circulatio_journey_experiment_get",
         arguments=arguments,
         kwargs=kwargs,
     )

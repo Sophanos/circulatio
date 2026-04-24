@@ -19,8 +19,7 @@ class FakeEvolutionLlmClient:
         self,
         responses: Mapping[str, object | list[object]] | None = None,
         *,
-        handler: Callable[[str, list[dict[str, str]], dict[str, object]], dict[str, object]]
-        | None = None,
+        handler: Callable[[str, list[dict[str, str]], dict[str, object]], dict[str, object]] | None = None,
     ) -> None:
         self.calls: list[FakeEvolutionCall] = []
         self._handler = handler
@@ -72,9 +71,7 @@ class FakeEvolutionLlmClient:
             return dict(self._handler(schema_name, messages, metadata))
         queue = self._responses.get(schema_name)
         if not queue:
-            raise AssertionError(
-                f"No fake evolution payload configured for schema '{schema_name}'."
-            )
+            raise AssertionError(f"No fake evolution payload configured for schema '{schema_name}'.")
         value = queue.pop(0)
         if not isinstance(value, Mapping):
             raise AssertionError(

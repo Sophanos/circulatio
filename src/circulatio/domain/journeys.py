@@ -17,7 +17,6 @@ class JourneyRecord(TypedDict, total=False):
     relatedPatternIds: Required[list[Id]]
     relatedDreamSeriesIds: Required[list[Id]]
     relatedGoalIds: Required[list[Id]]
-    relatedBodyStateIds: Required[list[Id]]
     currentQuestion: NotRequired[str]
     lastBriefedAt: NotRequired[ISODateString]
     nextReviewDueAt: NotRequired[ISODateString]
@@ -34,7 +33,6 @@ class JourneyUpdate(TypedDict, total=False):
     relatedPatternIds: list[Id]
     relatedDreamSeriesIds: list[Id]
     relatedGoalIds: list[Id]
-    relatedBodyStateIds: list[Id]
     currentQuestion: str
     lastBriefedAt: ISODateString
     nextReviewDueAt: ISODateString

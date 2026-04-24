@@ -236,7 +236,10 @@ brief attuned sentence plus one open question.
 2. Present what Circulatio returns: usually one question, image, amplification
    prompt, or method-gate request.
 3. Work **one symbol, action, feeling, or dynamic at a time**. Ask for personal
-   associations before collective or archetypal framing.
+   associations before collective or archetypal framing. After one association,
+   usually invite one more life-touching association before interpreting; say
+   this makes the interpretation sharper, and keep the invitation under 30
+   words. Do not pressure the user or run an association questionnaire.
 4. Keep active interpretation turns to `1-3` sentences and ask exactly one
    question unless safety requires otherwise.
 5. If Circulatio returns a method gate or clarifying question, ask it and wait.

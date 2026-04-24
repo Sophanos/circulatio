@@ -134,23 +134,7 @@ Disallowed language: "You are a thinking type.", "This proves your inferior func
 
 ---
 
-## 5. Journey Followthrough Guardrails
-
-- No streaks, backlog counters, overdue debt, quota language, or hidden task semantics.
-- Only one non-terminal journey experiment may be current per journey.
-- `alive_today` and `journey_page` may suggest current tending, but they must not auto-create it on read.
-- Repeated practice skips should soften or quiet the next invitation rather than escalating pressure.
-- Dismissal creates cooldown on the brief path; it does not create a missed-state or failure-state on the journey.
-- Quiet and release are neutral states, not failure states.
-- Journey-linked body-state persistence requires an explicit journey anchor or explicit related practice/brief context. Do not link body states to journeys from loose temporal coincidence alone.
-- If there is no fresh signal since the last journey-linked brief, do not surface a new “just checking in” reminder merely because time passed.
-- Time alone may open one available window after explicit current-tending start, but it must not create repeated nudges without fresh signal.
-- Successful stabilization should increase silence. Followthrough exists to support volition and continuity, not engagement pressure.
-- Experiment-linked practices still pass through the normal consent, grounding, and safety gates.
-
----
-
-## 6. Demo Script
+## 5. Demo Script
 
 Goal: show Hermes-Circulatio as a longitudinal individuation backend, not a one-off interpreter.
 
@@ -186,7 +170,6 @@ The repo-owned demo harness exercises the packaged Hermes plugin surface against
    - Hermes tool path: `circulatio_store_reflection` followed by `circulatio_create_journey`
    - Read-mostly page: `/circulation journey`
    - Manual QA path: `/circulation journey create --label "Laundry return"`, `/circulation journey list`, `/circulation journey get --label "Laundry return"`, `/circulation journey pause --label "Laundry return"`, `/circulation journey resume --label "Laundry return"`
-   - Current tending QA path: `/circulation journey experiment start --journey-label "Laundry return" --title "Current tending" --summary "Stay with the thread lightly."`, `/circulation journey experiment list`, `/circulation journey experiment quiet <experimentId>`, `/circulation journey experiment resume <experimentId>`, `/circulation journey experiment release <experimentId>`
 5. Enter new material: `/circulation dream "I was in a flooded house and found a snake under the stairs."`
    - Witnessing, recurrence links, cautious context links, pending proposals.
 6. Show approval/rejection:
@@ -223,7 +206,7 @@ Do not demo: deterministic typology, diagnostic language, graph visualization, u
 
 ---
 
-## 7. Self-Evolution Guardrails
+## 6. Self-Evolution Guardrails
 
 The self-evolution tooling is development infrastructure. It is not part of the live runtime loop.
 

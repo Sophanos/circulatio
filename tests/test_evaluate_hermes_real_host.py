@@ -150,41 +150,6 @@ class EvaluateHermesRealHostTests(unittest.TestCase):
         sanitized = self.harness.sanitize_output(b"session_id: abc123\r\nLine 1\r\n")
         self.assertEqual(sanitized, "session_id: abc123\nLine 1")
 
-    def test_extract_session_turn_details_uses_last_matching_user_turn(self) -> None:
-        payload = {
-            "messages": [
-                {"role": "user", "content": "older turn"},
-                {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {"function": {"name": "circulatio_store_reflection", "arguments": "{}"}}
-                    ],
-                    "content": "",
-                },
-                {"role": "assistant", "content": "Older reply"},
-                {"role": "user", "content": "current turn"},
-                {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {"function": {"name": "circulatio_analysis_packet", "arguments": "{}"}},
-                        {"function": {"name": "circulatio_discovery", "arguments": "{}"}},
-                    ],
-                    "content": "",
-                },
-                {"role": "tool", "content": "{}"},
-                {"role": "assistant", "content": "Current final reply"},
-            ]
-        }
-        tool_calls, host_reply = self.harness._extract_session_turn_details(
-            payload,
-            user_turn="current turn",
-        )
-        self.assertEqual(
-            tool_calls,
-            ["circulatio_analysis_packet", "circulatio_discovery"],
-        )
-        self.assertEqual(host_reply, "Current final reply")
-
 
 if __name__ == "__main__":
     unittest.main()

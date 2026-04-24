@@ -15,7 +15,6 @@ from ..domain.method_state import (
 from ..domain.practices import PracticeSessionRecord
 from ..domain.proactive import ProactiveBriefRecord
 from ..domain.reviews import DashboardSummary
-from ..domain.timestamps import parse_iso_datetime
 from ..domain.types import (
     CoachCaptureContract,
     CoachGlobalConstraints,
@@ -26,7 +25,6 @@ from ..domain.types import (
     CoachSurface,
     CoachWithheldMoveSummary,
     Id,
-    JourneyFollowthroughSummary,
     MethodContextSnapshot,
     MethodStateSourceRef,
     ResourceInvitationSummary,
@@ -169,7 +167,9 @@ class CoachEngine:
                 if str(item).strip()
             ],
             "reasons": [
-                str(item).strip() for item in runtime_policy.get("reasons", []) if str(item).strip()
+                str(item).strip()
+                for item in runtime_policy.get("reasons", [])
+                if str(item).strip()
             ],
             "updatedAt": updated_at,
         }
@@ -197,7 +197,6 @@ class CoachEngine:
         existing_briefs: list[ProactiveBriefRecord] | None = None,
         recent_practices: list[PracticeSessionRecord] | None = None,
         journeys: list[JourneyRecord] | None = None,
-        journey_followthrough: list[JourneyFollowthroughSummary] | None = None,
         dashboard: DashboardSummary | None = None,
         adaptation_profile: UserAdaptationProfileSummary | None = None,
         now: str,
@@ -239,14 +238,6 @@ class CoachEngine:
                 loop_candidates.append(loop)
             if withheld_move is not None:
                 withheld.append(withheld_move)
-        loop_candidates = self._integrate_journey_followthrough(
-            loop_candidates=loop_candidates,
-            journey_followthrough=journey_followthrough or [],
-            method_context=snapshot,
-            runtime_policy=runtime_policy,
-            existing_briefs=existing,
-            now=now,
-        )
 
         loop_candidates.sort(key=lambda item: self._loop_sort_key(item, surface=surface))
         active_loops = loop_candidates[:4]
@@ -265,8 +256,7 @@ class CoachEngine:
             "doNotAskReasons": [
                 *(
                     ["coach_state_no_eligible_move"]
-                    if selected_move is None
-                    and not any(
+                    if selected_move is None and not any(
                         str(loop.get("status") or "").strip() == "eligible" for loop in active_loops
                     )
                     else []
@@ -336,8 +326,16 @@ class CoachEngine:
     ) -> CoachMoveContract | None:
         loops = active_loops
         if loops is None:
-            loops = coach_state.get("activeLoops", []) if isinstance(coach_state, dict) else []
-        eligible = [loop for loop in loops if str(loop.get("status") or "").strip() == "eligible"]
+            loops = (
+                coach_state.get("activeLoops", [])
+                if isinstance(coach_state, dict)
+                else []
+            )
+        eligible = [
+            loop
+            for loop in loops
+            if str(loop.get("status") or "").strip() == "eligible"
+        ]
         if not eligible:
             return None
         eligible.sort(key=lambda item: self._loop_sort_key(item, surface=surface))
@@ -358,9 +356,6 @@ class CoachEngine:
             "blockedMoves": list(selected.get("blockedMoves", [])),
             "reasons": list(selected.get("reasons", [])),
         }
-        related_experiment_ids = self._ids(selected.get("relatedExperimentIds"))
-        if related_experiment_ids:
-            move["relatedExperimentIds"] = related_experiment_ids
         related_resource_ids = selected.get("relatedResourceIds", [])
         if related_resource_ids:
             move["relatedResourceIds"] = list(related_resource_ids)
@@ -370,433 +365,6 @@ class CoachEngine:
                 dict(selected["resourceInvitation"]),
             )
         return move
-
-    def _integrate_journey_followthrough(
-        self,
-        *,
-        loop_candidates: list[CoachLoopSummary],
-        journey_followthrough: list[JourneyFollowthroughSummary],
-        method_context: MethodContextSnapshot,
-        runtime_policy: dict[str, object],
-        existing_briefs: list[ProactiveBriefRecord],
-        now: str,
-    ) -> list[CoachLoopSummary]:
-        if not journey_followthrough:
-            return loop_candidates
-        goal_tensions = self._dict_list(method_context.get("goalTensions"))
-        goal_ids_by_tension: dict[str, list[Id]] = {
-            str(item.get("id") or "").strip(): self._ids(item.get("goalIds"))
-            for item in goal_tensions
-            if str(item.get("id") or "").strip()
-        }
-        result = [deepcopy(loop) for loop in loop_candidates]
-        dominant_journey_ids: set[Id] = set()
-        for summary in journey_followthrough:
-            if not isinstance(summary, dict):
-                continue
-            readiness = str(summary.get("readiness") or "").strip()
-            if readiness == "quiet":
-                continue
-            followthrough_loop = self._followthrough_loop(
-                summary=summary,
-                goal_ids_by_tension=goal_ids_by_tension,
-                method_context=method_context,
-                runtime_policy=runtime_policy,
-                existing_briefs=existing_briefs,
-                now=now,
-            )
-            if followthrough_loop is None:
-                continue
-            matching_index = self._matching_followthrough_loop_index(
-                loop_candidates=result,
-                followthrough_loop=followthrough_loop,
-                goal_ids_by_tension=goal_ids_by_tension,
-            )
-            if matching_index is None:
-                result.append(followthrough_loop)
-            else:
-                result[matching_index] = self._merge_followthrough_loop(
-                    loop=result[matching_index],
-                    followthrough_loop=followthrough_loop,
-                )
-            dominant_journey_ids.update(self._ids(followthrough_loop.get("relatedJourneyIds")))
-        if dominant_journey_ids:
-            result = self._suppress_generic_reentry_loops(
-                loop_candidates=result,
-                dominant_journey_ids=dominant_journey_ids,
-            )
-        return result
-
-    def _followthrough_loop(
-        self,
-        *,
-        summary: JourneyFollowthroughSummary,
-        goal_ids_by_tension: dict[str, list[Id]],
-        method_context: MethodContextSnapshot,
-        runtime_policy: dict[str, object],
-        existing_briefs: list[ProactiveBriefRecord],
-        now: str,
-    ) -> CoachLoopSummary | None:
-        journey_id = str(summary.get("journeyId") or "").strip()
-        move_kind = str(summary.get("recommendedMoveKind") or "").strip()
-        if not journey_id or not move_kind or move_kind == "track_without_prompt":
-            return None
-        loop_kind = self._followthrough_loop_kind(summary)
-        title_hint, summary_hint, prompt_frame = self._followthrough_prompt(summary=summary)
-        related_practice_session_ids = self._ids(summary.get("relatedPracticeSessionIds"))
-        related_experiment_ids = self._ids(summary.get("relatedExperimentIds"))
-        related_body_state_ids = self._ids(summary.get("relatedBodyStateIds"))
-        related_goal_tension_ids = self._ids(summary.get("relatedGoalTensionIds"))
-        related_goal_ids: list[Id] = []
-        for tension_id in related_goal_tension_ids:
-            related_goal_ids = self._dedupe_ids(
-                [*related_goal_ids, *goal_ids_by_tension.get(tension_id, [])]
-            )
-        anchor_refs: MethodStateAnchorRefs = {"journeyId": journey_id}
-        if related_practice_session_ids:
-            anchor_refs["practiceSessionId"] = related_practice_session_ids[0]
-        if related_goal_ids:
-            anchor_refs["goalId"] = related_goal_ids[0]
-        capture = self._capture_contract(
-            source=self._followthrough_source(loop_kind),
-            loop_key=f"coach:{loop_kind}:{journey_id}",
-            expected_targets=self._followthrough_expected_targets(
-                move_kind=move_kind,
-                related_goal_ids=related_goal_ids,
-                related_practice_session_ids=related_practice_session_ids,
-                related_body_state_ids=related_body_state_ids,
-            ),
-            answer_mode="choice_then_free_text"
-            if move_kind != "return_to_journey"
-            else "free_text",
-            skip_behavior="cooldown",
-            anchor_refs=anchor_refs,
-        )
-        blocked_moves = self._dedupe_strings(
-            [
-                *self._strings(runtime_policy.get("blockedMoves")),
-                *[str(item) for item in summary.get("blockedEscalations", []) if str(item).strip()],
-            ]
-        )
-        reasons = self._dedupe_strings(
-            [
-                "journey_followthrough_dominant",
-                f"journey_followthrough_family_{summary.get('family', 'cross_family')}",
-                f"journey_followthrough_readiness_{summary.get('readiness', 'available')}",
-                *[str(item) for item in summary.get("reasons", []) if str(item).strip()],
-            ]
-        )
-        source_record_refs: list[MethodStateSourceRef] = [
-            {"recordType": "Journey", "recordId": journey_id, "summary": summary_hint}
-        ]
-        source_record_refs.extend(
-            {"recordType": "JourneyExperiment", "recordId": experiment_id}
-            for experiment_id in related_experiment_ids[:1]
-        )
-        source_record_refs.extend(
-            {"recordType": "PracticeSession", "recordId": practice_id}
-            for practice_id in related_practice_session_ids[:2]
-        )
-        source_record_refs.extend(
-            {"recordType": "GoalTension", "recordId": tension_id}
-            for tension_id in related_goal_tension_ids[:2]
-        )
-        loop = self._base_loop(
-            loop_key=f"coach:{loop_kind}:{journey_id}",
-            kind=loop_kind,
-            move_kind=move_kind,
-            title=title_hint,
-            summary=summary_hint,
-            prompt_frame=prompt_frame,
-            capture=capture,
-            priority=int(summary.get("priority", 0) or 0),
-            related_goal_ids=related_goal_ids,
-            related_journey_ids=[cast(Id, journey_id)],
-            related_experiment_ids=related_experiment_ids,
-            related_practice_session_ids=related_practice_session_ids,
-            related_symbol_ids=[],
-            related_body_state_ids=related_body_state_ids,
-            related_relational_scene_ids=[],
-            evidence_ids=related_goal_tension_ids,
-            source_record_refs=self._dedupe_refs(source_record_refs),
-            blocked_moves=blocked_moves,
-            consent_scopes=[],
-            reasons=reasons,
-            method_context=method_context,
-            runtime_policy=runtime_policy,
-            existing_briefs=existing_briefs,
-            now=now,
-        )
-        if str(summary.get("readiness") or "").strip() == "available":
-            loop["priority"] = max(int(loop.get("priority", 0) or 0), 60)
-        return loop
-
-    def _followthrough_loop_kind(self, summary: JourneyFollowthroughSummary) -> CoachLoopKind:
-        family = str(summary.get("family") or "cross_family").strip()
-        move_kind = str(summary.get("recommendedMoveKind") or "").strip()
-        if family == "practice_reentry":
-            return "practice_integration"
-        if family in {"embodied_recurrence", "symbol_body_life_pressure"}:
-            return "soma"
-        if family == "relational_scene_recurrence":
-            return "relational_scene"
-        if family == "thought_loop_typology_restraint":
-            return "goal_guidance"
-        if move_kind == "offer_resource":
-            return "resource_support"
-        return "journey_reentry"
-
-    def _followthrough_source(self, loop_kind: CoachLoopKind) -> MethodStateResponseSource:
-        if loop_kind == "practice_integration":
-            return "practice_feedback"
-        if loop_kind == "goal_guidance":
-            return "goal_feedback"
-        if loop_kind == "relational_scene":
-            return "relational_scene"
-        if loop_kind in {"soma", "resource_support"}:
-            return "body_note"
-        return "freeform_followup"
-
-    def _followthrough_expected_targets(
-        self,
-        *,
-        move_kind: str,
-        related_goal_ids: list[Id],
-        related_practice_session_ids: list[Id],
-        related_body_state_ids: list[Id],
-    ) -> list[MethodStateCaptureTargetKind]:
-        if move_kind == "ask_practice_followup":
-            targets: list[MethodStateCaptureTargetKind] = [
-                "practice_outcome",
-                "practice_preference",
-            ]
-            if related_body_state_ids:
-                targets.append("body_state")
-            return targets
-        if move_kind == "ask_goal_tension":
-            return ["goal_tension", "goal", "conscious_attitude"]
-        if move_kind == "ask_relational_scene":
-            targets = ["relational_scene"]
-            if related_body_state_ids:
-                targets.append("body_state")
-            return targets
-        if move_kind in {"ask_body_checkin", "offer_resource", "offer_practice"}:
-            targets = ["body_state"] if related_body_state_ids else []
-            if related_goal_ids:
-                targets.append("goal_tension")
-            if related_practice_session_ids:
-                targets.append("practice_outcome")
-            return targets or ["body_state"]
-        targets = ["conscious_attitude"]
-        if related_body_state_ids:
-            targets.insert(0, "body_state")
-        if related_goal_ids:
-            targets.append("goal_tension")
-        return list(dict.fromkeys(targets))
-
-    def _followthrough_prompt(
-        self,
-        *,
-        summary: JourneyFollowthroughSummary,
-    ) -> tuple[str, str, dict[str, object]]:
-        move_kind = str(summary.get("recommendedMoveKind") or "").strip()
-        body_first = bool(summary.get("bodyFirst"))
-        if move_kind == "ask_practice_followup":
-            return (
-                "Practice follow-up",
-                "A recent journey-linked practice looks ready for a light follow-up.",
-                {
-                    "stance": "practice_integration",
-                    "askAbout": "what shifted, resisted, or changed after the practice",
-                    "avoid": ["backlog_dump", "pressure_language", "symbolic_verdict"],
-                    "choices": ["note what happened", "body first", "leave it alone"],
-                },
-            )
-        if move_kind == "offer_resource":
-            return (
-                "Resource support",
-                "This journey looks live, but a gentler resource fits better than another push.",
-                {
-                    "stance": "grounding_first",
-                    "askAbout": "whether a gentler resource would help right now",
-                    "avoid": ["pressure_language", "symbolic_interpretation", "diagnosis"],
-                    "choices": ["try a resource", "not now", "just track it"],
-                },
-            )
-        if move_kind == "ask_body_checkin":
-            return (
-                "Body check-in",
-                "This journey can be met body-first without forcing an explanation.",
-                {
-                    "stance": "body_first",
-                    "askAbout": "what is most noticeable in the body right now",
-                    "avoid": ["diagnosis", "causal_claim", "symbolic_pressure"],
-                    "choices": ["track it", "name the pressure", "leave it alone"],
-                },
-            )
-        if move_kind == "ask_goal_tension":
-            return (
-                "Goal tension",
-                "A live journey-linked tension can be named without turning it into a plan.",
-                {
-                    "stance": "hold_tension",
-                    "askAbout": "which side feels most charged right now",
-                    "avoid": ["optimization_language", "planning_first", "verdict_language"],
-                    "choices": ["name both sides", "track it", "leave it alone"],
-                },
-            )
-        if move_kind == "ask_relational_scene":
-            return (
-                "Relational scene",
-                "A relational scene looks active enough for a bounded scene-first check-in.",
-                {
-                    "stance": "scene_first",
-                    "askAbout": "what changed in you after the contact",
-                    "avoid": ["diagnosis", "causal_claim", "projection_language"],
-                    "choices": [
-                        "track the scene",
-                        "body first" if body_first else "hold it lightly",
-                        "leave it alone",
-                    ],
-                },
-            )
-        if move_kind == "offer_practice":
-            return (
-                "Practice option",
-                "A bounded practice option may fit this journey now.",
-                {
-                    "stance": "practice_invitation",
-                    "askAbout": (
-                        "whether a light practice would help or whether silence fits better"
-                    ),
-                    "avoid": ["compliance_language", "backlog_pressure", "intensity_escalation"],
-                    "choices": ["offer one", "not now", "leave it alone"],
-                },
-            )
-        return (
-            "Journey re-entry",
-            "An active journey can be picked up from what is already alive.",
-            {
-                "stance": "journey_reentry",
-                "askAbout": "what shifted in this thread since the last touchpoint",
-                "avoid": ["backlog_dump", "symbolic_pressure", "certainty_language"],
-                "choices": [
-                    "track it",
-                    "body first" if body_first else "hold it lightly",
-                    "leave it alone",
-                ],
-            },
-        )
-
-    def _matching_followthrough_loop_index(
-        self,
-        *,
-        loop_candidates: list[CoachLoopSummary],
-        followthrough_loop: CoachLoopSummary,
-        goal_ids_by_tension: dict[str, list[Id]],
-    ) -> int | None:
-        followthrough_kind = str(followthrough_loop.get("kind") or "").strip()
-        followthrough_journey_ids = set(self._ids(followthrough_loop.get("relatedJourneyIds")))
-        followthrough_experiment_ids = set(
-            self._ids(followthrough_loop.get("relatedExperimentIds"))
-        )
-        followthrough_practice_ids = set(
-            self._ids(followthrough_loop.get("relatedPracticeSessionIds"))
-        )
-        followthrough_body_ids = set(self._ids(followthrough_loop.get("relatedBodyStateIds")))
-        followthrough_goal_ids = set(self._ids(followthrough_loop.get("relatedGoalIds")))
-        del goal_ids_by_tension
-        for index, candidate in enumerate(loop_candidates):
-            candidate_kind = str(candidate.get("kind") or "").strip()
-            if candidate_kind != followthrough_kind:
-                continue
-            if followthrough_experiment_ids.intersection(
-                self._ids(candidate.get("relatedExperimentIds"))
-            ):
-                return index
-            if followthrough_journey_ids.intersection(
-                self._ids(candidate.get("relatedJourneyIds"))
-            ):
-                return index
-            if followthrough_practice_ids.intersection(
-                self._ids(candidate.get("relatedPracticeSessionIds"))
-            ):
-                return index
-            if followthrough_body_ids.intersection(self._ids(candidate.get("relatedBodyStateIds"))):
-                return index
-            if followthrough_goal_ids.intersection(self._ids(candidate.get("relatedGoalIds"))):
-                return index
-        return None
-
-    def _merge_followthrough_loop(
-        self,
-        *,
-        loop: CoachLoopSummary,
-        followthrough_loop: CoachLoopSummary,
-    ) -> CoachLoopSummary:
-        merged = cast(CoachLoopSummary, deepcopy(loop))
-        merged["priority"] = max(
-            int(merged.get("priority", 0) or 0),
-            int(followthrough_loop.get("priority", 0) or 0),
-        )
-        for field in (
-            "relatedGoalIds",
-            "relatedJourneyIds",
-            "relatedExperimentIds",
-            "relatedPracticeSessionIds",
-            "relatedSymbolIds",
-            "relatedBodyStateIds",
-            "relatedRelationalSceneIds",
-            "evidenceIds",
-        ):
-            merged[field] = self._dedupe_ids(
-                [
-                    *self._ids(merged.get(field)),
-                    *self._ids(followthrough_loop.get(field)),
-                ]
-            )
-        merged["sourceRecordRefs"] = self._dedupe_refs(
-            [
-                *self._dict_list(merged.get("sourceRecordRefs")),
-                *self._dict_list(followthrough_loop.get("sourceRecordRefs")),
-            ]
-        )
-        merged["blockedMoves"] = self._dedupe_strings(
-            [
-                *self._strings(merged.get("blockedMoves")),
-                *self._strings(followthrough_loop.get("blockedMoves")),
-            ]
-        )
-        merged["reasons"] = self._dedupe_strings(
-            [
-                *self._strings(merged.get("reasons")),
-                *self._strings(followthrough_loop.get("reasons")),
-            ]
-        )
-        if int(followthrough_loop.get("priority", 0) or 0) >= int(merged.get("priority", 0) or 0):
-            for field in ("titleHint", "summaryHint", "promptFrame", "moveKind", "capture"):
-                merged[field] = deepcopy(followthrough_loop[field])
-        return merged
-
-    def _suppress_generic_reentry_loops(
-        self,
-        *,
-        loop_candidates: list[CoachLoopSummary],
-        dominant_journey_ids: set[Id],
-    ) -> list[CoachLoopSummary]:
-        suppressed: list[CoachLoopSummary] = []
-        for loop in loop_candidates:
-            reasons = self._strings(loop.get("reasons"))
-            if "journey_followthrough_dominant" in reasons:
-                suppressed.append(loop)
-                continue
-            if str(loop.get("kind") or "").strip() != "journey_reentry":
-                suppressed.append(loop)
-                continue
-            if dominant_journey_ids.intersection(self._ids(loop.get("relatedJourneyIds"))):
-                continue
-            suppressed.append(loop)
-        return suppressed
 
     def _soma_loop(
         self,
@@ -870,7 +438,6 @@ class CoachEngine:
             related_goal_ids=self._ids(active_goal_tension.get("linkedGoalIds"))
             or self._ids(first_body_state.get("linkedGoalIds")),
             related_journey_ids=[],
-            related_experiment_ids=[],
             related_practice_session_ids=[],
             related_symbol_ids=self._ids(first_body_state.get("linkedSymbolIds")),
             related_body_state_ids=self._ids([body_state_id]) if body_states else [],
@@ -960,7 +527,6 @@ class CoachEngine:
             priority=78,
             related_goal_ids=goal_ids,
             related_journey_ids=[],
-            related_experiment_ids=[],
             related_practice_session_ids=[],
             related_symbol_ids=[],
             related_body_state_ids=[],
@@ -1049,7 +615,6 @@ class CoachEngine:
             priority=80,
             related_goal_ids=[],
             related_journey_ids=[],
-            related_experiment_ids=[],
             related_practice_session_ids=[],
             related_symbol_ids=[],
             related_body_state_ids=[],
@@ -1111,7 +676,9 @@ class CoachEngine:
         practice = self._select_recent_practice(recent_practices=recent_practices, now=now)
         recent_outcome_trend = str(practice_loop.get("recentOutcomeTrend") or "").strip()
         skipped_count = sum(
-            1 for item in recent_practices[:3] if str(item.get("status") or "").strip() == "skipped"
+            1
+            for item in recent_practices[:3]
+            if str(item.get("status") or "").strip() == "skipped"
         )
         if practice is None and recent_outcome_trend not in {"activating", "mixed", "settling"}:
             return None, None
@@ -1184,7 +751,6 @@ class CoachEngine:
             priority=94 if move_kind == "ask_practice_followup" else 88,
             related_goal_ids=[],
             related_journey_ids=[],
-            related_experiment_ids=[],
             related_practice_session_ids=self._ids([practice_id]) if practice is not None else [],
             related_symbol_ids=[],
             related_body_state_ids=[],
@@ -1231,7 +797,9 @@ class CoachEngine:
     ) -> tuple[CoachLoopSummary | None, CoachWithheldMoveSummary | None]:
         del recent_practices, dashboard
         active_journeys = [
-            item for item in journeys if str(item.get("status") or "").strip() == "active"
+            item
+            for item in journeys
+            if str(item.get("status") or "").strip() == "active"
         ] or [
             item
             for item in self._dict_list(method_context.get("activeJourneys"))
@@ -1272,7 +840,6 @@ class CoachEngine:
             priority=90,
             related_goal_ids=self._ids(journey.get("relatedGoalIds")),
             related_journey_ids=self._ids([journey_id]),
-            related_experiment_ids=[],
             related_practice_session_ids=[],
             related_symbol_ids=self._ids(journey.get("relatedSymbolIds")),
             related_body_state_ids=[],
@@ -1309,7 +876,9 @@ class CoachEngine:
         grounding_recommendation = str(grounding.get("recommendation") or "").strip()
         recent_outcome_trend = str(practice_loop.get("recentOutcomeTrend") or "").strip()
         skipped_count = sum(
-            1 for item in recent_practices[:3] if str(item.get("status") or "").strip() == "skipped"
+            1
+            for item in recent_practices[:3]
+            if str(item.get("status") or "").strip() == "skipped"
         )
         if (
             depth_level != "grounding_only"
@@ -1347,7 +916,8 @@ class CoachEngine:
             move_kind="offer_resource",
             title="Resource support",
             summary=(
-                "A gentler resource fits the current pacing better than a stronger symbolic move."
+                "A gentler resource fits the current pacing better "
+                "than a stronger symbolic move."
             ),
             prompt_frame={
                 "stance": "grounding_first",
@@ -1375,7 +945,6 @@ class CoachEngine:
             priority=96 if depth_level == "grounding_only" else 86,
             related_goal_ids=[],
             related_journey_ids=[],
-            related_experiment_ids=[],
             related_practice_session_ids=(
                 self._ids([practice.get("id")]) if isinstance(practice, dict) else []
             ),
@@ -1400,8 +969,16 @@ class CoachEngine:
             consent_scopes=["somatic_correlation"] if source == "body_note" else [],
             reasons=self._dedupe_strings(
                 [
-                    *(["runtime_policy_grounding_only"] if depth_level == "grounding_only" else []),
-                    *(["practice_repeated_skips"] if skipped_count >= 2 else []),
+                    *(
+                        ["runtime_policy_grounding_only"]
+                        if depth_level == "grounding_only"
+                        else []
+                    ),
+                    *(
+                        ["practice_repeated_skips"]
+                        if skipped_count >= 2
+                        else []
+                    ),
                     *(
                         [f"practice_loop_recent_outcome_trend_{recent_outcome_trend}"]
                         if recent_outcome_trend
@@ -1431,7 +1008,6 @@ class CoachEngine:
         priority: int,
         related_goal_ids: list[Id],
         related_journey_ids: list[Id],
-        related_experiment_ids: list[Id],
         related_practice_session_ids: list[Id],
         related_symbol_ids: list[Id],
         related_body_state_ids: list[Id],
@@ -1472,7 +1048,6 @@ class CoachEngine:
             "relatedMaterialIds": [],
             "relatedGoalIds": related_goal_ids,
             "relatedJourneyIds": related_journey_ids,
-            "relatedExperimentIds": related_experiment_ids,
             "relatedPracticeSessionIds": related_practice_session_ids,
             "relatedSymbolIds": related_symbol_ids,
             "relatedBodyStateIds": related_body_state_ids,
@@ -1492,13 +1067,14 @@ class CoachEngine:
             loop["status"] = status
         if cooldown_until:
             loop["cooldownUntil"] = cooldown_until
-        if str(
-            runtime_policy.get("depthLevel") or ""
-        ).strip() == "grounding_only" and move_kind in {
-            "ask_goal_tension",
-            "ask_relational_scene",
-            "return_to_journey",
-        }:
+        if (
+            str(runtime_policy.get("depthLevel") or "").strip() == "grounding_only"
+            and move_kind in {
+                "ask_goal_tension",
+                "ask_relational_scene",
+                "return_to_journey",
+            }
+        ):
             loop["status"] = "track_only"
         if not isinstance(method_context.get("methodState"), dict):
             loop["status"] = "track_only"
@@ -1548,7 +1124,9 @@ class CoachEngine:
         if isinstance(invitation, dict):
             resource = invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
+                str(resource.get("id") or "").strip()
+                if isinstance(resource, dict)
+                else ""
             )
             if resource_id:
                 refs.append({"recordType": "EmbodiedResource", "recordId": resource_id})
@@ -1591,7 +1169,9 @@ class CoachEngine:
         if not related_resource_ids and isinstance(invitation, dict):
             resource = invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
+                str(resource.get("id") or "").strip()
+                if isinstance(resource, dict)
+                else ""
             )
             if resource_id:
                 related_resource_ids = [resource_id]
@@ -1610,7 +1190,7 @@ class CoachEngine:
         loop: CoachLoopSummary,
         *,
         surface: CoachSurface,
-    ) -> tuple[int, int, int, int, int]:
+    ) -> tuple[int, int, str]:
         surface_order = {
             "generic": {
                 "practice_integration": 0,
@@ -1669,13 +1249,7 @@ class CoachEngine:
             "withheld": 4,
         }
         kind = str(loop.get("kind") or "").strip()
-        dominant_rank = (
-            0 if "journey_followthrough_dominant" in self._strings(loop.get("reasons")) else 1
-        )
-        experiment_rank = 0 if self._ids(loop.get("relatedExperimentIds")) else 1
         return (
-            dominant_rank,
-            experiment_rank,
             surface_order.get(surface, {}).get(kind, 10),
             -int(loop.get("priority", 0)),
             status_rank.get(str(loop.get("status") or "").strip(), 10),
@@ -1688,7 +1262,7 @@ class CoachEngine:
         existing_briefs: list[ProactiveBriefRecord],
         now: str,
     ) -> tuple[Literal["waiting_for_user", "cooling_down"] | None, str | None]:
-        now_dt = parse_iso_datetime(now, default=datetime.now(UTC))
+        now_dt = self._parse_datetime(now)
         for brief in existing_briefs:
             brief_key = str(brief.get("coachLoopKey") or brief.get("triggerKey") or "").strip()
             if brief_key != loop_key:
@@ -1698,7 +1272,7 @@ class CoachEngine:
                 return "waiting_for_user", None
             cooldown_until = str(brief.get("cooldownUntil") or "").strip()
             if status in {"dismissed", "acted_on"} and cooldown_until:
-                if parse_iso_datetime(cooldown_until, default=datetime.now(UTC)) > now_dt:
+                if self._parse_datetime(cooldown_until) > now_dt:
                     return "cooling_down", cooldown_until
         return None, None
 
@@ -1710,7 +1284,7 @@ class CoachEngine:
     ) -> PracticeSessionRecord | None:
         if not recent_practices:
             return None
-        now_dt = parse_iso_datetime(now, default=datetime.now(UTC))
+        now_dt = self._parse_datetime(now)
         due = [
             item
             for item in recent_practices
@@ -1718,11 +1292,7 @@ class CoachEngine:
             in {"recommended", "accepted", "completed", "skipped"}
             and (
                 not item.get("nextFollowUpDueAt")
-                or parse_iso_datetime(
-                    str(item.get("nextFollowUpDueAt")),
-                    default=datetime.now(UTC),
-                )
-                <= now_dt
+                or self._parse_datetime(str(item.get("nextFollowUpDueAt"))) <= now_dt
             )
         ]
         pool = due or recent_practices
@@ -1792,3 +1362,14 @@ class CoachEngine:
                 }
             )
         return deduped
+
+    def _parse_datetime(self, value: str | None) -> datetime:
+        if not value:
+            return datetime.now(UTC)
+        candidate = value.strip()
+        if candidate.endswith("Z"):
+            candidate = candidate[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(candidate)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)

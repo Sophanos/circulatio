@@ -39,9 +39,7 @@ def load_journey_case(case_id: str) -> dict[str, object]:
     return load_journey_cases(JOURNEY_DATASETS, case_ids=[case_id])[0]
 
 
-def build_service_fixture() -> tuple[
-    InMemoryCirculatioRepository, CirculatioService, FakeCirculatioLlm
-]:
+def build_service_fixture() -> tuple[InMemoryCirculatioRepository, CirculatioService, FakeCirculatioLlm]:
     repository = InMemoryCirculatioRepository()
     llm = FakeCirculatioLlm()
     core = CirculatioCore(repository, llm=llm)
@@ -98,7 +96,6 @@ async def seed_history_seed(
                 "relatedPatternIds": list(journey.get("relatedPatternIds", [])),
                 "relatedDreamSeriesIds": list(journey.get("relatedDreamSeriesIds", [])),
                 "relatedGoalIds": list(journey.get("relatedGoalIds", [])),
-                "relatedBodyStateIds": list(journey.get("relatedBodyStateIds", [])),
                 "currentQuestion": str(journey.get("currentQuestion") or ""),
                 "createdAt": str(journey.get("createdAt") or "2026-04-18T00:00:00Z"),
                 "updatedAt": str(journey.get("updatedAt") or "2026-04-18T00:00:00Z"),
@@ -125,7 +122,6 @@ async def seed_history_seed(
                 "nextFollowUpDueAt": practice.get("nextFollowUpDueAt"),
                 "source": str(practice.get("source") or "manual"),
                 "followUpCount": int(practice.get("followUpCount") or 0),
-                "relatedJourneyIds": list(practice.get("relatedJourneyIds", [])),
                 "createdAt": str(practice.get("createdAt") or "2026-04-18T00:00:00Z"),
                 "updatedAt": str(practice.get("updatedAt") or "2026-04-18T00:00:00Z"),
                 "activationBefore": practice.get("activationBefore"),

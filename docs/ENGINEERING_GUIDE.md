@@ -1,4 +1,4 @@
-> **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
+> **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, the Phase 1 plan-only ritual presentation contract, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
 > **Consolidated docs:** See `ARCHITECTURE.md` for the system framing. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `PRESENTATION_LAYER.md` for the deferred embodied presentation contract.
 
@@ -29,8 +29,10 @@ Circulatio is a **symbolic/individuation backend for Hermes**. It is not a gener
 - Frontend visualization (out of scope for this phase)
 
 ### Integration Boundary
-- **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling
-- **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile
+- **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling, ritual delivery messages
+- **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile, typed ritual plans
+- **Renderer CLI owns:** local/static artifact manifest generation, mock provider output, provider/cache boundaries
+- **Hermes Rituals frontend owns:** playback of artifact manifests, breath pacers, meditation fields, captions, and completion UI
 
 ### Storage Boundary
 - SQLite is the canonical local backend
@@ -116,7 +118,6 @@ The codebase now already contains the Phase 4-7 substrate that later work should
 
 * `MethodContextSnapshot` is part of interpretation input and persisted context snapshots.
 * `ThreadDigest` is a derived internal read model beside `MethodContextSnapshot`; it unifies journeys, dream series, threshold/process loops, goal tension, practice-loop, and longitudinal thread refs without creating a new durable record family.
-* Journey followthrough is also derived at runtime rather than persisted as a new ontology. The only durable additions for this layer are explicit continuity links that cannot be safely re-derived: `JourneyRecord.relatedBodyStateIds` and `PracticeSessionRecord.relatedJourneyIds`.
 * Domain records now exist for conscious attitude, personal amplification, body states, goals, dream series, culture, adaptation, journeys, and proactive briefs.
 * `CirculatioCore` accepts LLM-produced `methodGate`, `depthReadiness`, amplification prompts, dream-series suggestions, and richer practice metadata.
 * Hermes/plugin surfaces now support hold-first storage for dreams, events, reflections, symbolic notes, and body states, plus `alive_today`, the bounded read-only `discovery` digest, journey-page assembly, low-risk journey-container management, label-based journey resolution, explicit `/circulation journey ...` QA commands, interpretation, review, and approval flows.
@@ -138,16 +139,6 @@ As of April 2026, the Phase 8/9 backend slice is also present in the main runtim
 * the repo now also includes a conversational real-host QA protocol at `tests/evals/HERMES_CIRCULATIO_REAL_HOST_HARNESS.md` for strict operator-driven routing, leak, fallback, and retry-loop checks through `hermes chat`
 
 The remaining work in this area should be refinement, wider validation, and documentation upkeep rather than a new architectural phase transition.
-
-### Journey Followthrough Contract
-
-Journey followthrough for P2-P4 is a targeted extension of the existing runtime, not a new subsystem.
-
-* keep `JourneyRecord` lightweight rather than turning it into a task, reminder, or streak object
-* derive family/readiness/blocked-escalation state at runtime only through `JourneyFollowthroughEngine`
-* keep those family labels internal to orchestration rather than persisting them or exposing them as host/UI ontology
-* let `CoachEngine` remain the canonical selector of the next bounded move, with `ProactiveEngine` deciding whether that move becomes a brief or stays silent
-* treat silence as a valid outcome; successful stabilization should lengthen quiet rather than create more nudges
 
 ### Current Evolution OS Tooling
 

@@ -53,9 +53,7 @@ class PromptFragmentsProvider(Protocol):
 
     def method_state_routing_instruction_block(self) -> dict[str, str]: ...
 
-    def analysis_packet_instruction_block(
-        self, analytic_lens: str | None = None
-    ) -> dict[str, str]: ...
+    def analysis_packet_instruction_block(self, analytic_lens: str | None = None) -> dict[str, str]: ...
 
 
 def _fragments(provider: PromptFragmentsProvider | None) -> PromptFragmentsProvider:
@@ -109,6 +107,7 @@ def build_interpretation_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+
 def build_weekly_review_messages(
     input_data: CirculationSummaryInput,
     *,
@@ -142,6 +141,7 @@ def build_weekly_review_messages(
     )
     user = json.dumps(payload, indent=2, sort_keys=True, default=str)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
 
 
 def build_alive_today_messages(
@@ -205,6 +205,7 @@ def build_life_context_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+
 def build_practice_messages(
     input_data: PracticeRecommendationInput,
     *,
@@ -243,6 +244,7 @@ def build_practice_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+
 def build_rhythmic_brief_messages(
     input_data: RhythmicBriefInput,
     *,
@@ -275,6 +277,7 @@ def build_rhythmic_brief_messages(
     )
     user = json.dumps(payload, indent=2, sort_keys=True, default=str)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
 
 
 def build_threshold_review_messages(
@@ -312,6 +315,7 @@ def build_threshold_review_messages(
     )
     user = json.dumps(payload, indent=2, sort_keys=True, default=str)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
 
 
 def build_living_myth_review_messages(
@@ -354,6 +358,7 @@ def build_living_myth_review_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+
 def build_method_state_routing_messages(
     input_data: MethodStateRoutingInput,
     *,
@@ -384,6 +389,7 @@ def build_method_state_routing_messages(
     )
     user = json.dumps(payload, indent=2, sort_keys=True, default=str)
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
 
 
 def build_analysis_packet_messages(

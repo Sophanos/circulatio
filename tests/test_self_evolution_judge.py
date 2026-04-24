@@ -17,7 +17,13 @@ from tools.self_evolution.judge import JudgeOptions, pairwise_order
 
 class SelfEvolutionJudgeTests(unittest.TestCase):
     def _dataset_path(self, name: str) -> Path:
-        return Path(__file__).resolve().parents[1] / "tests" / "evals" / "circulatio_method" / name
+        return (
+            Path(__file__).resolve().parents[1]
+            / "tests"
+            / "evals"
+            / "circulatio_method"
+            / name
+        )
 
     def test_judge_score_is_recorded_but_does_not_flip_pass_status(self) -> None:
         client = FakeEvolutionLlmClient(
@@ -41,9 +47,7 @@ class SelfEvolutionJudgeTests(unittest.TestCase):
         report = evaluate_target(
             "prompt_fragments",
             dataset_paths=[self._dataset_path("execution_prompt_behavior.jsonl")],
-            execution_options=ExecutionOptions(
-                enabled=True, candidate_id="prompt_fragments_cand_0001"
-            ),
+            execution_options=ExecutionOptions(enabled=True, candidate_id="prompt_fragments_cand_0001"),
             judge_options=JudgeOptions(enabled=True, candidate_id="prompt_fragments_cand_0001"),
             llm_client=client,
         )
@@ -85,9 +89,7 @@ class SelfEvolutionJudgeTests(unittest.TestCase):
         report = evaluate_target(
             "prompt_fragments",
             dataset_paths=[self._dataset_path("execution_prompt_behavior.jsonl")],
-            execution_options=ExecutionOptions(
-                enabled=True, candidate_id="prompt_fragments_cand_0001"
-            ),
+            execution_options=ExecutionOptions(enabled=True, candidate_id="prompt_fragments_cand_0001"),
             judge_options=JudgeOptions(
                 enabled=True,
                 mode="pairwise",

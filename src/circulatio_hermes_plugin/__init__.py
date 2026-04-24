@@ -21,12 +21,10 @@ from .tools import (
     discovery_tool,
     generate_practice_recommendation_tool,
     generate_rhythmic_briefs_tool,
-    get_journey_experiment_tool,
     get_journey_tool,
     get_material_tool,
     interpret_material_tool,
     journey_page_tool,
-    list_journey_experiments_tool,
     list_journeys_tool,
     list_materials_tool,
     list_pending_review_proposals_tool,
@@ -45,14 +43,12 @@ from .tools import (
     reject_hypotheses_tool,
     reject_proposals_tool,
     reject_review_proposals_tool,
-    respond_journey_experiment_tool,
     respond_practice_recommendation_tool,
     respond_rhythmic_brief_tool,
     revise_entity_tool,
     set_consent_tool,
     set_cultural_frame_tool,
     set_journey_status_tool,
-    start_journey_experiment_tool,
     store_body_state_tool,
     store_dream_tool,
     store_event_tool,
@@ -88,10 +84,6 @@ _TOOL_HANDLERS = {
     "circulatio_get_journey": get_journey_tool,
     "circulatio_update_journey": update_journey_tool,
     "circulatio_set_journey_status": set_journey_status_tool,
-    "circulatio_journey_experiment_start": start_journey_experiment_tool,
-    "circulatio_journey_experiment_respond": respond_journey_experiment_tool,
-    "circulatio_journey_experiment_list": list_journey_experiments_tool,
-    "circulatio_journey_experiment_get": get_journey_experiment_tool,
     "circulatio_list_materials": list_materials_tool,
     "circulatio_get_material": get_material_tool,
     "circulatio_interpret_material": interpret_material_tool,
@@ -168,7 +160,8 @@ def _register_tools(ctx: Any) -> None:
     if not hasattr(ctx, "register_tool"):
         return
     for schema in TOOL_SCHEMAS:
-        handler = _TOOL_HANDLERS[schema["name"]]
+        name = str(schema["name"])
+        handler = _TOOL_HANDLERS[name]
         _register_tool(ctx, schema, handler)
 
 

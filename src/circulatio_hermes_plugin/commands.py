@@ -8,6 +8,7 @@ from copy import deepcopy
 from circulatio.domain.errors import PersistenceError, ProfileStorageCorruptionError
 from circulatio.domain.ids import create_id
 from circulatio.hermes.agent_bridge_contracts import (
+    BridgeOperation,
     BridgeRequestEnvelope,
     BridgeResponseEnvelope,
     BridgeStatus,
@@ -96,7 +97,7 @@ def build_command_request(*, raw_args: str, kwargs: dict[str, object]) -> Bridge
 
 def build_tool_request(
     *,
-    operation: str,
+    operation: BridgeOperation,
     payload: dict[str, object],
     tool_name: str,
     kwargs: dict[str, object],

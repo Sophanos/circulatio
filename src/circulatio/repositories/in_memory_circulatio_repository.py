@@ -60,11 +60,6 @@ from ..domain.interpretations import (
     InterpretationRunUpdate,
     ProposalDecisionRecord,
 )
-from ..domain.journey_experiments import (
-    JourneyExperimentRecord,
-    JourneyExperimentStatus,
-    JourneyExperimentUpdate,
-)
 from ..domain.journeys import JourneyRecord, JourneyUpdate
 from ..domain.living_myth import (
     AnalysisPacketRecord,
@@ -859,15 +854,14 @@ class InMemoryCirculatioRepository(CirculatioRepository):
         async with self._lock:
             bucket = self._bucket(record["userId"])
             ensure_unique(bucket.practice_sessions, record["id"], "practice session")
-            normalized = self._normalize_practice_session_record(record)
-            bucket.practice_sessions[record["id"]] = deepcopy(normalized)
-            return deepcopy(normalized)
+            bucket.practice_sessions[record["id"]] = deepcopy(record)
+            return deepcopy(record)
 
     async def get_practice_session(
         self, user_id: Id, practice_session_id: Id, *, include_deleted: bool = False
     ) -> PracticeSessionRecord:
         async with self._lock:
-            return self._normalize_practice_session_record(
+            return deepcopy(
                 get_visible(
                     store=self._bucket(user_id).practice_sessions,
                     record_id=practice_session_id,
@@ -902,7 +896,7 @@ class InMemoryCirculatioRepository(CirculatioRepository):
                     continue
                 if since and item.get("updatedAt", item.get("createdAt", "")) < since:
                     continue
-                items.append(self._normalize_practice_session_record(item))
+                items.append(deepcopy(item))
             items.sort(
                 key=lambda item: item.get("updatedAt", item.get("createdAt", "")), reverse=True
             )
@@ -920,7 +914,7 @@ class InMemoryCirculatioRepository(CirculatioRepository):
                 label="practice session",
             )
             record.update(deepcopy(updates))
-            return self._normalize_practice_session_record(record)
+            return deepcopy(record)
 
     async def delete_practice_session(
         self, user_id: Id, practice_session_id: Id, *, mode: DeletionMode
@@ -1750,19 +1744,17 @@ class InMemoryCirculatioRepository(CirculatioRepository):
                         continue
                     if existing.get("triggerKey") != trigger_key:
                         continue
-                    return self._normalize_proactive_brief_record(existing)
+                    return deepcopy(existing)
             ensure_unique(bucket.proactive_briefs, record["id"], "proactive brief")
-            normalized = self._normalize_proactive_brief_record(record)
-            bucket.proactive_briefs[record["id"]] = deepcopy(normalized)
-            return deepcopy(normalized)
+            bucket.proactive_briefs[record["id"]] = deepcopy(record)
+            return deepcopy(record)
 
     async def get_proactive_brief(
         self, user_id: Id, brief_id: Id, *, include_deleted: bool = False
     ) -> ProactiveBriefRecord:
-        record = await self._get_bucket_record(
+        return await self._get_bucket_record(
             user_id, "proactive_briefs", brief_id, include_deleted, "proactive brief"
         )
-        return self._normalize_proactive_brief_record(record)
 
     async def list_proactive_briefs(
         self,
@@ -1775,7 +1767,7 @@ class InMemoryCirculatioRepository(CirculatioRepository):
         limit: int = 50,
     ) -> list[ProactiveBriefRecord]:
         status_set = set(statuses or [])
-        records = await self._list_bucket_records(
+        return await self._list_bucket_records(
             user_id,
             "proactive_briefs",
             include_deleted=include_deleted,
@@ -1787,73 +1779,13 @@ class InMemoryCirculatioRepository(CirculatioRepository):
             ),
             limit=limit,
         )
-        return [self._normalize_proactive_brief_record(item) for item in records]
 
     async def update_proactive_brief(
         self, user_id: Id, brief_id: Id, updates: ProactiveBriefUpdate
     ) -> ProactiveBriefRecord:
-        record = await self._update_bucket_record(
+        return await self._update_bucket_record(
             user_id, "proactive_briefs", brief_id, updates, "proactive brief"
         )
-        return self._normalize_proactive_brief_record(record)
-
-    async def create_journey_experiment(
-        self, record: JourneyExperimentRecord
-    ) -> JourneyExperimentRecord:
-        async with self._lock:
-            bucket = self._bucket(record["userId"])
-            ensure_unique(bucket.journey_experiments, record["id"], "journey experiment")
-            normalized = self._normalize_journey_experiment_record(record)
-            bucket.journey_experiments[record["id"]] = deepcopy(normalized)
-            return deepcopy(normalized)
-
-    async def list_journey_experiments(
-        self,
-        user_id: Id,
-        *,
-        journey_ids: list[Id] | None = None,
-        statuses: list[JourneyExperimentStatus] | None = None,
-        include_deleted: bool = False,
-        limit: int = 50,
-    ) -> list[JourneyExperimentRecord]:
-        journey_id_set = {str(item).strip() for item in journey_ids or [] if str(item).strip()}
-        status_set = set(statuses or [])
-        records = await self._list_bucket_records(
-            user_id,
-            "journey_experiments",
-            include_deleted=include_deleted,
-            label="journey experiment",
-            predicate=lambda item: (
-                (not journey_id_set or str(item.get("journeyId") or "").strip() in journey_id_set)
-                and (not status_set or item.get("status") in status_set)
-            ),
-            limit=limit,
-        )
-        return [self._normalize_journey_experiment_record(item) for item in records]
-
-    async def get_journey_experiment(
-        self, user_id: Id, experiment_id: Id, *, include_deleted: bool = False
-    ) -> JourneyExperimentRecord:
-        record = await self._get_bucket_record(
-            user_id,
-            "journey_experiments",
-            experiment_id,
-            include_deleted,
-            "journey experiment",
-        )
-        return self._normalize_journey_experiment_record(record)
-
-    async def update_journey_experiment(
-        self, user_id: Id, experiment_id: Id, updates: JourneyExperimentUpdate
-    ) -> JourneyExperimentRecord:
-        record = await self._update_bucket_record(
-            user_id,
-            "journey_experiments",
-            experiment_id,
-            updates,
-            "journey experiment",
-        )
-        return self._normalize_journey_experiment_record(record)
 
     async def build_hermes_memory_context_from_records(
         self, user_id: Id, *, max_items: int | None = None
@@ -2444,32 +2376,6 @@ class InMemoryCirculatioRepository(CirculatioRepository):
                 key=lambda item: item.get("updatedAt", item.get("createdAt", "")), reverse=True
             )
             return items[:limit]
-
-    def _normalize_practice_session_record(
-        self, record: PracticeSessionRecord
-    ) -> PracticeSessionRecord:
-        normalized = deepcopy(record)
-        normalized.setdefault("relatedExperimentIds", [])
-        return normalized
-
-    def _normalize_proactive_brief_record(
-        self, record: ProactiveBriefRecord
-    ) -> ProactiveBriefRecord:
-        normalized = deepcopy(record)
-        normalized.setdefault("relatedExperimentIds", [])
-        return normalized
-
-    def _normalize_journey_experiment_record(
-        self, record: JourneyExperimentRecord
-    ) -> JourneyExperimentRecord:
-        normalized = deepcopy(record)
-        normalized.setdefault("relatedPracticeSessionIds", [])
-        normalized.setdefault("relatedBriefIds", [])
-        normalized.setdefault("relatedSymbolIds", [])
-        normalized.setdefault("relatedGoalTensionIds", [])
-        normalized.setdefault("relatedBodyStateIds", [])
-        normalized.setdefault("relatedResourceIds", [])
-        return normalized
 
     async def _delete_bucket_record(
         self,

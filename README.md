@@ -59,6 +59,35 @@ Expected shape:
 - Circulatio starts a collaborative interpretation
 - the first reply is usually one bounded question, not a full reading
 
+### Ritual artifact dry run
+
+Create a plan through Hermes or a test fixture, then render it locally with mock providers:
+
+```bash
+.venv/bin/python scripts/render_ritual_artifact.py \
+  --plan artifacts/rituals/plans/{planId}.json \
+  --out apps/hermes-rituals-web/public/artifacts/{artifactId} \
+  --mock-providers \
+  --dry-run
+```
+
+The Hermes Rituals app can load the resulting manifest at `/artifacts/{artifactId}`. The built-in fixture is available at `/artifacts/weekly-ritual-dry-run`.
+
+Chutes provider rendering is available from the renderer only. Keep the API token in your shell or an ignored local env file, then request the provider profile explicitly:
+
+```bash
+export CHUTES_API_TOKEN=...
+.venv/bin/python scripts/render_ritual_artifact.py \
+  --plan artifacts/rituals/plans/{planId}.json \
+  --out apps/hermes-rituals-web/public/artifacts/{artifactId} \
+  --provider-profile chutes_speech \
+  --surfaces audio,captions \
+  --transcribe-captions \
+  --max-cost-usd 0.05
+```
+
+The renderer also has opt-in Chutes profiles for image, music, video, and all surfaces. Those calls still require a plan that allows external providers plus an explicit positive budget flag; raw Circulatio source text is not sent to providers.
+
 Example reply shape:
 
 ```text
@@ -78,7 +107,7 @@ Journals store. Chatbots react. Circulatio creates meaning and continuity:
 - **You remain the author of your own symbols.** Nothing becomes "true" about you without your witness.
 - **Your images become a language you recognize.** Not generic meanings. Your own recurring vocabulary, deepening over time.
 
-It does not diagnose, gamify, optimize, or turn inner work into streaks or quotas.  
+It does not diagnose, gamify, or optimize.  
 It holds, remembers, and helps patterns become visible.
 
 <p align="center">
@@ -180,7 +209,6 @@ The host handles routing, sessions, and scheduling. Circulatio handles:
 - **Proactive runtime** — `alive_today`, rhythmic briefs, journey pages, and weekly reviews
 - **Read surfaces** — discovery, journey pages, threshold reviews, living myth reviews, and bounded analysis packets
 - **Practice lifecycle** — recommendations, follow-ups, and integration, held lightly
-- **Current tending** — one explicit, non-gamified way of staying with a journey when the user accepts it
 
 It can run in-memory for testing or with a SQLite-backed profile runtime for durable local use.
 

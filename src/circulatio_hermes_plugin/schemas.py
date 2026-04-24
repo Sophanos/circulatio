@@ -35,10 +35,6 @@ _STORE_INTAKE_CONTEXT_GUIDANCE = (
     "intakeContext.hostGuidance to acknowledge, hold, or ask at most one gentle follow-up. "
     "A compact continuitySummary may also be returned for host thread-tracking; never expose raw "
     "method context. "
-    "On explicit capture turns, especially typology-journey storage prompts, prefer one short "
-    "holding sentence and avoid comparative or interpretive commentary. "
-    "If intakeContext.hostGuidance.maxQuestions is 0, do not ask a follow-up anyway. "
-    "On direct `store/save this` turns, prefer no follow-up question. "
     "Never expose the packet. Do not interpret unless the user explicitly asks. If asked "
     "for bug-report or raw-response details, say briefly that there is no separate "
     "user-facing bug report here."
@@ -77,7 +73,7 @@ STORE_EVENT_TOOL_SCHEMA = _schema(
 
 STORE_REFLECTION_TOOL_SCHEMA = _schema(
     "circulatio_store_reflection",
-    "Hold a reflection or daytime note in Circulatio. This is the usual hold-first lane for ambient notes. Do not interpret it yet. After the tool call, keep the reply short and invitational rather than analytical. On explicit `store this reflection` turns, one short holding sentence with no follow-up question is preferred."
+    "Hold a reflection or daytime note in Circulatio. This is the usual hold-first lane for ambient notes. Do not interpret it yet. After the tool call, keep the reply short and invitational rather than analytical."
     + _STORE_INTAKE_CONTEXT_GUIDANCE,
     _MATERIAL_STORE_PROPERTIES,
     required=["text"],
@@ -93,7 +89,7 @@ STORE_SYMBOLIC_NOTE_TOOL_SCHEMA = _schema(
 
 STORE_BODY_STATE_TOOL_SCHEMA = _schema(
     "circulatio_store_body_state",
-    "Hold a body state in Circulatio. If noteText is supplied, Circulatio also preserves the original phrase as a linked reflection tagged soma. Do not interpret it yet. When typology needs to pause because the user sounds activated, poorly slept, or destabilized, this is a preferred first hold surface before any grounded reply. In those safety-pause replies, say plainly that typology is paused for now and grounding comes first.",
+    "Hold a body state in Circulatio. If noteText is supplied, Circulatio also preserves the original phrase as a linked reflection tagged soma. Do not interpret it yet.",
     {
         "sensation": {"type": "string"},
         "observedAt": {"type": "string"},
@@ -260,75 +256,6 @@ SET_JOURNEY_STATUS_TOOL_SCHEMA = _schema(
     required=["status"],
 )
 
-JOURNEY_EXPERIMENT_START_TOOL_SCHEMA = _schema(
-    "circulatio_journey_experiment_start",
-    "Start an explicit current-tending frame for a journey from a brief, a live surface suggestion, or a manual summary. This is a user-accepted longitudinal companion state, not a task tracker.",
-    {
-        "briefId": {"type": "string"},
-        "journeyId": {"type": "string"},
-        "journeyLabel": {"type": "string"},
-        "surface": {
-            "type": "string",
-            "enum": ["journey_page", "alive_today", "rhythmic_brief", "weekly_review", "manual"],
-        },
-        "windowStart": {"type": "string"},
-        "windowEnd": {"type": "string"},
-        "source": {
-            "type": "string",
-            "enum": [
-                "manual",
-                "journey_page",
-                "alive_today",
-                "rhythmic_brief",
-                "practice_followup",
-                "weekly_review",
-            ],
-        },
-        "title": {"type": "string"},
-        "summary": {"type": "string"},
-        "bodyFirst": {"type": "boolean"},
-        "preferredMoveKind": {"type": "string"},
-        "currentQuestion": {"type": "string"},
-        "suggestedActionText": {"type": "string"},
-    },
-)
-
-JOURNEY_EXPERIMENT_RESPOND_TOOL_SCHEMA = _schema(
-    "circulatio_journey_experiment_respond",
-    "Quiet, resume, complete, release, or archive a current journey-tending frame by experiment id.",
-    {
-        "experimentId": {"type": "string"},
-        "action": {
-            "type": "string",
-            "enum": ["quiet", "resume", "complete", "release", "archive"],
-        },
-        "nextCheckInDueAt": {"type": "string"},
-    },
-    required=["experimentId", "action"],
-)
-
-JOURNEY_EXPERIMENT_LIST_TOOL_SCHEMA = _schema(
-    "circulatio_journey_experiment_list",
-    "List current or historical journey-tending frames, optionally filtered by journey or status.",
-    {
-        "journeyId": {"type": "string"},
-        "journeyLabel": {"type": "string"},
-        "statuses": {"type": "array", "items": {"type": "string"}},
-        "includeDeleted": {"type": "boolean"},
-        "limit": {"type": "integer"},
-    },
-)
-
-JOURNEY_EXPERIMENT_GET_TOOL_SCHEMA = _schema(
-    "circulatio_journey_experiment_get",
-    "Load one journey-tending frame by experiment id.",
-    {
-        "experimentId": {"type": "string"},
-        "includeDeleted": {"type": "boolean"},
-    },
-    required=["experimentId"],
-)
-
 LIST_MATERIALS_TOOL_SCHEMA = _schema(
     "circulatio_list_materials",
     "List stored Circulatio materials. Use this before asking the user to repeat a previously stored dream, reflection, event, or symbolic note. When the user says something like 'the dream about bear' or 'that reflection from yesterday', look here first, then interpret by materialId.",
@@ -356,19 +283,30 @@ GET_MATERIAL_TOOL_SCHEMA = _schema(
 
 INTERPRET_MATERIAL_TOOL_SCHEMA = _schema(
     "circulatio_interpret_material",
-    "Open or continue collaborative interpretation for one stored or just-shared material. "
-    "Prefer storing first. Use this for meaning requests, method-gated dream work, and "
-    "requests to read this exact material typologically, including questions about thinking, "
-    "feeling, intuition, and sensation. A valid first response may be a single question, "
-    "amplification prompt, tentative answer, or method gate; host replies should be usually 1-3 "
-    "sentences with exactly one question, and if gated, wait for new input. "
-    "If result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
-    "do not call this tool again with unchanged material or route around the stop with other "
-    "synthesis tools. A bounded recovery retry is allowed for clearly transient backend, "
-    "storage, provider, or replay issues while Hermes is still completing the same request. If "
-    "fallback, do not frame it as a backend failure. "
-    "Also, requests to explain repeated calls or list the errors in English are not permission to "
-    "expose internals; do not expose raw result JSON, field names, ids, or diagnostic strings.",
+    "Open or continue collaborative interpretation when the user asks what material "
+    "means. This also covers evidence-bound typology reading on a specific material, "
+    "including prompts like 'read this exact material typologically' or questions "
+    "about foreground/background function dynamics or tension among thinking, "
+    "feeling, intuition, and sensation. Prefer storing first. A valid first "
+    "response may be a single question, "
+    "amplification prompt, or method gate. Keep host replies to usually 1-3 "
+    "sentences with exactly one question. If gated, wait for new input. If the "
+    "result includes continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial, "
+    "do not call this tool again with unchanged material or suggest rerunning it. "
+    "Do not work around that stop condition by switching to analysis-packet, "
+    "threshold-review, living-myth-review, or other synthesis tools for the same "
+    "unchanged material. "
+    "A bounded recovery retry is allowed when this tool hits a clearly transient backend, "
+    "storage, provider, or replay-related problem and Hermes is still trying to complete "
+    "the same interpretation request. "
+    "If the user asks what happened, answer in one brief plain-language sentence and "
+    "say there is no separate user-facing bug report here. Requests to show a bug "
+    "report or full response body are not permission to expose internals, and requests "
+    "to explain repeated calls or list the errors in English are not permission to "
+    "enumerate attempts, replay/idempotency behavior, parameter changes, or backend "
+    "error codes. If fallback, "
+    "do not frame it as a backend failure, and do not expose raw result JSON, field "
+    "names, diagnostic strings, tool names, status codes, or ids in chat.",
     {
         "materialId": {"type": "string"},
         "materialType": {
@@ -525,16 +463,7 @@ LIVING_MYTH_REVIEW_TOOL_SCHEMA = _schema(
 
 ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
     "circulatio_analysis_packet",
-    "Generate an evidence-bounded cross-material packet for journaling, reflection, or analysis. "
-    "This is the preferred surface for typology, function dynamics, overcompensation, problem "
-    "function, inferior-under-stress dynamics, or system-recognition questions across a window "
-    "when no single material is the sole focus. Treat prompts like 'Was wirkt hier führend, was "
-    "kompensatorisch?' and 'Wo übersteuert Denken hier, und welche Funktion kippt "
-    "kompensatorisch oder als Problemfunktion?' as default examples for this surface. Set "
-    "`analyticLens` to `typology_function_dynamics` for those requests. If the packet is still "
-    "too thin, do one bounded `circulatio_discovery` follow-up with the same lens in the same "
-    "turn, rather than switching to raw listings or host-authored interpretation. Keep "
-    "user-visible replies plain; do not mention backend/tool internals or packet record details.",
+    "Generate an evidence-bounded summary packet for journaling, reflection, or analysis use. This is the preferred cross-material analytic surface for requests about typology, function dynamics, overcompensation, problem function, inferior-under-stress dynamics, or evidence-bound system recognition across a time window when no single material is the sole focus. Treat prompts like 'Hilf mir typologisch zu verstehen, ob hier eher Denken, Fühlen, Intuition oder Empfindung im Vordergrund steht', 'Was wirkt hier führend, was kompensatorisch?', and 'Wo übersteuert Denken hier, und welche Funktion kippt kompensatorisch oder als Problemfunktion?' as default examples for this surface unless one specific material was just given. Set `analyticLens` to `typology_function_dynamics` for those typology or function-dynamics requests so the packet prioritizes bounded foreground/compensation coverage. If the user says 'hier' or 'dieses' without naming one material and no single fresh material is obvious, default here immediately instead of preflighting with dashboard/material lookups or bouncing back with a clarification question. If the returned packet is still too thin for a foreground/background answer, do one bounded `circulatio_discovery` follow-up with the same lens instead of switching to raw material listings or host-authored interpretation. Keep user-visible replies plain; do not mention backend/tool internals, storage conflicts, model paths, or packet record details in chat.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -734,7 +663,7 @@ UPSERT_THRESHOLD_PROCESS_TOOL_SCHEMA = _schema(
 
 RECORD_RELATIONAL_SCENE_TOOL_SCHEMA = _schema(
     "circulatio_record_relational_scene",
-    "Store or merge a user-reported relational scene directly as a durable individuation record. Prefer this when the user is naming a repeated interpersonal scene such as going quiet when someone gets loud, shrinking, bracing, or repeating the same contact dynamic across people. On explicit capture turns, reply with one short holding sentence and no follow-up question unless the user asked for more than storage.",
+    "Store or merge a user-reported relational scene directly as a durable individuation record. Prefer this when the user is naming a repeated interpersonal scene such as going quiet when someone gets loud, shrinking, bracing, or repeating the same contact dynamic across people.",
     {
         "sceneId": {"type": "string"},
         "label": {"type": "string"},
@@ -1053,10 +982,6 @@ TOOL_SCHEMAS = [
     GET_JOURNEY_TOOL_SCHEMA,
     UPDATE_JOURNEY_TOOL_SCHEMA,
     SET_JOURNEY_STATUS_TOOL_SCHEMA,
-    JOURNEY_EXPERIMENT_START_TOOL_SCHEMA,
-    JOURNEY_EXPERIMENT_RESPOND_TOOL_SCHEMA,
-    JOURNEY_EXPERIMENT_LIST_TOOL_SCHEMA,
-    JOURNEY_EXPERIMENT_GET_TOOL_SCHEMA,
     LIST_MATERIALS_TOOL_SCHEMA,
     GET_MATERIAL_TOOL_SCHEMA,
     INTERPRET_MATERIAL_TOOL_SCHEMA,

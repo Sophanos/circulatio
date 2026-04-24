@@ -183,7 +183,9 @@ class CirculatioCoreTests(unittest.TestCase):
                 result["userFacingResponse"],
                 "What personal association comes up around the part of the dream that feels most alive right now?",
             )
-            self.assertEqual(result["clarificationPlan"]["captureTarget"], "personal_amplification")
+            self.assertEqual(
+                result["clarificationPlan"]["captureTarget"], "personal_amplification"
+            )
             self.assertEqual(result["methodGate"]["depthLevel"], "personal_amplification_needed")
 
         asyncio.run(run())
@@ -942,9 +944,7 @@ class CirculatioCoreTests(unittest.TestCase):
                     "evidence": [],
                 }
             )
-            self.assertFalse(
-                any(section["title"] == "Function dynamics" for section in result["sections"])
-            )
+            self.assertFalse(any(section["title"] == "Function dynamics" for section in result["sections"]))
             self.assertNotIn("functionDynamics", result)
 
         asyncio.run(run())

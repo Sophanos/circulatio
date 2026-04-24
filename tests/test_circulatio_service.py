@@ -282,7 +282,7 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_process_method_state_response_treats_fallback_clarification_as_context_only(
+    def test_process_method_state_response_captures_fallback_personal_association(
         self,
     ) -> None:
         class TimeoutLlm:
@@ -342,14 +342,22 @@ class CirculatioServiceTests(unittest.TestCase):
                 "user_1",
                 run_id=workflow["run"]["id"],
             )
-            self.assertEqual(result["captureRun"]["status"], "no_capture")
+            self.assertEqual(result["captureRun"]["status"], "completed")
             self.assertEqual(result["warnings"], [])
-            self.assertEqual(updated_prompt["status"], "answered_unrouted")
-            self.assertEqual(updated_prompt["captureTarget"], "answer_only")
+            self.assertEqual(updated_prompt["status"], "answered")
+            self.assertEqual(updated_prompt["captureTarget"], "personal_amplification")
             self.assertEqual(len(answers), 1)
-            self.assertEqual(answers[0]["captureTarget"], "answer_only")
-            self.assertEqual(answers[0]["routingStatus"], "unrouted")
-            self.assertEqual(amplifications, [])
+            self.assertEqual(answers[0]["captureTarget"], "personal_amplification")
+            self.assertEqual(answers[0]["routingStatus"], "routed")
+            self.assertEqual(len(amplifications), 1)
+            self.assertEqual(
+                amplifications[0]["associationText"],
+                "The image of the bear still feels the most alive.",
+            )
+            follow_up = result["followUpPrompts"][0]
+            self.assertIn("touch your life right now", follow_up)
+            self.assertIn("makes it sharper", follow_up)
+            self.assertLessEqual(len(follow_up.split()), 30)
 
         asyncio.run(run())
 
@@ -2531,9 +2539,7 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(
-        self,
-    ) -> None:
+    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(self) -> None:
         async def run() -> None:
             repository, service, _ = self._service()
             material = await service.store_material(
@@ -2588,9 +2594,7 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
             function_section = next(
-                section
-                for section in discovery["sections"]
-                if section["key"] == "function_dynamics"
+                section for section in discovery["sections"] if section["key"] == "function_dynamics"
             )
             self.assertIn("Foreground", {item["label"] for item in function_section["items"]})
             criteria = {
@@ -3145,7 +3149,6 @@ class CirculatioServiceTests(unittest.TestCase):
                     "alive_today",
                     "weekly_reflection",
                     "rhythmic_invitations",
-                    "tending_now",
                     "practice_container",
                     "analysis_packet",
                 ],
@@ -3153,7 +3156,6 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(await repository.list_weekly_reviews("user_1"), [])
             self.assertEqual(await repository.list_proactive_briefs("user_1"), [])
             self.assertEqual(await repository.list_practice_sessions("user_1"), [])
-            self.assertEqual(await repository.list_journey_experiments("user_1"), [])
             self.assertIsNone(await repository.get_adaptation_profile("user_1"))
             self.assertEqual(len(llm.alive_today_calls), 1)
             self.assertIn("methodContextSnapshot", llm.alive_today_calls[0])
@@ -3536,371 +3538,6 @@ class CirculatioServiceTests(unittest.TestCase):
             self.assertEqual(paused["status"], "paused")
             self.assertEqual(active["status"], "active")
             self.assertEqual([item["id"] for item in active_list], [journey["id"]])
-
-        asyncio.run(run())
-
-    def test_start_journey_experiment_from_brief_is_idempotent_and_links_brief(self) -> None:
-        async def run() -> None:
-            repository, service, _ = self._service()
-            journey = await service.create_journey(
-                {
-                    "userId": "user_1",
-                    "label": "Returning contact thread",
-                }
-            )
-            brief = await repository.create_proactive_brief(
-                {
-                    "id": create_id("proactive_brief"),
-                    "userId": "user_1",
-                    "briefType": "journey_checkin",
-                    "status": "candidate",
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                    "relatedJourneyIds": [journey["id"]],
-                    "relatedMaterialIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedPracticeSessionIds": [],
-                    "relatedExperimentIds": [],
-                    "evidenceIds": [],
-                    "createdAt": "2026-04-19T00:00:00Z",
-                    "updatedAt": "2026-04-19T00:00:00Z",
-                }
-            )
-
-            first = await service.start_journey_experiment(
-                {"userId": "user_1", "briefId": brief["id"]}
-            )
-            second = await service.start_journey_experiment(
-                {"userId": "user_1", "briefId": brief["id"]}
-            )
-            experiments = await repository.list_journey_experiments("user_1")
-            updated_brief = await repository.get_proactive_brief("user_1", brief["id"])
-
-            self.assertEqual(first["id"], second["id"])
-            self.assertEqual(len(experiments), 1)
-            self.assertEqual(updated_brief["status"], "acted_on")
-            self.assertEqual(updated_brief["relatedExperimentIds"], [first["id"]])
-
-        asyncio.run(run())
-
-    def test_dismissing_experiment_linked_brief_quiets_the_experiment(self) -> None:
-        async def run() -> None:
-            repository, service, _ = self._service()
-            journey = await service.create_journey(
-                {
-                    "userId": "user_1",
-                    "label": "Returning contact thread",
-                }
-            )
-            experiment = await service.start_journey_experiment(
-                {
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                }
-            )
-            brief = await repository.create_proactive_brief(
-                {
-                    "id": create_id("proactive_brief"),
-                    "userId": "user_1",
-                    "briefType": "journey_checkin",
-                    "status": "candidate",
-                    "title": "Journey check-in",
-                    "summary": "A light check-in remains available.",
-                    "relatedJourneyIds": [journey["id"]],
-                    "relatedMaterialIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedPracticeSessionIds": [],
-                    "relatedExperimentIds": [experiment["id"]],
-                    "evidenceIds": [],
-                    "createdAt": "2026-04-19T00:00:00Z",
-                    "updatedAt": "2026-04-19T00:00:00Z",
-                }
-            )
-
-            dismissed = await service.respond_rhythmic_brief(
-                {"userId": "user_1", "briefId": brief["id"], "action": "dismissed"}
-            )
-            updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
-
-            self.assertEqual(dismissed["status"], "dismissed")
-            self.assertEqual(updated_experiment["status"], "quiet")
-            self.assertEqual(updated_experiment["cooldownUntil"], dismissed["cooldownUntil"])
-
-        asyncio.run(run())
-
-    def test_pausing_journey_quiets_current_experiment(self) -> None:
-        async def run() -> None:
-            repository, service, _ = self._service()
-            journey = await service.create_journey(
-                {
-                    "userId": "user_1",
-                    "label": "Returning contact thread",
-                }
-            )
-            experiment = await service.start_journey_experiment(
-                {
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                }
-            )
-
-            await service.set_journey_status(
-                {
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "status": "paused",
-                }
-            )
-            updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
-
-            self.assertEqual(updated_experiment["status"], "quiet")
-
-        asyncio.run(run())
-
-    def test_quieting_journey_experiment_clears_due_date_and_resume_stays_neutral(self) -> None:
-        async def run() -> None:
-            repository, service, _ = self._service()
-            journey = await service.create_journey(
-                {
-                    "userId": "user_1",
-                    "label": "Returning contact thread",
-                }
-            )
-            experiment = await repository.create_journey_experiment(
-                {
-                    "id": create_id("journey_experiment"),
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                    "status": "active",
-                    "source": "manual",
-                    "bodyFirst": False,
-                    "relatedPracticeSessionIds": [],
-                    "relatedBriefIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedGoalTensionIds": [],
-                    "relatedBodyStateIds": [],
-                    "relatedResourceIds": [],
-                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-
-            quiet = await service.respond_journey_experiment(
-                {"userId": "user_1", "experimentId": experiment["id"], "action": "quiet"}
-            )
-            resumed = await service.respond_journey_experiment(
-                {"userId": "user_1", "experimentId": experiment["id"], "action": "resume"}
-            )
-
-            self.assertEqual(quiet["status"], "quiet")
-            self.assertEqual(quiet.get("nextCheckInDueAt", ""), "")
-            self.assertTrue(str(quiet.get("cooldownUntil") or ""))
-            self.assertEqual(resumed["status"], "active")
-            self.assertEqual(resumed.get("nextCheckInDueAt", ""), "")
-
-        asyncio.run(run())
-
-    def test_practice_responses_resolve_linked_experiments(self) -> None:
-        async def run() -> None:
-            repository, service, _ = self._service()
-            journey = await service.create_journey(
-                {
-                    "userId": "user_1",
-                    "label": "Returning contact thread",
-                }
-            )
-            accepted_experiment = await repository.create_journey_experiment(
-                {
-                    "id": create_id("journey_experiment"),
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                    "status": "active",
-                    "source": "manual",
-                    "bodyFirst": False,
-                    "relatedPracticeSessionIds": [],
-                    "relatedBriefIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedGoalTensionIds": [],
-                    "relatedBodyStateIds": [],
-                    "relatedResourceIds": [],
-                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-            skipped_experiment = await repository.create_journey_experiment(
-                {
-                    "id": create_id("journey_experiment"),
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                    "status": "active",
-                    "source": "manual",
-                    "bodyFirst": False,
-                    "relatedPracticeSessionIds": [],
-                    "relatedBriefIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedGoalTensionIds": [],
-                    "relatedBodyStateIds": [],
-                    "relatedResourceIds": [],
-                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-            accepted_practice = await repository.create_practice_session(
-                {
-                    "id": create_id("practice_session"),
-                    "userId": "user_1",
-                    "practiceType": "journaling",
-                    "target": "thread contact",
-                    "reason": "stay with the thread",
-                    "instructions": [],
-                    "durationMinutes": 5,
-                    "contraindicationsChecked": [],
-                    "requiresConsent": False,
-                    "status": "recommended",
-                    "source": "manual",
-                    "followUpCount": 0,
-                    "relatedJourneyIds": [journey["id"]],
-                    "relatedExperimentIds": [accepted_experiment["id"]],
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-            skipped_practice = await repository.create_practice_session(
-                {
-                    "id": create_id("practice_session"),
-                    "userId": "user_1",
-                    "practiceType": "grounding",
-                    "target": "settle body",
-                    "reason": "stay with the thread",
-                    "instructions": [],
-                    "durationMinutes": 5,
-                    "contraindicationsChecked": [],
-                    "requiresConsent": False,
-                    "status": "recommended",
-                    "source": "manual",
-                    "followUpCount": 0,
-                    "relatedJourneyIds": [journey["id"]],
-                    "relatedExperimentIds": [skipped_experiment["id"]],
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-
-            await service.respond_practice_recommendation(
-                {
-                    "userId": "user_1",
-                    "practiceSessionId": accepted_practice["id"],
-                    "action": "accepted",
-                }
-            )
-            await service.respond_practice_recommendation(
-                {
-                    "userId": "user_1",
-                    "practiceSessionId": skipped_practice["id"],
-                    "action": "skipped",
-                    "note": "Not today.",
-                }
-            )
-            accepted_updated = await repository.get_journey_experiment(
-                "user_1", accepted_experiment["id"]
-            )
-            skipped_updated = await repository.get_journey_experiment(
-                "user_1", skipped_experiment["id"]
-            )
-
-            self.assertEqual(accepted_updated["status"], "quiet")
-            self.assertEqual(
-                accepted_updated["relatedPracticeSessionIds"], [accepted_practice["id"]]
-            )
-            self.assertEqual(accepted_updated.get("nextCheckInDueAt", ""), "")
-            self.assertTrue(str(accepted_updated.get("cooldownUntil") or ""))
-            self.assertEqual(skipped_updated["status"], "quiet")
-            self.assertEqual(skipped_updated["relatedPracticeSessionIds"], [skipped_practice["id"]])
-            self.assertEqual(skipped_updated.get("nextCheckInDueAt", ""), "")
-            self.assertTrue(str(skipped_updated.get("cooldownUntil") or ""))
-
-        asyncio.run(run())
-
-    def test_practice_outcome_completes_linked_experiment(self) -> None:
-        async def run() -> None:
-            repository, service, _ = self._service()
-            journey = await service.create_journey(
-                {
-                    "userId": "user_1",
-                    "label": "Returning contact thread",
-                }
-            )
-            experiment = await repository.create_journey_experiment(
-                {
-                    "id": create_id("journey_experiment"),
-                    "userId": "user_1",
-                    "journeyId": journey["id"],
-                    "title": "Current tending",
-                    "summary": "Stay with this thread lightly.",
-                    "status": "active",
-                    "source": "manual",
-                    "bodyFirst": False,
-                    "relatedPracticeSessionIds": [],
-                    "relatedBriefIds": [],
-                    "relatedSymbolIds": [],
-                    "relatedGoalTensionIds": [],
-                    "relatedBodyStateIds": [],
-                    "relatedResourceIds": [],
-                    "nextCheckInDueAt": "2026-04-21T00:00:00Z",
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-            practice = await repository.create_practice_session(
-                {
-                    "id": create_id("practice_session"),
-                    "userId": "user_1",
-                    "practiceType": "grounding",
-                    "target": "settle body",
-                    "reason": "stay with the thread",
-                    "instructions": [],
-                    "durationMinutes": 5,
-                    "contraindicationsChecked": [],
-                    "requiresConsent": False,
-                    "status": "recommended",
-                    "source": "manual",
-                    "followUpCount": 0,
-                    "relatedJourneyIds": [journey["id"]],
-                    "relatedExperimentIds": [experiment["id"]],
-                    "createdAt": "2026-04-20T08:00:00Z",
-                    "updatedAt": "2026-04-20T08:00:00Z",
-                }
-            )
-
-            result = await service.record_practice_outcome(
-                user_id="user_1",
-                practice_session_id=practice["id"],
-                material_id=None,
-                outcome={
-                    "practiceType": "grounding",
-                    "outcome": "Felt more settled after grounding.",
-                },
-            )
-            updated_experiment = await repository.get_journey_experiment("user_1", experiment["id"])
-
-            self.assertEqual(result["practiceSession"]["status"], "completed")
-            self.assertEqual(updated_experiment["status"], "completed")
-            self.assertEqual(updated_experiment["relatedPracticeSessionIds"], [practice["id"]])
-            self.assertEqual(updated_experiment.get("nextCheckInDueAt", ""), "")
-            self.assertTrue(str(updated_experiment.get("completedAt") or ""))
 
         asyncio.run(run())
 

@@ -24,9 +24,7 @@ INTERPRETATION_RESPONSE_POLICY = (
     "rather than explain symbolism. Keep it short, plain, and grounded in lived feeling. "
     "Prefer one real question and at most one brief reflection. Use everyday relational or "
     "bodily language the user can actually feel. Do not use unexplained Jungian jargon like "
-    "anima, Great Mother, or archetype. If the material is a dream and the three-act "
-    "structure, lysis, or conscious attitude is missing, the userFacingResponse must ask for "
-    "those prerequisites before any amplification or symbolic exploration."
+    "anima, Great Mother, or archetype."
 )
 ACTION_DYNAMICS_POLICY = (
     "Action and relational dynamics come before or alongside symbolic decoding. In dreams, "
@@ -63,7 +61,9 @@ CLARIFICATION_INTENT_POLICY = (
 WITNESS_METHOD_POLICY = (
     "Personal amplification comes before collective amplification. Dream-series suggestions "
     "are suggestions, not facts. Soma, goal, culture, and series continuity should be "
-    "phrased as tentative co-occurrence unless the supplied context already confirms them."
+    "phrased as tentative co-occurrence unless the supplied context already confirms them. "
+    "After one real association, prefer one more brief life-touching association before "
+    "interpretation; explain that it sharpens the reading, but do not pressure or overload."
 )
 INTERPRETATION_CONSENT_POLICY = (
     "Only suggest collective amplification or deeper imaginal work when the supplied "

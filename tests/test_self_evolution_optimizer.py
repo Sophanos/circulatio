@@ -188,7 +188,7 @@ class SelfEvolutionOptimizerTests(unittest.TestCase):
             manifest_text = Path(result["paths"]["manifest"]).read_text()
         self.assertEqual(result["status"], "fail")
         self.assertEqual(result["promotionStatus"], "failed")
-        self.assertIn('"status": "fail"', report_json)
+        self.assertIn("\"status\": \"fail\"", report_json)
         self.assertIn('"status": "failed"', manifest_text)
 
     def test_reflection_strategy_writes_review_package(self) -> None:

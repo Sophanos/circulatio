@@ -23,6 +23,13 @@ class RitualRenderOptions(TypedDict, total=False):
     dryRun: bool
     surfaces: list[str]
     publicBasePath: str
+    providerProfile: str
+    chutesTokenEnv: str
+    transcribeCaptions: bool
+    requestTimeoutSeconds: int
+    maxCostUsd: float
+    videoImage: str
+    musicSteps: int
 
 
 class RitualArtifactManifest(TypedDict, total=False):

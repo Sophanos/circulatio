@@ -13,7 +13,6 @@ from ..domain.practices import (
     PracticeSessionSource,
     PracticeSessionStatus,
 )
-from ..domain.timestamps import format_iso_datetime, parse_iso_datetime
 from ..domain.types import (
     CoachLoopKind,
     CoachMoveKind,
@@ -99,11 +98,6 @@ class PracticeEngine:
             resolved_hints = adaptation_hints
         else:
             resolved_hints = {"maturity": "default", "source": "default"}
-        source_experiment_ids = (
-            [str(item) for item in practice.get("relatedExperimentIds", []) if str(item).strip()]
-            if isinstance(practice, dict)
-            else []
-        )
 
         def finalize(candidate: PracticePlan, extra_notes: list[str]) -> PracticePlan:
             framed = self._with_notes(candidate, extra_notes)
@@ -112,8 +106,6 @@ class PracticeEngine:
                 method_context=method_context,
                 runtime_policy=runtime_policy,
             )
-            if source_experiment_ids and not framed.get("relatedExperimentIds"):
-                framed["relatedExperimentIds"] = cast(list[Id], source_experiment_ids)
             return self._annotate_target_refs(
                 framed,
                 goal_tensions=resolved_goal_tensions,
@@ -316,7 +308,9 @@ class PracticeEngine:
         practice_type = str(result.get("type") or "journaling")
         current_modality = str(result.get("modality") or "").strip().lower()
         selected_loop_kind = (
-            str(selected_loop.get("kind") or "").strip() if isinstance(selected_loop, dict) else ""
+            str(selected_loop.get("kind") or "").strip()
+            if isinstance(selected_loop, dict)
+            else ""
         )
         selected_move_kind = str(selected_move.get("kind") or "").strip()
         if str(selected_move.get("loopKey") or "").strip():
@@ -327,7 +321,9 @@ class PracticeEngine:
             result["coachMoveKind"] = cast(CoachMoveKind, selected_move_kind)
         resource_invitation_value = selected_move.get("resourceInvitation")
         resource_invitation = (
-            dict(resource_invitation_value) if isinstance(resource_invitation_value, dict) else {}
+            dict(resource_invitation_value)
+            if isinstance(resource_invitation_value, dict)
+            else {}
         )
         resource_invitation_id = str(resource_invitation.get("id") or "").strip()
         if resource_invitation_id:
@@ -345,26 +341,14 @@ class PracticeEngine:
         if not related_resource_ids and resource_invitation:
             resource = resource_invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
+                str(resource.get("id") or "").strip()
+                if isinstance(resource, dict)
+                else ""
             )
             if resource_id:
                 related_resource_ids = [resource_id]
         if related_resource_ids:
             result["relatedResourceIds"] = cast(list[Id], related_resource_ids)
-        related_experiment_ids_value = selected_move.get("relatedExperimentIds")
-        related_experiment_ids = (
-            [str(item) for item in related_experiment_ids_value if str(item).strip()]
-            if isinstance(related_experiment_ids_value, list)
-            else []
-        )
-        if not related_experiment_ids and isinstance(selected_loop, dict):
-            loop_experiment_ids_value = selected_loop.get("relatedExperimentIds")
-            if isinstance(loop_experiment_ids_value, list):
-                related_experiment_ids = [
-                    str(item) for item in loop_experiment_ids_value if str(item).strip()
-                ]
-        if related_experiment_ids:
-            result["relatedExperimentIds"] = cast(list[Id], related_experiment_ids)
 
         max_duration = runtime_constraints.get("maxDurationMinutes")
         if not isinstance(max_duration, int):
@@ -508,7 +492,7 @@ class PracticeEngine:
         created_at: str,
         trigger: PracticeTriggerSummary,
     ) -> PracticeLifecycleDefaults:
-        created_dt = parse_iso_datetime(created_at, default=datetime.now(UTC))
+        created_dt = self._parse_datetime(created_at)
         trigger_type = str(trigger.get("triggerType") or "manual")
         follow_up_hours = {
             "manual": 24,
@@ -520,7 +504,9 @@ class PracticeEngine:
         }.get(trigger_type, 24)
         defaults: PracticeLifecycleDefaults = {
             "source": self._source_for_trigger(trigger_type),
-            "nextFollowUpDueAt": format_iso_datetime(created_dt + timedelta(hours=follow_up_hours)),
+            "nextFollowUpDueAt": self._format_datetime(
+                created_dt + timedelta(hours=follow_up_hours)
+            ),
             "followUpCount": 0,
         }
         brief_id = trigger.get("briefId")
@@ -630,3 +616,17 @@ class PracticeEngine:
             "analysis_packet": "analysis_packet",
         }
         return mapping.get(trigger_type, "manual")
+
+    def _parse_datetime(self, value: str | None) -> datetime:
+        if not value:
+            return datetime.now(UTC)
+        candidate = value.strip()
+        if candidate.endswith("Z"):
+            candidate = candidate[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(candidate)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+
+    def _format_datetime(self, value: datetime) -> str:
+        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")

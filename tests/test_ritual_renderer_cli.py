@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,42 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertTrue(manifest["surfaces"]["captions"]["segments"])
             self.assertEqual(manifest["render"]["providers"], ["mock"])
             self.assertIn("WEBVTT", captions_path.read_text(encoding="utf-8"))
+
+    def test_chutes_speech_profile_without_token_writes_warning_manifest(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": self._fixture_plan()}), encoding="utf-8")
+            env = dict(os.environ)
+            env.pop("CHUTES_API_TOKEN", None)
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(root / "scripts" / "render_ritual_artifact.py"),
+                    "--plan",
+                    str(plan_path),
+                    "--out",
+                    str(out_dir),
+                    "--provider-profile",
+                    "chutes_speech",
+                    "--surfaces",
+                    "audio",
+                    "--max-cost-usd",
+                    "0.01",
+                ],
+                cwd=root,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertIn("chutes_provider_missing_api_token", manifest["render"]["warnings"])
+            self.assertEqual(manifest["surfaces"]["audio"]["provider"], "mock")
 
     def _fixture_plan(self) -> dict[str, object]:
         return {

@@ -53,9 +53,6 @@ The families below are derived from existing records and projections:
 The important boundary is that the runtime should derive a bounded coaching stance from this
 context. It should not treat these families as stored diagnoses.
 
-Explicit journey-experiment state is adjunct context for that derivation. It is not a sixth family,
-not a persisted family label, and not a host-side replacement for the runtime family/readiness pass.
-
 ## Design Decisions
 
 These decisions are assumed by the stories and evals in this document.

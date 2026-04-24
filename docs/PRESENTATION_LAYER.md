@@ -1,7 +1,7 @@
 # Presentation Layer
-## Embodied Presentation Contract (Deferred)
+## Embodied Presentation Contract
 
-> **Status:** Deferred. The core backend/runtime through Phase 9 is implemented. This document captures the backend contract for a future embodied presentation layer. No `presentation.py`, TTS adapters, or web app exist in this repo yet.
+> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Circulatio emits typed ritual plans, the repo-local renderer CLI turns those plans into static artifact manifests, and the Hermes Rituals frontend can play the manifest. The renderer now has explicit Chutes provider profiles for speech, captions, image, music, and video, but those calls remain opt-in, budget-gated, and renderer-owned. Scheduled ritual invitations, completion sync, and any server/job system remain later work. Circulatio still does not own frontend rendering as a backend responsibility.
 
 Circulatio should evolve from a text interpretation backend into a **symbolic backend that emits embodied, voice-aware, breath-aware, interaction-ready presentation plans**. Hosts render them; Circulatio does not own frontend code.
 
@@ -9,8 +9,10 @@ The product-facing frame is **Hermes Rituals**:
 - **Rituals** — guided sessions and symbolic containers
 - **Broadcasts** — serialized or periodic companion voice
 - **Cinema** — audiovisual renderings of the same symbolic material
+- **Breath surface** — simple respiratory pacing for inhale, hold, exhale, and rest
+- **Meditation surface** — non-respiratory settling for coherence, attention, and symbolic containment
 
-These are not separate intelligence systems. They are different host renderings of shared derived context.
+These are not separate intelligence systems and not separate backend tool calls. They are different host renderings of shared derived context, enabled by arguments on one presentation-planning call.
 
 ---
 
@@ -22,7 +24,7 @@ Circulatio produces:
 - text
 - voice script
 - speech markup plan
-- breath / animation spec
+- breath / meditation / animation spec
 - association interaction spec
 - delivery policy
 
@@ -32,17 +34,31 @@ Hosts render:
 - interactive cards
 - subtitles
 - video compositions
-- external video embeds or hosted render URLs
-- soundtrack queues or music-service links
+- breath pacers
+- meditation fields
 - notifications
 - dashboard surfaces
 
 Current backend implication:
 - Coach-facing runtime surfaces can now emit typed `resourceInvitation` payloads from `coachState`, but those invitations stay curated, provenance-bound, and host-rendered. They are not arbitrary media lookup or recommendation flows.
+- Ritual planning is a read-only presentation compiler over existing Circulatio surfaces. It creates no material, no interpretation run, no weekly review record, and no media blob.
 
 ---
 
 ## Backend Contracts
+
+### Phase 1 Local Artifact Flow
+
+```text
+Hermes host/tool call
+-> circulatio.presentation.plan_ritual
+-> PresentationRitualPlan JSON
+-> scripts/render_ritual_artifact.py --mock-providers --dry-run
+-> hermes_ritual_artifact.v1 manifest.json
+-> Hermes Rituals frontend /artifacts/{artifactId}
+```
+
+Phase 1 enabled surfaces are text, voiceScript-as-plan, captions, breath, and meditation. Audio is mock/placeholder by default. Chutes provider-backed speech, captions, image, music, and video are available only when the renderer is called with an explicit `--provider-profile chutes_*`, a positive `--max-cost-usd`, an API token in `CHUTES_API_TOKEN` or the configured token env var, and a plan that does not disable external providers. Circulatio still emits plans only; it does not call Chutes or store media blobs.
 
 ### PresentationArtifact (planned)
 
@@ -94,17 +110,43 @@ BreathCycleSpec
 - restSeconds
 - cycles
 - pattern: steadying | lengthened_exhale | box_breath | orienting
-- techniqueName?
-- preferenceSource:
-    explicit_user_preference
-    host_prompted_preference
-    host_default
-    llm_suggested
-- visualForm: orb | wave | mandala | horizon
+- visualForm: pacer | wave | mandala | horizon
 - syncMarkers[]
 ```
 
 `pattern` is the normalized breathing shape used by the runtime. `techniqueName` is the user-facing or host-requested technique label when one is explicitly wanted, including named forms such as prana-derived breathing or other custom practices. If the technique matters, the host should either carry the user's explicit preference or ask. Circulatio may suggest a fit, but the host owns whether to surface that suggestion, ask a clarifying question, or fall back to a neutral steadying pattern.
+
+Breath tools should make the respiratory instruction legible. A default pacer can use one restrained grey ring: inhale expands, hold rests at maximum radius, exhale contracts, and rest quiets. Any vibration or edge pulse is a timing cue, not a symbolic interpretation.
+
+### MeditationFieldSpec (planned)
+
+```text
+MeditationFieldSpec
+- fieldType:
+    coherence_convergence
+    attention_anchor
+    threshold_stillness
+    image_afterglow
+- durationMs
+- sourceRefs[]
+- macroProgressPolicy:
+    session_progress
+    section_progress
+    untimed
+- microMotion:
+    still
+    pulse
+    convergence
+    shimmer
+- instructionDensity:
+    none
+    sparse
+    phase_label
+- safetyBoundary
+- syncMarkers[]
+```
+
+Meditation fields are not breath instructions. They can borrow the same playback clock, but their job is containment, attention, and symbolic settling. For example, a coherence convergence field can let scattered traces slowly gather into one ring across the session while small phase-linked pulses keep the field alive.
 
 ### AssociationProtocol (planned)
 
@@ -141,16 +183,9 @@ Not allowed deterministically:
 
 ## Tool Calling Contract (planned)
 
-Embodied presentation should arrive through **explicit host bridge/tool calls**, not through a generic "make media" ingress.
+Embodied presentation should arrive through one explicit host bridge/tool call, not through a generic "make media" ingress and not through one backend tool per visual mode.
 
-Hermes, OpenClaw, or another host adapter decides:
-- whether a moment should become a ritual, broadcast, or cinema rendering
-- whether Circulatio should write the narrative fully, minimally, or not at all
-- whether the host should ask the user about breathing technique or carry forward an explicit preference
-
-Circulatio returns a typed plan. The host renders it or asks follow-up questions when needed.
-
-### Ritual Planning Tool (planned)
+The tool call plans a ritual. Its arguments decide which surfaces are available for the host to render. Breath and meditation remain semantically distinct inside the same call:
 
 ```text
 circulatio.presentation.plan_ritual
@@ -161,91 +196,43 @@ input
     hold_container
     guided_ritual
     breath_container
+    meditation_container
     image_return
     active_imagination_container
 - narrativeMode:
     full_guided
     sparse_guided
     breath_only
+    meditation_only
     user_script
     hybrid
-- authorshipMode:
-    circulatio_written
-    host_written
-    user_supplied
-    host_plus_circulatio
-- requestedLenses[]:
-    breath
-    photo
-    cinema
-- scriptSeed?
-- breathRequest?
+- requestedSurfaces:
+    breath:
+      enabled: boolean
+      request?: BreathCycleSpec
+    meditation:
+      enabled: boolean
+      request?: MeditationFieldSpec
+    photo:
+      enabled: boolean
+    cinema:
+      enabled: boolean
+    audio:
+      enabled: boolean
 - privacyClass
 - safetyContext
 - deliveryPolicy
 ```
 
-Notes:
-- `narrativeMode=breath_only` means the host wants a reduced ritual container centered on breath timing, minimal captioning, and little or no narrative script.
-- `authorshipMode=host_written` or `user_supplied` means the host can pass its own words through `scriptSeed`; Circulatio should normalize structure, pacing, contraindications, and provenance rather than replacing the text blindly.
-- `requestedLenses[]` expresses the host rendering options, not a backend obligation to generate all media immediately.
-- `mediaSpecs[]` may point either to generated renders or to temporary host-managed assets such as a YouTube embed URL or a soundtrack queue while a native render pipeline is still maturing.
+`requestedSurfaces.breath.request` asks for respiratory pacing. `requestedSurfaces.meditation.request` asks for a settling field or attention container. The host may render both in one ritual from the same tool response, but the tool call keeps them semantically separate so a meditation visual does not silently become a breathing instruction.
 
-### Breath Request Shape (planned)
+### Experience Stories
 
-```text
-breathRequest
-- techniqueName?
-- inhaleSeconds?
-- holdSeconds?
-- exhaleSeconds?
-- restSeconds?
-- cycles?
-- preferenceSource:
-    explicit_user_preference
-    host_prompted_preference
-    host_default
-    llm_suggested
-- allowClarifyingQuestion: boolean
-```
-
-Rules:
-- If the user explicitly asks for a named breathing technique, preserve that request as input rather than silently normalizing it away.
-- If the host needs a technique choice and none is present, the host may ask the user directly.
-- If no preference is present and no question is asked, the safe fallback is a neutral steadying pattern rather than a strong named technique.
-
-### Ritual Planning Result (planned)
-
-```text
-RitualPresentationPlan
-- artifact: PresentationArtifact
-- voiceScript?
-- speechMarkupPlan?
-- breathCycle?
-- mediaSpecs[]
-- interactionSpec?
-- openQuestions[]?
-- withheldReason?
-```
-
-The host can then:
-- render the full ritual as audio + stage + captions
-- reduce it to a breath-only container
-- keep it as a photo-first ritual with sparse speech
-- later attach cinema or generated video assets without changing the symbolic source plan
-
-### Routing Boundary
-
-This should follow the same explicit-routing rule used elsewhere in Circulatio:
-
-```text
-Hermes/OpenClaw/host decides presentation is needed
-→ explicit bridge/tool call (`circulatio.presentation.plan_ritual`)
-→ Circulatio returns typed ritual presentation plan
-→ host renders, asks clarification, or defers
-```
-
-This connector is additive and explicit. It is not a hidden universal ingress, not a frontend-code generator, and not a license for the backend to decide on its own that every held note should become a ritual.
+- A user says, "I only need help breathing for a minute." The host calls `plan_ritual` with `narrativeMode=breath_only` and `requestedSurfaces.breath.enabled=true`, then renders a minimal pacer with inhale, hold, exhale, and rest labels.
+- A user brings a charged dream image but does not want interpretation yet. The host calls the same planner with `requestedSurfaces.meditation.enabled=true` and renders a coherence field that settles attention without turning the image into advice.
+- A user pauses midway through a ritual because the material feels too strong. The host can switch from cinema or narration into a meditation surface returned by the same plan, preserving the same timeline while reducing verbal density.
+- A user already has a breathing practice and names it directly. The host carries that explicit preference in `requestedSurfaces.breath.request` instead of letting Circulatio infer a technique from keywords.
+- A user wants the image, music, and breath all present. The host enables multiple `requestedSurfaces` in one tool call, but Circulatio still returns typed specs; the host decides whether to expose lens switching, queue controls, or a single focused surface.
 
 ---
 

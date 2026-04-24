@@ -68,11 +68,6 @@ from ..domain.interpretations import (
     InterpretationRunUpdate,
     ProposalDecisionRecord,
 )
-from ..domain.journey_experiments import (
-    JourneyExperimentRecord,
-    JourneyExperimentStatus,
-    JourneyExperimentUpdate,
-)
 from ..domain.journeys import JourneyRecord, JourneyUpdate
 from ..domain.living_myth import (
     AnalysisPacketRecord,
@@ -1303,51 +1298,6 @@ class HermesProfileCirculatioRepository(CirculatioRepository):
     ) -> JourneyRecord:
         return await self._write(
             user_id, lambda: self._delegate.update_journey(user_id, journey_id, updates)
-        )
-
-    async def create_journey_experiment(
-        self, record: JourneyExperimentRecord
-    ) -> JourneyExperimentRecord:
-        return await self._write(
-            record["userId"], lambda: self._delegate.create_journey_experiment(record)
-        )
-
-    async def list_journey_experiments(
-        self,
-        user_id: Id,
-        *,
-        journey_ids: list[Id] | None = None,
-        statuses: list[JourneyExperimentStatus] | None = None,
-        include_deleted: bool = False,
-        limit: int = 50,
-    ) -> list[JourneyExperimentRecord]:
-        return await self._read(
-            lambda: self._delegate.list_journey_experiments(
-                user_id,
-                journey_ids=journey_ids,
-                statuses=statuses,
-                include_deleted=include_deleted,
-                limit=limit,
-            )
-        )
-
-    async def get_journey_experiment(
-        self, user_id: Id, experiment_id: Id, *, include_deleted: bool = False
-    ) -> JourneyExperimentRecord:
-        return await self._read(
-            lambda: self._delegate.get_journey_experiment(
-                user_id,
-                experiment_id,
-                include_deleted=include_deleted,
-            )
-        )
-
-    async def update_journey_experiment(
-        self, user_id: Id, experiment_id: Id, updates: JourneyExperimentUpdate
-    ) -> JourneyExperimentRecord:
-        return await self._write(
-            user_id,
-            lambda: self._delegate.update_journey_experiment(user_id, experiment_id, updates),
         )
 
     async def create_proactive_brief(self, record: ProactiveBriefRecord) -> ProactiveBriefRecord:
