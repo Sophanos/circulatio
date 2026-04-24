@@ -11,6 +11,7 @@ import {
 import type { BreathCycle, BreathVisualForm } from "@/lib/artifact-contract"
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
+const PREPARATION_MS = 2600
 
 function titleCase(value: string) {
   return value
@@ -191,6 +192,19 @@ function BreathHorizon({
   )
 }
 
+function getPreparedBreathPhase(cycle: BreathCycle, currentMs: number): BreathPhase {
+  if (currentMs < PREPARATION_MS) {
+    return {
+      label: "Get ready",
+      progress: currentMs / PREPARATION_MS,
+      elapsedMs: currentMs,
+      durationMs: PREPARATION_MS
+    }
+  }
+
+  return getBreathPhase(cycle, currentMs - PREPARATION_MS)
+}
+
 function BreathVisual({
   cycle,
   currentMs,
@@ -236,7 +250,7 @@ export function BreathStage({
   totalDurationMs?: number
 }) {
   const breathCycle = cycle ?? DEFAULT_BREATH_CYCLE
-  const phase = getBreathPhase(breathCycle, currentMs)
+  const phase = getPreparedBreathPhase(breathCycle, currentMs)
   const remainingMs = Math.max(phase.durationMs - phase.elapsedMs, 0)
   const patternLabel = titleCase(breathCycle.pattern ?? DEFAULT_BREATH_CYCLE.pattern ?? "steadying")
   const techniqueName = breathCycle.techniqueName ?? patternLabel

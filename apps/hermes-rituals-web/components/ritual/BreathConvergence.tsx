@@ -57,10 +57,22 @@ const BASE_RADIUS = 84
 const RING_POINT_COUNT = 72
 const MAX_FRAME_DELTA_MS = 80
 const PLAYBACK_TIME_BLEND = 0.018
+const CHAOS_HOLD_FRACTION = 0.18
+const INTRO_MOTION_FRACTION = 0.44
 const TWO_PI = Math.PI * 2
 
 function easeOut(value: number) {
   return 1 - (1 - value) ** 3
+}
+
+function smoothstep(value: number) {
+  const t = clamp01(value)
+  return t * t * (3 - 2 * t)
+}
+
+function getHeldConvergenceProgress(macro: number) {
+  const heldMacro = clamp01((macro - CHAOS_HOLD_FRACTION) / (1 - CHAOS_HOLD_FRACTION))
+  return smoothstep(heldMacro)
 }
 
 const TRACE_BLUEPRINTS: TraceBlueprint[] = [
@@ -308,31 +320,31 @@ function buildOrganicRingPath({
 
 function buildRenderState(state: AnimatedConvergenceState): ConvergenceRender {
   const macro = clamp01(state.macro)
-  const baseConvergence = 1 - (1 - macro) ** 2
+  const baseConvergence = getHeldConvergenceProgress(macro)
   const convergence = Math.min(
     0.985,
     baseConvergence + state.coherenceBoost * (1 - baseConvergence)
   )
   const chaos = 1 - convergence
-  const introMotion = 1 - easeOut(clamp01(macro / 0.24))
+  const introMotion = 1 - easeOut(clamp01(macro / INTRO_MOTION_FRACTION))
   const flowTime = (state.localTime + state.playbackTime * PLAYBACK_TIME_BLEND) *
     (1.28 + introMotion * 0.54)
 
   return {
     traces: TRACE_BLUEPRINTS.map((trace, index) => {
       const t = flowTime * trace.speed * 920 + trace.phaseOffset
-      const driftScale = (0.22 + chaos * 0.92 + introMotion * 0.38) * state.driftMultiplier
+      const driftScale = (0.28 + chaos * 0.98 + introMotion * 0.42) * state.driftMultiplier
       const liveDrift = trace.driftAmp * driftScale
       const cx =
         SVG_CENTER +
         trace.startOffsetX * chaos +
         Math.cos(t) * liveDrift +
-        Math.sin(flowTime * 0.14 + trace.phaseOffset) * (chaos + introMotion * 0.5) * 0.72
+        Math.sin(flowTime * 0.14 + trace.phaseOffset) * (chaos + introMotion * 0.52) * 0.82
       const cy =
         SVG_CENTER +
         trace.startOffsetY * chaos +
         Math.sin(t * 1.07 + trace.phaseOffset) * liveDrift +
-        Math.cos(flowTime * 0.12 + trace.phaseOffset * 1.4) * (chaos + introMotion * 0.5) * 0.72
+        Math.cos(flowTime * 0.12 + trace.phaseOffset * 1.4) * (chaos + introMotion * 0.52) * 0.82
       const radiusJitter = Math.sin(t * 0.73 + trace.phaseOffset) *
         (0.32 + chaos * 0.74 + introMotion * 0.36)
       const radius =
@@ -424,7 +436,7 @@ export function BreathConvergence({
       lastFrameMs = now
       animated.localTime += deltaSeconds
       animated.playbackTime = damp(animated.playbackTime, nextTarget.playbackTime, 0.9, deltaSeconds)
-      animated.macro = damp(animated.macro, nextTarget.macro, 3.4, deltaSeconds)
+      animated.macro = damp(animated.macro, nextTarget.macro, 1.65, deltaSeconds)
       animated.sharedRadiusShift = damp(
         animated.sharedRadiusShift,
         nextTarget.sharedRadiusShift,

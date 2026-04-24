@@ -3,7 +3,7 @@
 import type { BreathCycle } from "@/lib/artifact-contract"
 
 export type BreathPhase = {
-  label: "Inhale" | "Hold" | "Exhale" | "Rest"
+  label: "Get ready" | "Inhale" | "Hold" | "Exhale" | "Rest"
   progress: number
   elapsedMs: number
   durationMs: number

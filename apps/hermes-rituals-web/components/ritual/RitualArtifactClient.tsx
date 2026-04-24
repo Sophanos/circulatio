@@ -607,7 +607,10 @@ export function RitualArtifactClient({
 
       {/* Bottom-right toggle buttons — fade out in immersive */}
       <motion.div
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-5 pb-5 md:px-8 md:pb-8"
+        className={[
+          "pointer-events-none absolute inset-x-0 z-20 flex justify-end px-5 md:px-8",
+          cinemaPlaybackImmersive ? "bottom-20 pb-0 md:bottom-24" : "bottom-0 pb-5 md:pb-8"
+        ].join(" ")}
         animate={{
           opacity: chromeHidden ? 0 : 1,
           y: chromeHidden ? 12 : 0

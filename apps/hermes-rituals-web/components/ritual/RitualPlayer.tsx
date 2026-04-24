@@ -612,9 +612,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
           className="pointer-events-none absolute inset-x-5 z-10 flex justify-center"
           initial={false}
           animate={{
-            bottom: fullStageChromeVisible ? 122 : 44,
+            bottom: fullStageChromeVisible ? 224 : 44,
             opacity: sectionMuted ? 0.45 : 1,
-            y: fullStageChromeVisible ? -4 : 0
+            y: fullStageChromeVisible ? -8 : 0
           }}
           transition={SPRING}
         >
@@ -660,7 +660,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         className={[
           "flex w-full flex-col items-center",
           fullStageVideo
-            ? "absolute inset-x-0 bottom-6 z-20 mx-auto max-w-6xl px-4 md:bottom-8 md:px-10"
+            ? "absolute inset-x-6 bottom-20 z-20 mx-auto max-w-[40rem] px-0 sm:max-w-[42rem] md:bottom-24 lg:max-w-[44rem] xl:max-w-[48rem]"
             : "relative z-10 max-w-xl"
         ].join(" ")}
         layout
@@ -678,7 +678,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
               className={[
                 "flex w-full flex-col items-center",
                 fullStageVideo
-                  ? "gap-3 rounded-[1.55rem] border border-white/10 bg-black/40 px-5 py-4 backdrop-blur-2xl md:px-8 md:py-4"
+                  ? "gap-3 rounded-[1.35rem] border border-white/10 bg-black/45 px-4 py-3 backdrop-blur-2xl md:px-5 md:py-3.5"
                   : "gap-3 pb-2"
               ].join(" ")}
               initial={{ opacity: 0, y: 10 }}
