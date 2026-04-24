@@ -398,6 +398,23 @@ async def plan_ritual_tool(arguments: dict[str, object] | None = None, **kwargs:
     )
 
 
+async def record_ritual_completion_tool(
+    arguments: dict[str, object] | None = None, **kwargs: object
+) -> str:
+    payload = _tool_payload(arguments, kwargs)
+    if (
+        not str(payload.get("idempotencyKey") or "").strip()
+        and str(payload.get("completionId") or "").strip()
+    ):
+        payload["idempotencyKey"] = str(payload["completionId"])
+    return await _dispatch_tool(
+        operation="circulatio.presentation.record_ritual_completion",
+        tool_name="circulatio_record_ritual_completion",
+        arguments=payload,
+        kwargs={},
+    )
+
+
 async def list_pending_review_proposals_tool(
     arguments: dict[str, object] | None = None, **kwargs: object
 ) -> str:

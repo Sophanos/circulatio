@@ -46,6 +46,8 @@ PresentationApprovalState = Literal[
 ]
 PresentationPrivacyClass = Literal["private", "sensitive", "session_only"]
 PresentationRenderMode = Literal["plan_only", "dry_run_manifest", "render_static"]
+RitualCompletionPlaybackState = Literal["completed", "partial", "abandoned"]
+ProviderPromptPolicy = Literal["derived_user_facing_only", "sanitized_visual_only", "none"]
 
 
 class PresentationSourceRef(TypedDict, total=False):
@@ -148,9 +150,7 @@ class RitualDeliveryPolicy(TypedDict, total=False):
 class RitualSourceDataPolicy(TypedDict, total=False):
     allowRawMaterialTextInPlan: NotRequired[bool]
     allowRawMaterialTextToProviders: NotRequired[bool]
-    providerPromptPolicy: NotRequired[
-        Literal["derived_user_facing_only", "sanitized_visual_only", "none"]
-    ]
+    providerPromptPolicy: NotRequired[ProviderPromptPolicy]
 
 
 class RitualRenderPolicy(TypedDict, total=False):
@@ -170,9 +170,7 @@ class RitualCompletionPolicy(TypedDict, total=False):
     captureReflection: NotRequired[bool]
     capturePracticeFeedback: NotRequired[bool]
     reflectionPrompt: NotRequired[str]
-    returnMode: NotRequired[
-        Literal["hermes_chat", "frontend_callback", "local_completion_file"]
-    ]
+    returnMode: NotRequired[Literal["hermes_chat", "frontend_callback", "local_completion_file"]]
 
 
 class VoiceScriptSegment(TypedDict, total=False):
@@ -254,6 +252,7 @@ class VisualPromptSurfacePlan(TypedDict, total=False):
     negativePrompt: NotRequired[str]
     privacyNotes: Required[list[str]]
     sourceRefIds: Required[list[Id]]
+    providerPromptPolicy: NotRequired[ProviderPromptPolicy]
 
 
 class VisualCinemaPlan(TypedDict, total=False):
@@ -381,6 +380,58 @@ class PresentationRitualPlanningInput(TypedDict, total=False):
     safetyContext: NotRequired[SafetyContext]
 
 
+class RitualInvitationPlanDraft(TypedDict, total=False):
+    sourceRefs: Required[list[PresentationSourceRef]]
+    ritualIntent: Required[RitualIntent]
+    narrativeMode: Required[NarrativeMode]
+    requestedSurfaces: Required[RequestedRitualSurfaces]
+    privacyClass: Required[PresentationPrivacyClass]
+    safetyContext: NotRequired[SafetyContext]
+    renderPolicy: Required[RitualRenderPolicy]
+    completionPolicy: Required[RitualCompletionPolicy]
+    locale: NotRequired[str]
+
+
+class RitualInvitationSummary(TypedDict, total=False):
+    invitationId: Required[Id]
+    userId: Required[Id]
+    sourceRefs: Required[list[PresentationSourceRef]]
+    title: Required[str]
+    summary: Required[str]
+    suggestedIntent: Required[RitualIntent]
+    suggestedSurfaces: Required[list[str]]
+    privacyClass: Required[PresentationPrivacyClass]
+    cadence: Required[Literal["weekly"]]
+    generatedAt: Required[ISODateString]
+    expiresAt: NotRequired[ISODateString]
+    planDraft: Required[RitualInvitationPlanDraft]
+    acceptancePayload: Required[dict[str, object]]
+
+
+class RitualCompletionEvent(TypedDict, total=False):
+    id: Required[Id]
+    userId: Required[Id]
+    artifactId: Required[str]
+    planId: NotRequired[Id]
+    sourceRefs: Required[list[PresentationSourceRef]]
+    manifestVersion: Required[str]
+    idempotencyKey: Required[str]
+    payloadFingerprint: Required[str]
+    completedAt: Required[ISODateString]
+    playbackState: Required[RitualCompletionPlaybackState]
+    durationMs: NotRequired[int]
+    completedSections: Required[list[str]]
+    reflectionMaterialId: NotRequired[Id]
+    practiceFeedbackId: NotRequired[Id]
+    metadata: Required[dict[str, object]]
+    createdAt: Required[ISODateString]
+
+
+class RitualCompletionRecordResult(TypedDict, total=False):
+    event: Required[RitualCompletionEvent]
+    replayed: Required[bool]
+
+
 __all__ = [
     "NarrativeMode",
     "PresentationApprovalState",
@@ -393,10 +444,16 @@ __all__ = [
     "PresentationRitualPlanningInput",
     "PresentationSourceDigest",
     "PresentationSourceRef",
+    "ProviderPromptPolicy",
     "PresentationSourceRole",
     "PresentationSourceType",
     "RequestedRitualSurfaces",
+    "RitualCompletionEvent",
+    "RitualCompletionPlaybackState",
     "RitualCompletionPolicy",
+    "RitualCompletionRecordResult",
     "RitualIntent",
+    "RitualInvitationPlanDraft",
+    "RitualInvitationSummary",
     "RitualRenderPolicy",
 ]

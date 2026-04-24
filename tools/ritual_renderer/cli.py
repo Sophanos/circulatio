@@ -81,6 +81,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=32,
         help="Chutes Diffrhythm generation steps.",
     )
+    parser.add_argument(
+        "--allow-beta-music",
+        action="store_true",
+        help="Allow beta/developer music provider calls when all other gates pass.",
+    )
+    parser.add_argument(
+        "--allow-beta-video",
+        action="store_true",
+        help="Allow beta/developer video provider calls when all other gates pass.",
+    )
     return parser
 
 
@@ -97,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
         "maxCostUsd": float(args.max_cost_usd),
         "videoImage": args.video_image,
         "musicSteps": int(args.music_steps),
+        "allowBetaMusic": bool(args.allow_beta_music),
+        "allowBetaVideo": bool(args.allow_beta_video),
     }
     if surfaces:
         options["surfaces"] = surfaces

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, ListMusic, MessageSquareText, Volume2, VolumeX } from "lucide-react"
+import { ArrowLeft, CheckCircle2, ListMusic, MessageSquareText, Volume2, VolumeX } from "lucide-react"
 import * as SliderPrimitive from "@radix-ui/react-slider"
 
 import { useRouter } from "next/navigation"
@@ -271,6 +271,7 @@ export function RitualArtifactClient({
   const railRef = useRef<HTMLElement>(null)
   const toggleRef = useRef<HTMLDivElement>(null)
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const completionIdRef = useRef<string | null>(null)
 
   const [currentMs, setCurrentMs] = useState(0)
   const [railOpen, setRailOpen] = useState(false)
@@ -287,6 +288,8 @@ export function RitualArtifactClient({
   const [channels, setChannels] = useState<ArtifactChannels>(
     artifact.channels ?? {}
   )
+  const [completionStatus, setCompletionStatus] = useState<"idle" | "sending" | "done" | "error">("idle")
+  const [reflectionText, setReflectionText] = useState("")
 
   // Immersive breath state
   const [isPlaying, setIsPlaying] = useState(false)
@@ -426,6 +429,32 @@ export function RitualArtifactClient({
   const handleSeek = useCallback((ms: number) => {
     playerRef.current?.seek(ms)
   }, [])
+
+  const handleComplete = useCallback(async () => {
+    if (!artifact.completionEndpoint || completionStatus === "sending") return
+    completionIdRef.current ??= crypto.randomUUID()
+    setCompletionStatus("sending")
+    try {
+      const response = await fetch(artifact.completionEndpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": completionIdRef.current
+        },
+        body: JSON.stringify({
+          completionId: completionIdRef.current,
+          playbackState: "completed",
+          completedAt: new Date().toISOString(),
+          completedSections: sections.map((section) => section.id),
+          durationMs: currentMs || artifact.durationMs,
+          reflectionText: reflectionText.trim() || undefined
+        })
+      })
+      setCompletionStatus(response.ok ? "done" : "error")
+    } catch {
+      setCompletionStatus("error")
+    }
+  }, [artifact.completionEndpoint, artifact.durationMs, completionStatus, currentMs, reflectionText, sections])
 
   return (
     <div
@@ -604,6 +633,33 @@ export function RitualArtifactClient({
           </div>
         </motion.aside>
       </motion.main>
+
+      {artifact.completionEndpoint && chromeVisible && (
+        <div className="absolute bottom-5 left-5 z-20 w-[min(24rem,calc(100vw-2.5rem))] rounded-2xl border border-white/10 bg-black/45 p-3 backdrop-blur-xl">
+          <textarea
+            value={reflectionText}
+            onChange={(event) => setReflectionText(event.target.value)}
+            placeholder={artifact.completionPrompt ?? "What did you notice?"}
+            className="min-h-20 w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm leading-6 text-silver-100 outline-none placeholder:text-silver-500 focus:border-white/25"
+          />
+          <button
+            type="button"
+            onClick={handleComplete}
+            disabled={completionStatus === "sending" || completionStatus === "done"}
+            className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-silver-100 px-3 text-sm font-medium text-graphite-950 disabled:cursor-default disabled:opacity-65"
+          >
+            <CheckCircle2 className="size-4" />
+            {completionStatus === "done"
+              ? "Recorded"
+              : completionStatus === "sending"
+                ? "Recording"
+                : "Complete"}
+          </button>
+          {completionStatus === "error" && (
+            <p className="mt-2 text-xs text-red-200">Completion could not be recorded.</p>
+          )}
+        </div>
+      )}
 
       {/* Bottom-right toggle buttons — fade out in immersive */}
       <motion.div

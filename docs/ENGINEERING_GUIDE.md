@@ -29,10 +29,17 @@ Circulatio is a **symbolic/individuation backend for Hermes**. It is not a gener
 - Frontend visualization (out of scope for this phase)
 
 ### Integration Boundary
-- **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling, ritual delivery messages
-- **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile, typed ritual plans
-- **Renderer CLI owns:** local/static artifact manifest generation, mock provider output, provider/cache boundaries
-- **Hermes Rituals frontend owns:** playback of artifact manifests, breath pacers, meditation fields, captions, and completion UI
+- **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling, ritual delivery messages, and ritual-invitation acceptance
+- **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile, typed ritual plans, scheduled ritual-invitation brief payloads, and idempotent ritual-completion events
+- **Renderer CLI owns:** local/static artifact manifest generation, mock provider output, provider/cache boundaries, fallback WebVTT captions, raw-prompt provider guards, and beta gates for music/video
+- **Hermes Rituals frontend owns:** playback of artifact manifests, breath pacers, meditation fields, captions, completion UI, idempotency-key generation, and completion POST validation
+
+### Ritual Runtime Boundaries
+- Scheduled cron may create `ritual_invitation` rhythmic briefs only after `proactive_briefing` consent.
+- Scheduled cron must not call `circulatio.presentation.plan_ritual`, run the renderer, or call external providers.
+- Manual acceptance is the boundary for planning: accept the brief, then call `circulatio_plan_ritual` with the safe `acceptancePayload`.
+- Completion sync is a separate persistence operation. It records playback state, optional literal reflection text, and explicit practice feedback only; it never triggers interpretation, review generation, proposal creation, or practice recommendation.
+- Provider-backed rendering stays opt-in, budget-gated, renderer-owned, and disabled for music/video unless beta flags are present.
 
 ### Storage Boundary
 - SQLite is the canonical local backend

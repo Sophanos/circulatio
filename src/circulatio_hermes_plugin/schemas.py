@@ -538,6 +538,27 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
     },
 )
 
+RECORD_RITUAL_COMPLETION_TOOL_SCHEMA = _schema(
+    "circulatio_record_ritual_completion",
+    "Record an explicit Hermes Rituals artifact completion idempotently. This stores completion only; it must not interpret, create hidden proposals, or infer practice feedback.",
+    {
+        "artifactId": {"type": "string"},
+        "manifestVersion": {"type": "string"},
+        "idempotencyKey": {"type": "string"},
+        "completionId": {"type": "string"},
+        "completedAt": {"type": "string"},
+        "playbackState": {"type": "string", "enum": ["completed", "partial", "abandoned"]},
+        "planId": {"type": "string"},
+        "sourceRefs": {"type": "array", "items": {"type": "object"}},
+        "durationMs": {"type": "integer"},
+        "completedSections": {"type": "array", "items": {"type": "string"}},
+        "reflectionText": {"type": "string"},
+        "practiceFeedback": {"type": "object"},
+        "clientMetadata": {"type": "object"},
+    },
+    required=["artifactId", "manifestVersion", "playbackState"],
+)
+
 LIST_PENDING_REVIEW_PROPOSALS_TOOL_SCHEMA = _schema(
     "circulatio_list_pending_review_proposals",
     "List pending approval-gated proposals on a living myth or threshold review record. Use this when the user asks for review proposals or `Review-Vorschläge`. If reviewId is omitted, use the latest relevant review.",
@@ -949,6 +970,7 @@ GENERATE_RHYTHMIC_BRIEFS_TOOL_SCHEMA = _schema(
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
         "source": {"type": "string", "enum": ["manual", "scheduled"]},
+        "briefTypes": {"type": "array", "items": {"type": "string"}},
         "limit": {"type": "integer"},
         "safetyContext": {"type": "object"},
     },
@@ -999,6 +1021,7 @@ TOOL_SCHEMAS = [
     LIVING_MYTH_REVIEW_TOOL_SCHEMA,
     ANALYSIS_PACKET_TOOL_SCHEMA,
     PLAN_RITUAL_TOOL_SCHEMA,
+    RECORD_RITUAL_COMPLETION_TOOL_SCHEMA,
     LIST_PENDING_REVIEW_PROPOSALS_TOOL_SCHEMA,
     APPROVE_REVIEW_PROPOSALS_TOOL_SCHEMA,
     REJECT_REVIEW_PROPOSALS_TOOL_SCHEMA,

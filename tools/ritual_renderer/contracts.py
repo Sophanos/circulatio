@@ -30,6 +30,8 @@ class RitualRenderOptions(TypedDict, total=False):
     maxCostUsd: float
     videoImage: str
     musicSteps: int
+    allowBetaMusic: bool
+    allowBetaVideo: bool
 
 
 class RitualArtifactManifest(TypedDict, total=False):

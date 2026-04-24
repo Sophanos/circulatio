@@ -249,6 +249,8 @@ class CirculatioAgentBridge:
             return await self.respond_practice(request)
         if operation == "circulatio.presentation.plan_ritual":
             return await self.plan_ritual(request)
+        if operation == "circulatio.presentation.record_ritual_completion":
+            return await self.record_ritual_completion(request)
         if operation == "circulatio.feedback.interpretation":
             return await self.record_interpretation_feedback(request)
         if operation == "circulatio.feedback.practice":
@@ -634,6 +636,27 @@ class CirculatioAgentBridge:
             result["continuitySummary"] = self._continuity_summary(
                 cast(dict[str, object], continuity)
             )
+        return self._response(
+            request=request,
+            status=self._bridge_status_for_command(command_result),
+            message=command_result["message"],
+            result=result,
+            affected_entity_ids=command_result.get("affectedEntityIds", []),
+        )
+
+    async def record_ritual_completion(
+        self, request: BridgeRequestEnvelope
+    ) -> BridgeResponseEnvelope:
+        command_result = await self._router.record_ritual_completion(
+            user_id=request["userId"],
+            payload=deepcopy(request["payload"]),
+        )
+        event = command_result.get("ritualCompletion")
+        result: dict[str, object] = {"command": command_result["command"]}
+        if isinstance(event, dict):
+            result["completionEvent"] = deepcopy(event)
+            result["completionEventId"] = event["id"]
+        result["replayed"] = bool(command_result.get("ritualCompletionReplayed", False))
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),
@@ -2239,13 +2262,15 @@ class CirculatioAgentBridge:
         llm_health = interpretation.get("llmInterpretationHealth")
         depth_engine_health = interpretation.get("depthEngineHealth")
         fallback_reason = None
-        if isinstance(llm_health, dict) and self._optional_string(
-            llm_health.get("source")
-        ) == "fallback":
+        if (
+            isinstance(llm_health, dict)
+            and self._optional_string(llm_health.get("source")) == "fallback"
+        ):
             fallback_reason = self._optional_string(llm_health.get("reason"))
-        elif isinstance(depth_engine_health, dict) and self._optional_string(
-            depth_engine_health.get("source")
-        ) == "fallback":
+        elif (
+            isinstance(depth_engine_health, dict)
+            and self._optional_string(depth_engine_health.get("source")) == "fallback"
+        ):
             fallback_reason = self._optional_string(depth_engine_health.get("reason"))
         if fallback_reason:
             reason = "fallback_collaborative_opening" if clarifying_question else fallback_reason

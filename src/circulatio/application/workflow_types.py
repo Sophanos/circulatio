@@ -31,6 +31,7 @@ from ..domain.presentation import (
     PresentationRitualPlanResult,
     PresentationSourceRef,
     RequestedRitualSurfaces,
+    RitualCompletionEvent,
     RitualCompletionPolicy,
     RitualIntent,
     RitualRenderPolicy,
@@ -712,6 +713,7 @@ class GenerateRhythmicBriefsInput(TypedDict, total=False):
     windowStart: NotRequired[str]
     windowEnd: NotRequired[str]
     source: NotRequired[RhythmBriefSource]
+    briefTypes: NotRequired[list[str]]
     limit: NotRequired[int]
     safetyContext: NotRequired[SafetyContext]
 
@@ -974,3 +976,24 @@ class RejectLivingMythReviewProposalsInput(TypedDict, total=False):
     reviewId: Required[Id]
     proposalIds: Required[list[Id]]
     reason: NotRequired[str]
+
+
+class RecordRitualCompletionInput(TypedDict, total=False):
+    userId: Required[Id]
+    artifactId: Required[str]
+    manifestVersion: Required[str]
+    idempotencyKey: Required[str]
+    completedAt: Required[str]
+    playbackState: Required[str]
+    planId: NotRequired[Id]
+    sourceRefs: NotRequired[list[PresentationSourceRef]]
+    durationMs: NotRequired[int]
+    completedSections: NotRequired[list[str]]
+    reflectionText: NotRequired[str]
+    practiceFeedback: NotRequired[dict[str, object]]
+    clientMetadata: NotRequired[dict[str, object]]
+
+
+class RecordRitualCompletionResult(TypedDict, total=False):
+    event: Required[RitualCompletionEvent]
+    replayed: Required[bool]

@@ -65,6 +65,7 @@ from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
 from ..domain.method_state import MethodStateCaptureRunRecord, MethodStateCaptureRunUpdate
 from ..domain.patterns import PatternHistoryEntry, PatternRecord, PatternType, PatternUpdate
 from ..domain.practices import PracticeSessionRecord, PracticeSessionStatus, PracticeSessionUpdate
+from ..domain.presentation import RitualCompletionEvent
 from ..domain.proactive import (
     ProactiveBriefRecord,
     ProactiveBriefStatus,
@@ -963,6 +964,18 @@ class CirculatioRepository(GraphMemoryRepository):
     async def get_proactive_brief(
         self, user_id: Id, brief_id: Id, *, include_deleted: bool = False
     ) -> ProactiveBriefRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_ritual_completion_event(
+        self, record: RitualCompletionEvent
+    ) -> RitualCompletionEvent:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_ritual_completion_event_by_idempotency_key(
+        self, user_id: Id, idempotency_key: str
+    ) -> RitualCompletionEvent | None:
         raise NotImplementedError
 
     @abstractmethod

@@ -1,7 +1,7 @@
 # Presentation Layer
 ## Embodied Presentation Contract
 
-> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Circulatio emits typed ritual plans, the repo-local renderer CLI turns those plans into static artifact manifests, and the Hermes Rituals frontend can play those manifests. Provider-backed rendering remains opt-in, budget-gated, and renderer-owned. Phase 2 adds scheduled ritual invitations only. Phase 3 adds idempotent completion sync and provider hardening. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
+> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the renderer now emits completion manifest fields plus beta gates for music/video. Provider-backed rendering remains opt-in, budget-gated, and renderer-owned. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
 
 Circulatio should evolve from a text interpretation backend into a **symbolic backend that emits embodied, voice-aware, breath-aware, interaction-ready presentation plans**. Hosts render them; Circulatio does not own frontend code.
 
@@ -140,7 +140,7 @@ Before Phase 2 starts, stabilize these leftovers:
 
 ## Phase 2 Scheduled Ritual Invitations
 
-Phase 2 adds **weekly scheduled ritual invitations only**. Cron may create a rhythmic brief, but must not call `plan_ritual` and must not render media.
+Phase 2 adds **weekly scheduled ritual invitations only**. Cron may create a consent-bound `ritual_invitation` rhythmic brief, but must not call `plan_ritual` and must not render media.
 
 ### New proactive brief type
 
@@ -239,7 +239,7 @@ The draft is not a plan. It is a typed suggestion for a later accepted plan requ
 
 ## Phase 3 Completion Sync And Provider Hardening
 
-Phase 3 adds **idempotent completion sync** and hardens provider rendering. Completion is an explicit user action or playback event. It is not interpretation.
+Phase 3 adds **idempotent completion sync** and hardens provider rendering. Completion is an explicit user action or playback event. It is not interpretation. The local backend/plugin route and frontend POST handler shape are implemented; production Hermes delivery/forwarding remains host configuration.
 
 ### Completion flow
 

@@ -20,6 +20,7 @@ from ..domain.materials import MaterialRecord, MaterialRevision
 from ..domain.method_state import MethodStateCaptureRunRecord
 from ..domain.patterns import PatternHistoryEntry, PatternRecord
 from ..domain.practices import PracticeSessionRecord
+from ..domain.presentation import RitualCompletionEvent
 from ..domain.proactive import ProactiveBriefRecord
 from ..domain.readiness import ConsentPreferenceRecord
 from ..domain.reviews import WeeklyReviewRecord
@@ -74,6 +75,7 @@ class UserCirculatioBucket:
     adaptation_profiles: dict[Id, UserAdaptationProfileRecord] = field(default_factory=dict)
     journeys: dict[Id, JourneyRecord] = field(default_factory=dict)
     proactive_briefs: dict[Id, ProactiveBriefRecord] = field(default_factory=dict)
+    ritual_completion_events: dict[Id, RitualCompletionEvent] = field(default_factory=dict)
     feedback: list[InterpretationFeedbackSummary] = field(default_factory=list)
     interaction_feedback: list[InteractionFeedbackRecord] = field(default_factory=list)
     cultural_origins: list[CulturalOriginSummary] = field(default_factory=list)

@@ -119,7 +119,15 @@
     "finishPrompt": "What did you notice in your body or attention after this?",
     "captureBodyResponse": true,
     "completionEndpoint": "/api/artifacts/weekly-ritual-dry-run/complete",
-    "returnCommand": "/circulation ritual complete weekly-ritual-dry-run"
+    "returnCommand": "/circulation ritual complete weekly-ritual-dry-run",
+    "completion": {
+      "enabled": true,
+      "endpoint": "/api/artifacts/weekly-ritual-dry-run/complete",
+      "idempotencyRequired": true,
+      "captureReflection": true,
+      "capturePracticeFeedback": true,
+      "completionIdStrategy": "client_uuid"
+    }
   },
   "safety": {
     "stopInstruction": "Stop if this increases activation; orient to the room.",

@@ -124,6 +124,7 @@ export type PresentationArtifact = {
   privacyClass?: string
   durationMs?: number
   completionPrompt?: string
+  completionEndpoint?: string
   threadSummary?: string
   sessionId?: string
   journeyId?: string
@@ -161,6 +162,15 @@ export type RitualCaptionTrack = {
 
 export type RitualCaptionSegment = CaptionCue & {
   id: string
+}
+
+export type RitualCompletionContract = {
+  enabled: boolean
+  endpoint: string
+  idempotencyRequired: true
+  captureReflection: boolean
+  capturePracticeFeedback: boolean
+  completionIdStrategy: "client_uuid"
 }
 
 export type RitualArtifactManifest = {
@@ -245,6 +255,7 @@ export type RitualArtifactManifest = {
     captureBodyResponse: boolean
     completionEndpoint?: string
     returnCommand?: string
+    completion?: RitualCompletionContract
   }
   safety: {
     stopInstruction: string
@@ -366,6 +377,8 @@ export function ritualArtifactFromManifest(
     privacyClass: manifest.privacyClass,
     durationMs: manifest.durationMs,
     completionPrompt: manifest.interaction.finishPrompt,
+    completionEndpoint:
+      manifest.interaction.completion?.endpoint ?? manifest.interaction.completionEndpoint,
     audioUrl: manifest.surfaces.audio?.src ?? undefined,
     videoUrl: cinema?.enabled && cinema.src ? cinema.src : undefined,
     stageVideo,

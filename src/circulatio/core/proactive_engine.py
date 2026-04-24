@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
@@ -8,6 +9,11 @@ from ..domain.ids import create_id, now_iso
 from ..domain.journeys import JourneyRecord
 from ..domain.memory import MemoryKernelSnapshot
 from ..domain.practices import PracticeSessionRecord
+from ..domain.presentation import (
+    PresentationSourceRef,
+    RitualInvitationPlanDraft,
+    RitualInvitationSummary,
+)
 from ..domain.proactive import (
     ProactiveBriefRecord,
     ProactiveBriefStatus,
@@ -124,6 +130,15 @@ class ProactiveEngine:
                 now=now,
             )
         )
+        if source == "scheduled":
+            seeds.extend(
+                self._ritual_invitation_seed(
+                    user_id=user_id,
+                    dashboard=dashboard,
+                    method_context=method_context,
+                    now=now,
+                )
+            )
         seeds.extend(self._weekly_review_seed(user_id=user_id, dashboard=dashboard, now=now))
         seeds = self._apply_runtime_policy_to_seeds(
             seeds=seeds,
@@ -1039,6 +1054,166 @@ class ProactiveEngine:
                     }
                 ]
         return []
+
+    def _ritual_invitation_seed(
+        self,
+        *,
+        user_id: str,
+        dashboard: DashboardSummary,
+        method_context: MethodContextSnapshot | None,
+        now: str,
+    ) -> list[RhythmicBriefSeed]:
+        week_bucket = self._week_bucket(now)
+        source_refs = self._ritual_invitation_source_refs(dashboard=dashboard)
+        safety_context = cast(dict[str, object] | None, (method_context or {}).get("safetyContext"))
+        requested_surfaces = {
+            "text": {"enabled": True},
+            "audio": {"enabled": False},
+            "captions": {"enabled": True, "format": "webvtt"},
+            "breath": {"enabled": True, "request": {"pattern": "steadying"}},
+            "meditation": {"enabled": True, "request": {"fieldType": "coherence_convergence"}},
+            "image": {"enabled": False},
+            "cinema": {"enabled": False},
+        }
+        render_policy = {
+            "mode": "dry_run_manifest",
+            "externalProvidersAllowed": False,
+            "videoAllowed": False,
+            "providerAllowlist": ["mock", "local"],
+            "maxCost": {"currency": "USD", "amount": 0},
+            "sourceDataPolicy": {
+                "allowRawMaterialTextInPlan": False,
+                "allowRawMaterialTextToProviders": False,
+                "providerPromptPolicy": "none",
+            },
+        }
+        completion_policy = {
+            "captureReflection": True,
+            "capturePracticeFeedback": True,
+            "returnMode": "frontend_callback",
+        }
+        plan_draft: RitualInvitationPlanDraft = {
+            "sourceRefs": source_refs,
+            "ritualIntent": "weekly_integration",
+            "narrativeMode": "hybrid",
+            "requestedSurfaces": requested_surfaces,
+            "privacyClass": "private",
+            "renderPolicy": render_policy,
+            "completionPolicy": completion_policy,
+            "locale": "en-US",
+        }
+        if safety_context:
+            plan_draft["safetyContext"] = deepcopy(safety_context)
+        acceptance_payload: dict[str, object] = {
+            "ritualIntent": "weekly_integration",
+            "narrativeMode": "hybrid",
+            "sourceRefs": source_refs,
+            "requestedSurfaces": requested_surfaces,
+            "renderPolicy": render_policy,
+            "completionPolicy": completion_policy,
+            "privacyClass": "private",
+            "locale": "en-US",
+        }
+        if safety_context:
+            acceptance_payload["safetyContext"] = deepcopy(safety_context)
+        invitation: RitualInvitationSummary = {
+            "invitationId": create_id("ritual_invitation"),
+            "userId": user_id,
+            "sourceRefs": source_refs,
+            "title": "Weekly ritual invitation",
+            "summary": (
+                "A weekly ritual can be prepared from approved summaries and recent "
+                "continuity if you accept it."
+            ),
+            "suggestedIntent": "weekly_integration",
+            "suggestedSurfaces": ["text", "captions", "breath", "meditation"],
+            "privacyClass": "private",
+            "cadence": "weekly",
+            "generatedAt": now,
+            "expiresAt": (self._parse_datetime(now) + timedelta(days=7))
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "planDraft": plan_draft,
+            "acceptancePayload": acceptance_payload,
+        }
+        material_ids = [
+            str(ref.get("recordId"))
+            for ref in source_refs
+            if ref.get("sourceType") == "material" and ref.get("recordId")
+        ]
+        evidence_ids = [
+            str(evidence_id)
+            for ref in source_refs
+            for evidence_id in ref.get("evidenceIds", [])
+            if str(evidence_id).strip()
+        ]
+        return [
+            {
+                "briefType": "ritual_invitation",
+                "triggerKey": f"ritual_invitation:weekly:{user_id}:{week_bucket}",
+                "titleHint": invitation["title"],
+                "summaryHint": invitation["summary"],
+                "suggestedActionHint": (
+                    "Accept to prepare the plan; ignore it and nothing is rendered."
+                ),
+                "priority": 55,
+                "relatedJourneyIds": [],
+                "relatedMaterialIds": material_ids,
+                "relatedSymbolIds": [],
+                "relatedPracticeSessionIds": [],
+                "evidenceIds": list(dict.fromkeys(evidence_ids)),
+                "reason": "weekly_ritual_invitation_due",
+                "ritualInvitation": invitation,
+            }
+        ]
+
+    def _ritual_invitation_source_refs(
+        self,
+        *,
+        dashboard: DashboardSummary,
+    ) -> list[PresentationSourceRef]:
+        refs: list[PresentationSourceRef] = []
+        latest_review = dashboard.get("latestReview")
+        if isinstance(latest_review, dict):
+            refs.append(
+                {
+                    "sourceType": "weekly_review",
+                    "recordId": str(latest_review.get("id") or ""),
+                    "role": "primary",
+                    "title": "Latest weekly review",
+                    "evidenceIds": [str(item) for item in latest_review.get("evidenceIds", [])],
+                    "approvalState": "read_only_generated",
+                }
+            )
+        for material in dashboard.get("recentMaterials", [])[:3]:
+            if not isinstance(material, dict):
+                continue
+            material_id = str(material.get("id") or "").strip()
+            if not material_id:
+                continue
+            title = str(material.get("title") or material.get("summary") or "Recent material")
+            refs.append(
+                {
+                    "sourceType": "material",
+                    "recordId": material_id,
+                    "role": "supporting" if refs else "primary",
+                    "title": self._sanitize_text(title, avoid_patterns=[]),
+                    "evidenceIds": [],
+                    "approvalState": "read_only_generated",
+                }
+            )
+        if not refs:
+            refs.append(
+                {
+                    "sourceType": "surface_result",
+                    "recordId": "weekly_continuity",
+                    "role": "primary",
+                    "title": "Weekly continuity",
+                    "evidenceIds": [],
+                    "approvalState": "read_only_generated",
+                }
+            )
+        return refs
 
     def _weekly_review_seed(
         self,

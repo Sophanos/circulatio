@@ -16,6 +16,7 @@ from ..domain.presentation import (
     PresentationCostEstimate,
     PresentationRenderRequest,
     PresentationRitualPlan,
+    RitualCompletionEvent,
 )
 from ..domain.proactive import ProactiveBriefRecord
 from ..domain.reviews import WeeklyReviewRecord
@@ -46,6 +47,8 @@ class HermesCommandResult(TypedDict, total=False):
     practiceSession: NotRequired[PracticeSessionRecord]
     practiceRecommendation: NotRequired[PracticePlan]
     ritualPlan: NotRequired[PresentationRitualPlan]
+    ritualCompletion: NotRequired[RitualCompletionEvent]
+    ritualCompletionReplayed: NotRequired[bool]
     costEstimate: NotRequired[PresentationCostEstimate]
     renderRequest: NotRequired[PresentationRenderRequest]
     warnings: NotRequired[list[str]]
@@ -203,8 +206,7 @@ class HermesCirculationCommandRouter:
             "userId": user_id,
             "status": "ok",
             "message": (
-                "Prepared a ritual plan. "
-                "Render it through the Hermes Rituals artifact renderer."
+                "Prepared a ritual plan. Render it through the Hermes Rituals artifact renderer."
             ),
             "ritualPlan": plan,
             "costEstimate": workflow["costEstimate"],
@@ -212,6 +214,26 @@ class HermesCirculationCommandRouter:
             "warnings": workflow.get("warnings", []),
             "continuity": workflow.get("continuity"),
             "affectedEntityIds": [],
+        }
+
+    async def record_ritual_completion(
+        self,
+        *,
+        user_id: Id,
+        payload: dict[str, object],
+    ) -> HermesCommandResult:
+        result = await self._service.record_ritual_completion({"userId": user_id, **payload})
+        event = result["event"]
+        return {
+            "command": "/circulation ritual complete",
+            "userId": user_id,
+            "status": "ok",
+            "message": "Ritual completion recorded."
+            if not result["replayed"]
+            else "Ritual completion replayed.",
+            "ritualCompletion": event,
+            "ritualCompletionReplayed": result["replayed"],
+            "affectedEntityIds": [event["id"]],
         }
 
     async def respond_practice(

@@ -296,6 +296,48 @@ class RhythmicRuntimeTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_scheduled_ritual_invitation_is_allowlisted_and_safe(self) -> None:
+        async def run() -> None:
+            repository, service = self._service()
+            await service.set_consent_preference(
+                {"userId": "user_1", "scope": "proactive_briefing", "status": "allow"}
+            )
+            await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "The river image stayed with me after the week ended.",
+                    "summary": "River image after the week",
+                    "materialDate": "2026-04-18T00:00:00Z",
+                }
+            )
+
+            result = await service.generate_rhythmic_briefs(
+                {
+                    "userId": "user_1",
+                    "source": "scheduled",
+                    "briefTypes": ["ritual_invitation"],
+                    "limit": 1,
+                }
+            )
+
+            self.assertEqual(len(result["briefs"]), 1)
+            brief = result["briefs"][0]
+            self.assertEqual(brief["briefType"], "ritual_invitation")
+            self.assertIn("ritualInvitation", brief)
+            invitation = brief["ritualInvitation"]
+            self.assertEqual(invitation["acceptancePayload"]["ritualIntent"], "weekly_integration")
+            self.assertFalse(
+                invitation["acceptancePayload"]["renderPolicy"]["externalProvidersAllowed"]
+            )
+            self.assertFalse(invitation["acceptancePayload"]["renderPolicy"]["videoAllowed"])
+            self.assertNotIn("text", invitation["sourceRefs"][0])
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+            self.assertEqual(await repository.list_weekly_reviews("user_1"), [])
+            self.assertEqual(await repository.list_practice_sessions("user_1"), [])
+
+        asyncio.run(run())
+
 
 if __name__ == "__main__":
     unittest.main()

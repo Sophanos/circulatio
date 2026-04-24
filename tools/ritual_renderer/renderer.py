@@ -118,9 +118,7 @@ class RitualRenderer:
             provider_assets=provider_assets,
         )
         surfaces: dict[str, object] = {
-            "text": {
-                "body": cast(dict[str, object], plan.get("text") or {}).get("body", "")
-            },
+            "text": {"body": cast(dict[str, object], plan.get("text") or {}).get("body", "")},
             "audio": audio_surface,
             "captions": {
                 "tracks": [
@@ -148,9 +146,7 @@ class RitualRenderer:
             "meditation": {
                 "enabled": bool(meditation.get("enabled", False)),
                 "fieldType": str(meditation.get("fieldType") or "coherence_convergence"),
-                "durationMs": int(
-                    meditation.get("durationMs", min(duration_ms, 180000)) or 180000
-                ),
+                "durationMs": int(meditation.get("durationMs", min(duration_ms, 180000)) or 180000),
                 "macroProgressPolicy": str(
                     meditation.get("macroProgressPolicy") or "session_progress"
                 ),
@@ -187,15 +183,23 @@ class RitualRenderer:
                 "captureBodyResponse": True,
                 "completionEndpoint": f"/api/artifacts/{artifact_id}/complete",
                 "returnCommand": f"/circulation ritual complete {artifact_id}",
+                "completion": {
+                    "enabled": True,
+                    "endpoint": f"/api/artifacts/{artifact_id}/complete",
+                    "idempotencyRequired": True,
+                    "captureReflection": True,
+                    "capturePracticeFeedback": True,
+                    "completionIdStrategy": "client_uuid",
+                },
             },
             "safety": {
                 "stopInstruction": cast(dict[str, object], plan.get("safetyBoundary") or {}).get(
                     "groundingInstruction",
                     "Stop if this increases activation; orient to the room.",
                 ),
-                "contraindications": cast(
-                    dict[str, object], plan.get("voiceScript") or {}
-                ).get("contraindications", []),
+                "contraindications": cast(dict[str, object], plan.get("voiceScript") or {}).get(
+                    "contraindications", []
+                ),
                 "blockedSurfaces": cast(dict[str, object], plan.get("safetyBoundary") or {}).get(
                     "blockedSurfaces", []
                 ),
@@ -203,9 +207,7 @@ class RitualRenderer:
             "render": {
                 "rendererVersion": RENDERER_VERSION,
                 "mode": str(
-                    cast(dict[str, object], plan.get("deliveryPolicy") or {}).get(
-                        "renderMode"
-                    )
+                    cast(dict[str, object], plan.get("deliveryPolicy") or {}).get("renderMode")
                     or "dry_run_manifest"
                 ),
                 "providers": providers,
@@ -325,6 +327,15 @@ class RitualRenderer:
                 assets=assets,
                 warnings=warnings,
             )
+        if "music" in selected and not self._options.get("allowBetaMusic"):
+            warnings.append("chutes_music_skipped_without_beta_gate")
+            selected.discard("music")
+        if "cinema" in selected and not self._options.get("allowBetaVideo"):
+            warnings.append("chutes_video_skipped_without_beta_gate")
+            selected.discard("cinema")
+        if "cinema" in selected and not self._plan_allows_video(plan):
+            warnings.append("chutes_video_blocked_by_plan_video_policy")
+            selected.discard("cinema")
         if "music" in selected:
             self._try_render_chutes_music(
                 output=output,
@@ -505,7 +516,16 @@ class RitualRenderer:
     def _plan_allows_external_providers(self, plan: dict[str, object]) -> bool:
         safety = cast(dict[str, object], plan.get("safetyBoundary") or {})
         restrictions = {str(item) for item in safety.get("providerRestrictions", [])}
-        return "external_providers_disabled" not in restrictions
+        if "external_providers_disabled" in restrictions:
+            return False
+        if "no_raw_material_to_external_provider" not in restrictions:
+            return False
+        return True
+
+    def _plan_allows_video(self, plan: dict[str, object]) -> bool:
+        visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
+        cinema = cast(dict[str, object], visual.get("cinema") or {})
+        return bool(cinema.get("enabled"))
 
     def _asset_ref(self, asset: ChutesAsset, *, public_base: str) -> dict[str, object]:
         return {
@@ -536,12 +556,17 @@ class RitualRenderer:
         image = cast(dict[str, object], visual.get("image") or {})
         if not image.get("enabled"):
             return ""
+        if image.get("providerPromptPolicy") != "sanitized_visual_only":
+            return ""
         return " ".join(str(image.get("prompt") or "").split())
 
     def _video_prompt(self, plan: dict[str, object]) -> str:
         visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
         cinema = cast(dict[str, object], visual.get("cinema") or {})
         if not cinema.get("enabled"):
+            return ""
+        image = cast(dict[str, object], visual.get("image") or {})
+        if image.get("providerPromptPolicy") != "sanitized_visual_only":
             return ""
         storyboard = cinema.get("storyboard")
         if isinstance(storyboard, list) and storyboard:
@@ -579,9 +604,7 @@ class RitualRenderer:
         self, plan: dict[str, object], *, duration_ms: int
     ) -> list[CaptionSegment]:
         voice_script = cast(dict[str, object], plan.get("voiceScript") or {})
-        raw_segments = [
-            item for item in voice_script.get("segments", []) if isinstance(item, dict)
-        ]
+        raw_segments = [item for item in voice_script.get("segments", []) if isinstance(item, dict)]
         captions: list[CaptionSegment] = []
         cursor = 0
         for index, segment in enumerate(raw_segments, start=1):
@@ -592,9 +615,7 @@ class RitualRenderer:
             segment_ms = min(max(word_count * 520, 3200), 14000)
             pause_ms = int(segment.get("pauseAfterMs", 0) or 0)
             end = min(cursor + segment_ms, duration_ms)
-            captions.append(
-                {"id": f"cap_{index}", "startMs": cursor, "endMs": end, "text": text}
-            )
+            captions.append({"id": f"cap_{index}", "startMs": cursor, "endMs": end, "text": text})
             cursor = min(end + pause_ms, duration_ms)
             if cursor >= duration_ms:
                 break
@@ -624,8 +645,7 @@ class RitualRenderer:
         for caption in captions:
             blocks.append(caption["id"])
             blocks.append(
-                f"{self._vtt_time(caption['startMs'])} --> "
-                f"{self._vtt_time(caption['endMs'])}"
+                f"{self._vtt_time(caption['startMs'])} --> {self._vtt_time(caption['endMs'])}"
             )
             blocks.append(caption["text"])
             blocks.append("")

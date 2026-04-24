@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 from copy import deepcopy
@@ -58,11 +60,12 @@ from ..domain.presentation import (
     PresentationSourceRef,
     PresentationSourceType,
     RequestedRitualSurfaces,
+    RitualCompletionEvent,
     RitualCompletionPolicy,
     RitualIntent,
     RitualRenderPolicy,
 )
-from ..domain.proactive import ProactiveBriefRecord
+from ..domain.proactive import ProactiveBriefRecord, ProactiveBriefType
 from ..domain.readiness import ConsentPreferenceRecord
 from ..domain.records import DeletionMode
 from ..domain.reviews import DashboardSummary, WeeklyReviewRecord
@@ -162,6 +165,8 @@ from .workflow_types import (
     RecordInnerOuterCorrespondenceInput,
     RecordNuminousEncounterInput,
     RecordRelationalSceneInput,
+    RecordRitualCompletionInput,
+    RecordRitualCompletionResult,
     RespondPracticeInput,
     RespondRhythmicBriefInput,
     RhythmicBriefWorkflowResult,
@@ -486,8 +491,7 @@ class CirculatioService:
             "id": create_id("personal_amplification"),
             "userId": input_data["userId"],
             "canonicalName": str(
-                input_data.get("canonicalName")
-                or (prompt.get("canonicalName") if prompt else "")
+                input_data.get("canonicalName") or (prompt.get("canonicalName") if prompt else "")
             ).strip(),
             "surfaceText": str(
                 input_data.get("surfaceText") or (prompt.get("surfaceText") if prompt else "")
@@ -4050,6 +4054,123 @@ class CirculatioService:
         )
         return {"summary": summary, "continuity": continuity}
 
+    async def record_ritual_completion(
+        self,
+        input_data: RecordRitualCompletionInput,
+    ) -> RecordRitualCompletionResult:
+        artifact_id = self._optional_str(input_data.get("artifactId"))
+        if not artifact_id:
+            raise ValidationError("artifactId is required.")
+        manifest_version = self._optional_str(input_data.get("manifestVersion"))
+        if not manifest_version:
+            raise ValidationError("manifestVersion is required.")
+        idempotency_key = self._optional_str(input_data.get("idempotencyKey"))
+        if not idempotency_key:
+            raise ValidationError("idempotencyKey is required.")
+        playback_state = self._optional_str(input_data.get("playbackState")) or "completed"
+        if playback_state not in {"completed", "partial", "abandoned"}:
+            raise ValidationError("playbackState must be completed, partial, or abandoned.")
+        completed_at = self._optional_str(input_data.get("completedAt")) or now_iso()
+        self._parse_datetime(completed_at)
+        completed_sections = self._normalize_completion_sections(
+            input_data.get("completedSections")
+        )
+        duration_ms = input_data.get("durationMs")
+        if duration_ms is not None:
+            try:
+                duration_ms = int(duration_ms)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError("durationMs must be an integer when supplied.") from exc
+            if duration_ms < 0:
+                raise ValidationError("durationMs cannot be negative.")
+        source_refs = self._normalize_completion_source_refs(input_data.get("sourceRefs"))
+        metadata = self._normalize_completion_metadata(input_data.get("clientMetadata"))
+        practice_feedback = input_data.get("practiceFeedback")
+        if isinstance(practice_feedback, dict) and not self._optional_str(
+            practice_feedback.get("practiceSessionId")
+        ):
+            metadata["practiceFeedback"] = deepcopy(practice_feedback)
+            practice_feedback = None
+        normalized_payload: dict[str, object] = {
+            "artifactId": artifact_id,
+            "manifestVersion": manifest_version,
+            "planId": self._optional_str(input_data.get("planId")) or "",
+            "sourceRefs": source_refs,
+            "completedAt": completed_at,
+            "playbackState": playback_state,
+            "durationMs": duration_ms,
+            "completedSections": completed_sections,
+            "reflectionText": self._optional_str(input_data.get("reflectionText")) or "",
+            "practiceFeedback": deepcopy(practice_feedback)
+            if isinstance(practice_feedback, dict)
+            else None,
+            "metadata": metadata,
+        }
+        fingerprint = self._completion_payload_fingerprint(normalized_payload)
+        existing = await self._repository.get_ritual_completion_event_by_idempotency_key(
+            input_data["userId"],
+            idempotency_key,
+        )
+        if existing is not None:
+            if existing.get("payloadFingerprint") != fingerprint:
+                raise ValidationError(
+                    "Ritual completion idempotency key was reused with a different payload."
+                )
+            return {"event": existing, "replayed": True}
+
+        reflection_material_id: Id | None = None
+        reflection_text = self._optional_str(input_data.get("reflectionText"))
+        if reflection_text:
+            reflection = await self.store_material(
+                {
+                    "userId": input_data["userId"],
+                    "materialType": "reflection",
+                    "text": reflection_text,
+                    "summary": self._truncate_intake_text(reflection_text, limit=180),
+                    "materialDate": completed_at,
+                    "privacyClass": "private",
+                    "source": "system",
+                    "tags": ["ritual_completion"],
+                }
+            )
+            reflection_material_id = reflection["id"]
+        practice_feedback_id: Id | None = None
+        if isinstance(practice_feedback, dict):
+            feedback_value = self._optional_str(practice_feedback.get("feedback")) or "helpful"
+            feedback_record = await self.record_practice_feedback(
+                input_data["userId"],
+                cast(Id, str(practice_feedback["practiceSessionId"])),
+                cast(PracticeInteractionFeedback, feedback_value),
+                note=self._optional_str(practice_feedback.get("note")),
+                locale=self._optional_str(practice_feedback.get("locale")),
+            )
+            practice_feedback_id = feedback_record["id"]
+        event: RitualCompletionEvent = {
+            "id": create_id("ritual_completion"),
+            "userId": input_data["userId"],
+            "artifactId": artifact_id,
+            "sourceRefs": source_refs,
+            "manifestVersion": manifest_version,
+            "idempotencyKey": idempotency_key,
+            "payloadFingerprint": fingerprint,
+            "completedAt": completed_at,
+            "playbackState": cast(object, playback_state),  # type: ignore[typeddict-item]
+            "completedSections": completed_sections,
+            "metadata": metadata,
+            "createdAt": now_iso(),
+        }
+        plan_id = self._optional_str(input_data.get("planId"))
+        if plan_id:
+            event["planId"] = plan_id
+        if duration_ms is not None:
+            event["durationMs"] = duration_ms
+        if reflection_material_id:
+            event["reflectionMaterialId"] = reflection_material_id
+        if practice_feedback_id:
+            event["practiceFeedbackId"] = practice_feedback_id
+        stored = await self._repository.create_ritual_completion_event(event)
+        return {"event": stored, "replayed": False}
+
     async def plan_ritual(self, input_data: PlanRitualInput) -> PlanRitualWorkflowResult:
         resolved_start, resolved_end = self._resolve_ritual_window(input_data)
         if self._parse_datetime(resolved_start) > self._parse_datetime(resolved_end):
@@ -4200,9 +4321,7 @@ class CirculatioService:
             raise ValidationError(f"Unsupported narrativeMode: {candidate}")
         return cast(NarrativeMode, candidate)
 
-    def _normalize_requested_ritual_surfaces(
-        self, value: object | None
-    ) -> RequestedRitualSurfaces:
+    def _normalize_requested_ritual_surfaces(self, value: object | None) -> RequestedRitualSurfaces:
         if value is None:
             return {}
         if not isinstance(value, dict):
@@ -4361,8 +4480,7 @@ class CirculatioService:
             "title": "Ritual from selected Circulatio material",
             "summary": (
                 "A ritual plan for selected Circulatio source references in the window "
-                f"{window_start} to {window_end}: "
-                + ", ".join(labels[:6])
+                f"{window_start} to {window_end}: " + ", ".join(labels[:6])
             ),
             "activeThemes": labels[:5],
             "recurringSymbols": [],
@@ -5190,6 +5308,15 @@ class CirculatioService:
             "proactive_briefing",
         )
         skipped_reasons: list[str] = []
+        allowed_brief_types = set(get_args(ProactiveBriefType))
+        requested_brief_types = {
+            str(item) for item in input_data.get("briefTypes", []) if str(item).strip()
+        }
+        unknown_brief_types = sorted(requested_brief_types.difference(allowed_brief_types))
+        if unknown_brief_types:
+            raise ValidationError(
+                "Unsupported rhythmic brief type(s): " + ", ".join(unknown_brief_types)
+            )
         if source == "scheduled" and consent_status != "allow":
             return {
                 "briefs": [],
@@ -5208,8 +5335,10 @@ class CirculatioService:
             adaptation_profile=adaptation_summary,
             source=source,  # type: ignore[arg-type]
             now=now,
-            limit=max(1, int(input_data.get("limit", 3))),
+            limit=max(10 if requested_brief_types else 1, int(input_data.get("limit", 3))),
         )
+        if requested_brief_types:
+            seeds = [seed for seed in seeds if seed.get("briefType") in requested_brief_types]
         due_seeds = self._proactive_engine.filter_due_candidates(
             seeds=seeds,
             existing_briefs=existing_briefs,
@@ -5217,6 +5346,7 @@ class CirculatioService:
             source=source,  # type: ignore[arg-type]
             now=now,
         )
+        due_seeds = due_seeds[: max(1, int(input_data.get("limit", 3)))]
         if not due_seeds:
             result: RhythmicBriefWorkflowResult = {"briefs": [], "continuity": continuity}
             if skipped_reasons:
@@ -9404,6 +9534,40 @@ class CirculatioService:
         text = str(value).strip()
         return text or None
 
+    def _normalize_completion_sections(self, value: object | None) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValidationError("completedSections must be a list when supplied.")
+        sections: list[str] = []
+        for item in value:
+            candidate = self._optional_str(item)
+            if candidate and candidate not in sections:
+                sections.append(candidate)
+        return sections
+
+    def _normalize_completion_source_refs(
+        self, value: object | None
+    ) -> list[PresentationSourceRef]:
+        if value is None:
+            return []
+        refs, _ = self._normalize_presentation_source_refs(value)
+        return refs
+
+    def _normalize_completion_metadata(self, value: object | None) -> dict[str, object]:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValidationError("clientMetadata must be an object when supplied.")
+        blocked_keys = {"transcript", "captions", "rawMaterialText", "providerPrompt"}
+        return {
+            str(key): deepcopy(item) for key, item in value.items() if str(key) not in blocked_keys
+        }
+
+    def _completion_payload_fingerprint(self, payload: dict[str, object]) -> str:
+        encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode()
+        return hashlib.sha256(encoded).hexdigest()
+
     def _validate_cultural_frame_type(self, value: object | None) -> str:
         frame_type = self._optional_str(value) or "chosen"
         if frame_type not in {"alchemical", "mythic", "religious", "literary", "family", "chosen"}:
@@ -11742,6 +11906,11 @@ class CirculatioService:
                 ResourceInvitationSummary,
                 deepcopy(resource_invitation),
             )
+        ritual_invitation = result.get("ritualInvitation")
+        if not isinstance(ritual_invitation, dict):
+            ritual_invitation = seed.get("ritualInvitation")
+        if isinstance(ritual_invitation, dict):
+            record["ritualInvitation"] = deepcopy(ritual_invitation)  # type: ignore[typeddict-item]
         related_resource_ids = [
             str(item) for item in seed.get("relatedResourceIds", []) if str(item).strip()
         ]

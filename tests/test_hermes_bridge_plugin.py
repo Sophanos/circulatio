@@ -56,6 +56,7 @@ from circulatio_hermes_plugin.tools import (
     query_graph_tool,
     record_interpretation_feedback_tool,
     record_practice_feedback_tool,
+    record_ritual_completion_tool,
     reject_hypotheses_tool,
     reject_proposals_tool,
     reject_review_proposals_tool,
@@ -246,6 +247,28 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "ritual-renderer.v1",
             )
             self.assertIn("captions", response["result"]["renderRequest"]["allowedSurfaces"])
+
+        asyncio.run(run())
+
+    def test_record_ritual_completion_tool_dispatches_without_interpretation(self) -> None:
+        async def run() -> None:
+            runtime = self._install_in_memory_runtime()
+            response = json.loads(
+                await record_ritual_completion_tool(
+                    {
+                        "artifactId": "artifact_1",
+                        "manifestVersion": "hermes_ritual_artifact.v1",
+                        "completionId": "completion_1",
+                        "completedAt": "2026-04-19T12:00:00Z",
+                        "playbackState": "completed",
+                        "reflectionText": "The closing felt steady.",
+                    },
+                    **self._tool_kwargs(call_id="tool_ritual_completion"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(response["result"]["completionEvent"]["artifactId"], "artifact_1")
+            self.assertEqual(runtime.llm.interpret_calls, [])
 
         asyncio.run(run())
 
@@ -1831,6 +1854,7 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "circulatio_record_interpretation_feedback",
                 "circulatio_record_practice_feedback",
                 "circulatio_plan_ritual",
+                "circulatio_record_ritual_completion",
                 "circulatio_generate_rhythmic_briefs",
                 "circulatio_respond_rhythmic_brief",
             },

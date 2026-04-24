@@ -623,9 +623,7 @@ class CirculatioCore:
         if not summary:
             summary = "A short ritual from the material already available in Circulatio."
         active_themes = [
-            str(item)
-            for item in source_digest.get("activeThemes", [])
-            if str(item).strip()
+            str(item) for item in source_digest.get("activeThemes", []) if str(item).strip()
         ]
         recurring_symbols = [
             str(item) for item in source_digest.get("recurringSymbols", []) if str(item).strip()
@@ -732,9 +730,7 @@ class CirculatioCore:
             "safetyBoundary": {
                 "depthWorkAllowed": not grounding_only,
                 "blockedSurfaces": list(dict.fromkeys(blocked_surfaces)),
-                "groundingInstruction": (
-                    "Stop if this increases activation; orient to the room."
-                ),
+                "groundingInstruction": ("Stop if this increases activation; orient to the room."),
                 "providerRestrictions": provider_restrictions,
             },
             "provenance": {
@@ -988,6 +984,7 @@ class CirculatioCore:
             **({"prompt": prompt} if prompt else {}),
             "privacyNotes": ["no raw dream text", "derived user-facing summary only"],
             "sourceRefIds": source_ref_ids,
+            "providerPromptPolicy": "sanitized_visual_only" if enabled else "none",
         }
 
     def _presentation_source_ref_ids(self, refs: list[PresentationSourceRef]) -> list[str]:
@@ -1649,6 +1646,7 @@ class CirculatioCore:
         if runtime_policy.get("depthLevel") == "grounding_only" and brief_type not in {
             "practice_followup",
             "resource_invitation",
+            "ritual_invitation",
         }:
             return {
                 "withheld": True,
@@ -1657,10 +1655,32 @@ class CirculatioCore:
         if not safety["depthWorkAllowed"] and brief_type not in {
             "practice_followup",
             "resource_invitation",
+            "ritual_invitation",
         }:
             return {
                 "withheld": True,
                 "withheldReason": "safety_gate_blocks_symbolic_brief",
+            }
+        if brief_type == "ritual_invitation":
+            return {
+                "title": str(seed.get("titleHint") or "Weekly ritual invitation"),
+                "summary": str(
+                    seed.get("summaryHint")
+                    or "A weekly ritual can be prepared if you explicitly accept it."
+                ),
+                "suggestedAction": str(
+                    seed.get("suggestedActionHint")
+                    or "Accept to prepare the plan; ignore it and nothing is rendered."
+                ),
+                "userFacingResponse": (
+                    "A weekly ritual invitation is available. Accept it to prepare a plan; "
+                    "nothing is planned or rendered until then."
+                ),
+                "llmHealth": {
+                    "status": "fallback",
+                    "reason": "ritual_invitation_fallback",
+                    "source": "fallback",
+                },
             }
         llm_output = None
         if self._llm is not None:

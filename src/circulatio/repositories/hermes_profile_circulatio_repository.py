@@ -83,6 +83,7 @@ from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
 from ..domain.method_state import MethodStateCaptureRunRecord, MethodStateCaptureRunUpdate
 from ..domain.patterns import PatternHistoryEntry, PatternRecord, PatternType, PatternUpdate
 from ..domain.practices import PracticeSessionRecord, PracticeSessionStatus, PracticeSessionUpdate
+from ..domain.presentation import RitualCompletionEvent
 from ..domain.proactive import (
     ProactiveBriefRecord,
     ProactiveBriefStatus,
@@ -1342,6 +1343,23 @@ class HermesProfileCirculatioRepository(CirculatioRepository):
             user_id, lambda: self._delegate.update_proactive_brief(user_id, brief_id, updates)
         )
 
+    async def create_ritual_completion_event(
+        self, record: RitualCompletionEvent
+    ) -> RitualCompletionEvent:
+        return await self._write(
+            record["userId"], lambda: self._delegate.create_ritual_completion_event(record)
+        )
+
+    async def get_ritual_completion_event_by_idempotency_key(
+        self, user_id: Id, idempotency_key: str
+    ) -> RitualCompletionEvent | None:
+        return await self._read(
+            lambda: self._delegate.get_ritual_completion_event_by_idempotency_key(
+                user_id,
+                idempotency_key,
+            )
+        )
+
     async def build_hermes_memory_context_from_records(
         self, user_id: Id, *, max_items: int | None = None
     ) -> HermesMemoryContext:
@@ -1823,6 +1841,7 @@ def _bucket_to_payload(bucket: UserCirculatioBucket) -> dict[str, object]:
         "adaptation_profiles": deepcopy(bucket.adaptation_profiles),
         "journeys": deepcopy(bucket.journeys),
         "proactive_briefs": deepcopy(bucket.proactive_briefs),
+        "ritual_completion_events": deepcopy(bucket.ritual_completion_events),
         "feedback": deepcopy(bucket.feedback),
         "interaction_feedback": deepcopy(bucket.interaction_feedback),
         "cultural_origins": deepcopy(bucket.cultural_origins),
@@ -1869,6 +1888,7 @@ def _bucket_from_payload(payload: dict[str, object]) -> UserCirculatioBucket:
         adaptation_profiles=deepcopy(payload.get("adaptation_profiles", {})),
         journeys=deepcopy(payload.get("journeys", {})),
         proactive_briefs=deepcopy(payload.get("proactive_briefs", {})),
+        ritual_completion_events=deepcopy(payload.get("ritual_completion_events", {})),
         feedback=deepcopy(payload.get("feedback", [])),
         interaction_feedback=deepcopy(payload.get("interaction_feedback", [])),
         cultural_origins=deepcopy(payload.get("cultural_origins", [])),

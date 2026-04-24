@@ -90,9 +90,9 @@ duplicate requests return the original response.
 - For image, video, or external provider generation, require explicit user
   wording and the matching render policy. Otherwise default to text, captions,
   breath, and meditation.
-- Scheduled ritual surfacing is a rhythmic brief invitation. Actual ritual
-  planning happens only after the user accepts the invitation; scheduled cron
-  must not call `circulatio_plan_ritual` or render media.
+- Scheduled ritual surfacing is a `ritual_invitation` rhythmic brief invitation.
+  Actual ritual planning happens only after the user accepts the invitation;
+  scheduled cron must not call `circulatio_plan_ritual` or render media.
 - If the user wants a practice or rhythmic surfacing, call
   `circulatio_generate_practice_recommendation` or
   `circulatio_generate_rhythmic_briefs`, then use the matching response tool
@@ -100,6 +100,10 @@ duplicate requests return the original response.
 - Use `circulatio_respond_practice_recommendation` for accept / skip decisions.
   If the user reports how a recommended practice actually landed after doing it,
   prefer `circulatio_record_practice_feedback` over generic follow-up capture.
+- Use `circulatio_record_ritual_completion` only for explicit artifact completion
+  or frontend completion sync. It records playback state, optional literal
+  reflection, and explicit practice feedback only; it must not be paired with an
+  interpretation call unless the user separately asks for meaning.
   If Hermes can see exactly one plausible recent or anchored
   `practiceSessionId`, use it instead of asking the user to identify the
   practice again; bodily shifts after journaling or reflective practice still
@@ -196,7 +200,7 @@ duplicate requests return the original response.
 
 - `circulatio_generate_practice_recommendation`,
   `circulatio_respond_practice_recommendation`
-- `circulatio_plan_ritual`
+- `circulatio_plan_ritual`, `circulatio_record_ritual_completion`
 - `circulatio_generate_rhythmic_briefs`, `circulatio_respond_rhythmic_brief`
 
 ## Host Tone

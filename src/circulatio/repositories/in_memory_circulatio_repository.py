@@ -75,6 +75,7 @@ from ..domain.memory import MemoryKernelSnapshot, MemoryRetrievalQuery
 from ..domain.method_state import MethodStateCaptureRunRecord, MethodStateCaptureRunUpdate
 from ..domain.patterns import PatternHistoryEntry, PatternRecord, PatternType, PatternUpdate
 from ..domain.practices import PracticeSessionRecord, PracticeSessionStatus, PracticeSessionUpdate
+from ..domain.presentation import RitualCompletionEvent
 from ..domain.proactive import (
     ProactiveBriefRecord,
     ProactiveBriefStatus,
@@ -1786,6 +1787,34 @@ class InMemoryCirculatioRepository(CirculatioRepository):
         return await self._update_bucket_record(
             user_id, "proactive_briefs", brief_id, updates, "proactive brief"
         )
+
+    async def create_ritual_completion_event(
+        self, record: RitualCompletionEvent
+    ) -> RitualCompletionEvent:
+        async with self._lock:
+            bucket = self._bucket(record["userId"])
+            idempotency_key = str(record.get("idempotencyKey") or "").strip()
+            for existing in bucket.ritual_completion_events.values():
+                if existing.get("idempotencyKey") != idempotency_key:
+                    continue
+                if existing.get("payloadFingerprint") != record.get("payloadFingerprint"):
+                    raise ConflictError(
+                        "Ritual completion idempotency key was reused with a different payload."
+                    )
+                return deepcopy(existing)
+            ensure_unique(bucket.ritual_completion_events, record["id"], "ritual completion")
+            bucket.ritual_completion_events[record["id"]] = deepcopy(record)
+            return deepcopy(record)
+
+    async def get_ritual_completion_event_by_idempotency_key(
+        self, user_id: Id, idempotency_key: str
+    ) -> RitualCompletionEvent | None:
+        async with self._lock:
+            normalized = str(idempotency_key).strip()
+            for existing in self._bucket(user_id).ritual_completion_events.values():
+                if existing.get("idempotencyKey") == normalized:
+                    return deepcopy(existing)
+            return None
 
     async def build_hermes_memory_context_from_records(
         self, user_id: Id, *, max_items: int | None = None

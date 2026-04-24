@@ -185,3 +185,68 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_record_ritual_completion_is_idempotent_and_literal_only(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            first = await service.record_ritual_completion(
+                {
+                    "userId": "user_1",
+                    "artifactId": "artifact_1",
+                    "manifestVersion": "hermes_ritual_artifact.v1",
+                    "idempotencyKey": "completion_1",
+                    "completedAt": "2026-04-19T12:00:00Z",
+                    "playbackState": "completed",
+                    "planId": "ritual_plan_1",
+                    "sourceRefs": [
+                        {"sourceType": "surface_result", "recordId": "alive", "role": "primary"}
+                    ],
+                    "completedSections": ["arrival", "closing", "arrival"],
+                    "reflectionText": "I felt more settled after the breath segment.",
+                    "clientMetadata": {"transcript": "blocked", "device": "test"},
+                }
+            )
+            replay = await service.record_ritual_completion(
+                {
+                    "userId": "user_1",
+                    "artifactId": "artifact_1",
+                    "manifestVersion": "hermes_ritual_artifact.v1",
+                    "idempotencyKey": "completion_1",
+                    "completedAt": "2026-04-19T12:00:00Z",
+                    "playbackState": "completed",
+                    "planId": "ritual_plan_1",
+                    "sourceRefs": [
+                        {"sourceType": "surface_result", "recordId": "alive", "role": "primary"}
+                    ],
+                    "completedSections": ["arrival", "closing", "arrival"],
+                    "reflectionText": "I felt more settled after the breath segment.",
+                    "clientMetadata": {"transcript": "blocked", "device": "test"},
+                }
+            )
+
+            self.assertFalse(first["replayed"])
+            self.assertTrue(replay["replayed"])
+            self.assertEqual(first["event"]["id"], replay["event"]["id"])
+            self.assertEqual(first["event"]["completedSections"], ["arrival", "closing"])
+            self.assertEqual(first["event"]["metadata"], {"device": "test"})
+            self.assertEqual(len(await repository.list_materials("user_1")), 1)
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+            self.assertEqual(llm.interpret_calls, [])
+
+        asyncio.run(run())
+
+    def test_record_ritual_completion_rejects_idempotency_conflict(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            payload = {
+                "userId": "user_1",
+                "artifactId": "artifact_1",
+                "manifestVersion": "hermes_ritual_artifact.v1",
+                "idempotencyKey": "completion_1",
+                "completedAt": "2026-04-19T12:00:00Z",
+                "playbackState": "completed",
+            }
+            await service.record_ritual_completion(payload)
+            with self.assertRaises(Exception):
+                await service.record_ritual_completion({**payload, "playbackState": "partial"})
+
+        asyncio.run(run())

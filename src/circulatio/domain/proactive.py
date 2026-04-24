@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, NotRequired, Required, TypedDict
 
+from .presentation import RitualInvitationSummary
 from .types import (
     CoachCaptureContract,
     CoachLoopKind,
@@ -23,6 +24,7 @@ ProactiveBriefType = Literal[
     "return_invitation",
     "bridge_invitation",
     "analysis_packet_invitation",
+    "ritual_invitation",
 ]
 ProactiveBriefStatus = Literal["candidate", "shown", "dismissed", "acted_on", "deleted"]
 RhythmBriefSource = Literal["manual", "scheduled", "review", "practice_followup"]
@@ -46,6 +48,7 @@ class RhythmicBriefSeed(TypedDict, total=False):
     coachMoveKind: NotRequired[CoachMoveKind]
     capture: NotRequired[CoachCaptureContract]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
+    ritualInvitation: NotRequired[RitualInvitationSummary]
     relatedResourceIds: NotRequired[list[Id]]
 
 
@@ -71,6 +74,7 @@ class ProactiveBriefRecord(TypedDict, total=False):
     coachMoveKind: NotRequired[CoachMoveKind]
     capture: NotRequired[CoachCaptureContract]
     resourceInvitation: NotRequired[ResourceInvitationSummary]
+    ritualInvitation: NotRequired[RitualInvitationSummary]
     relatedResourceIds: NotRequired[list[Id]]
     createdAt: Required[ISODateString]
     shownAt: NotRequired[ISODateString]
@@ -101,6 +105,7 @@ class ProactiveBriefUpdate(TypedDict, total=False):
     coachMoveKind: CoachMoveKind
     capture: CoachCaptureContract
     resourceInvitation: ResourceInvitationSummary
+    ritualInvitation: RitualInvitationSummary
     relatedResourceIds: list[Id]
     shownAt: ISODateString
     actedOnAt: ISODateString

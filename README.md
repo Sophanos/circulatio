@@ -71,7 +71,7 @@ Create a plan through Hermes or a test fixture, then render it locally with mock
   --dry-run
 ```
 
-The Hermes Rituals app can load the resulting manifest at `/artifacts/{artifactId}`. The built-in fixture is available at `/artifacts/weekly-ritual-dry-run`.
+The Hermes Rituals app can load the resulting manifest at `/artifacts/{artifactId}`. The built-in fixture is available at `/artifacts/weekly-ritual-dry-run`. Scheduled cron must not run this renderer; it should create only `ritual_invitation` rhythmic briefs and wait for explicit user acceptance before planning.
 
 Chutes provider rendering is available from the renderer only. Keep the API token in your shell or an ignored local env file, then request the provider profile explicitly:
 
@@ -86,7 +86,7 @@ export CHUTES_API_TOKEN=...
   --max-cost-usd 0.05
 ```
 
-The renderer also has opt-in Chutes profiles for image, music, video, and all surfaces. Those calls still require a plan that allows external providers plus an explicit positive budget flag; raw Circulatio source text is not sent to providers.
+The renderer also has opt-in Chutes profiles for image, music, video, and all surfaces. Those calls still require a plan that allows external providers plus an explicit positive budget flag; raw Circulatio source text is not sent to providers. Music and video additionally require `--allow-beta-music` or `--allow-beta-video`.
 
 Example reply shape:
 
