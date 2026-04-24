@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from pathlib import Path
@@ -128,7 +129,10 @@ from .sqlite_utils import (
 
 T = TypeVar("T")
 
+LOGGER = logging.getLogger(__name__)
+
 _SCHEMA_VERSION = 1
+_WRITE_CONFLICT_RETRIES = 3
 
 
 class HermesProfileCirculatioRepository(CirculatioRepository):
@@ -1594,32 +1598,55 @@ class HermesProfileCirculatioRepository(CirculatioRepository):
 
     async def _write(self, user_id: Id, call: Callable[[], Awaitable[T]]) -> T:
         async with self._io_lock:
-            self._ensure_user_storage_available(user_id)
-            had_bucket = user_id in self._delegate._users
-            previous_bucket = deepcopy(self._delegate._users[user_id]) if had_bucket else None
-            previous_revision = self._bucket_revisions.get(user_id, 0)
-            try:
-                result = await call()
-                bucket = self._delegate._bucket(user_id)
-                payload_json = _serialize_bucket(bucket)
-                self._persist_serialized_user(
-                    user_id,
-                    payload_json=payload_json,
-                    expected_revision=previous_revision,
-                    insert_new=not had_bucket,
-                )
-                return result
-            except ProfileStorageConflictError:
-                self._reload_user_from_storage(user_id)
-                raise
-            except Exception:
-                self._restore_user_snapshot(
-                    user_id,
-                    bucket=previous_bucket,
-                    revision=previous_revision,
-                    had_bucket=had_bucket,
-                )
-                raise
+            last_conflict: ProfileStorageConflictError | None = None
+            for attempt in range(_WRITE_CONFLICT_RETRIES + 1):
+                self._ensure_user_storage_available(user_id)
+                had_bucket = user_id in self._delegate._users
+                previous_bucket = deepcopy(self._delegate._users[user_id]) if had_bucket else None
+                previous_revision = self._bucket_revisions.get(user_id, 0)
+                try:
+                    result = await call()
+                    bucket = self._delegate._bucket(user_id)
+                    payload_json = _serialize_bucket(bucket)
+                    self._persist_serialized_user(
+                        user_id,
+                        payload_json=payload_json,
+                        expected_revision=previous_revision,
+                        insert_new=not had_bucket,
+                    )
+                    return result
+                except ProfileStorageConflictError as exc:
+                    last_conflict = exc
+                    self._restore_user_snapshot(
+                        user_id,
+                        bucket=previous_bucket,
+                        revision=previous_revision,
+                        had_bucket=had_bucket,
+                    )
+                    self._reload_user_from_storage(user_id)
+                    if attempt >= _WRITE_CONFLICT_RETRIES:
+                        LOGGER.warning(
+                            "Circulatio profile write conflict exhausted retries for user_id=%s",
+                            user_id,
+                        )
+                        raise
+                    LOGGER.info(
+                        "Circulatio profile write conflict; retrying user_id=%s attempt=%s",
+                        user_id,
+                        attempt + 1,
+                    )
+                    await asyncio.sleep(0.025 * (2**attempt))
+                except Exception:
+                    self._restore_user_snapshot(
+                        user_id,
+                        bucket=previous_bucket,
+                        revision=previous_revision,
+                        had_bucket=had_bucket,
+                    )
+                    raise
+            if last_conflict is not None:
+                raise last_conflict
+            raise PersistenceError("Circulatio storage write failed without a recorded cause.")
 
     def _initialize_schema(self) -> None:
         with sqlite_transaction(

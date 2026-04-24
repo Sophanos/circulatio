@@ -31,6 +31,7 @@ from circulatio_hermes_plugin.runtime import get_runtime, reset_runtimes, set_ru
 from circulatio_hermes_plugin.tools import (
     alive_today_tool,
     analysis_packet_tool,
+    answer_amplification_tool,
     approve_proposals_tool,
     approve_review_proposals_tool,
     capture_reality_anchors_tool,
@@ -53,6 +54,7 @@ from circulatio_hermes_plugin.tools import (
     living_myth_review_tool,
     memory_kernel_tool,
     method_state_respond_tool,
+    plan_ritual_tool,
     query_graph_tool,
     record_interpretation_feedback_tool,
     record_practice_feedback_tool,
@@ -201,6 +203,55 @@ class HermesBridgePluginTests(unittest.TestCase):
             if line.startswith(prefix):
                 return line[len(prefix) :].strip()
         self.fail(f"Missing rendered line starting with {prefix!r}")
+
+    def test_tool_dispatch_accepts_payload_fields_as_kwargs(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            response = json.loads(
+                await answer_amplification_tool(
+                    canonicalName="bear_attack_dream",
+                    surfaceText="A bear attacked me in the forest.",
+                    associationText="Fear while running, then a cave.",
+                    **self._tool_kwargs(call_id="tool_kwargs_payload"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(response["message"], "Stored personal amplification.")
+
+        asyncio.run(run())
+
+    def test_plan_ritual_tool_dispatches_to_presentation_operation(self) -> None:
+        async def run() -> None:
+            self._install_in_memory_runtime()
+            response = json.loads(
+                await plan_ritual_tool(
+                    {
+                        "ritualIntent": "weekly_integration",
+                        "narrativeMode": "hybrid",
+                        "windowStart": "2026-04-12T00:00:00Z",
+                        "windowEnd": "2026-04-19T23:59:59Z",
+                        "requestedSurfaces": {
+                            "breath": {"enabled": True},
+                            "meditation": {"enabled": True},
+                            "captions": {"enabled": True},
+                            "cinema": {"enabled": False},
+                        },
+                    },
+                    **self._tool_kwargs(call_id="tool_plan_ritual"),
+                )
+            )
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(
+                response["result"]["plan"]["schemaVersion"],
+                "circulatio.presentation.plan.v1",
+            )
+            self.assertEqual(
+                response["result"]["renderRequest"]["rendererVersion"],
+                "ritual-renderer.v1",
+            )
+            self.assertIn("captions", response["result"]["renderRequest"]["allowedSurfaces"])
+
+        asyncio.run(run())
 
     def test_reflect_command_creates_pending_proposals_and_approval_writes_memory(self) -> None:
         async def run() -> None:
@@ -400,6 +451,49 @@ class HermesBridgePluginTests(unittest.TestCase):
             self.assertEqual(responded["message"], "I've kept that with the material.")
             self.assertNotIn("backend", responded["message"].lower())
             self.assertNotIn("failed", responded["message"].lower())
+
+        asyncio.run(run())
+
+    def test_fallback_amplification_answer_captures_personal_association(self) -> None:
+        class TimeoutInterpretLlm(FakeCirculatioLlm):
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+        async def run() -> None:
+            runtime = self._install_in_memory_runtime(llm=TimeoutInterpretLlm())
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {
+                        "materialType": "dream",
+                        "text": "A bear attacked me in the forest and I ran into a cave.",
+                    },
+                    **self._tool_kwargs(call_id="tool_fallback_amp_interpret"),
+                )
+            )
+            continuation = interpreted["result"]["continuationState"]
+            responded = json.loads(
+                await method_state_respond_tool(
+                    {
+                        "source": "amplification_answer",
+                        "responseText": "The fear while running and the cave feel most charged.",
+                        "anchorRefs": continuation["anchorRefs"],
+                        "expectedTargets": ["personal_amplification"],
+                    },
+                    **self._tool_kwargs(call_id="tool_fallback_amp_answer"),
+                )
+            )
+            amplifications = await runtime.repository.list_personal_amplifications(
+                "hermes:default:local",
+                run_id=interpreted["result"]["runId"],
+            )
+            self.assertEqual(responded["status"], "ok")
+            self.assertEqual(responded["result"]["continuationState"]["kind"], "capture_completed")
+            self.assertEqual(len(amplifications), 1)
+            self.assertEqual(
+                amplifications[0]["associationText"],
+                "The fear while running and the cave feel most charged.",
+            )
 
         asyncio.run(run())
 
@@ -1661,6 +1755,7 @@ class HermesBridgePluginTests(unittest.TestCase):
                 "circulatio_respond_practice_recommendation",
                 "circulatio_record_interpretation_feedback",
                 "circulatio_record_practice_feedback",
+                "circulatio_plan_ritual",
                 "circulatio_generate_rhythmic_briefs",
                 "circulatio_respond_rhythmic_brief",
             },
@@ -1676,6 +1771,11 @@ class HermesBridgePluginTests(unittest.TestCase):
         self.assertIn("circulatio_discovery", ctx.tools)
         self.assertIn("circulatio_weekly_review", ctx.tools)
         self.assertIn("circulatio_method_state_respond", ctx.tools)
+        self.assertIn("circulatio_plan_ritual", ctx.tools)
+        self.assertIn(
+            "one ritual-planning call",
+            ctx.tools["circulatio_plan_ritual"]["description"],
+        )
         self.assertIn(
             "continuationState.doNotRetryInterpretMaterialWithUnchangedMaterial",
             ctx.tools["circulatio_interpret_material"]["description"],

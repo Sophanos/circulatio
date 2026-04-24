@@ -53,9 +53,15 @@ def _fresh_fallback_practice(template: dict[str, object]) -> dict[str, object]:
 
 def _fallback_clarifying_question(input_data: MaterialInterpretationInput) -> str:
     return (
-        "What part of the dream feels most alive right now?"
+        (
+            "What personal association comes up around the part of the dream "
+            "that feels most alive right now?"
+        )
         if input_data["materialType"] == "dream"
-        else "What image or feeling from this feels most alive right now?"
+        else (
+            "What personal association comes up around the image or feeling "
+            "that feels most alive right now?"
+        )
     )
 
 
@@ -92,7 +98,14 @@ def _fallback_clarification_plan(
     ref_key: str,
     run_id: str,
     material_id: str,
+    input_data: MaterialInterpretationInput,
 ) -> dict[str, object]:
+    surface_text = str(input_data.get("materialText") or "").strip()[:240]
+    canonical_name = (
+        "most alive dream image"
+        if input_data["materialType"] == "dream"
+        else "most alive material image"
+    )
     return {
         "questionText": question_text,
         "questionKey": ref_key,
@@ -101,9 +114,11 @@ def _fallback_clarification_plan(
         "expectedAnswerKind": "free_text",
         "routingHints": {
             "source": "fallback_collaborative_opening",
-            "continuationMode": "interpretation_context_only",
+            "continuationMode": "personal_amplification",
             "expectedTargets": ["personal_amplification"],
             "anchorRefs": {"runId": run_id, "materialId": material_id},
+            "canonicalName": canonical_name,
+            "surfaceText": surface_text,
         },
         "anchorRefs": {"runId": run_id, "materialId": material_id},
         "consentScopes": [],
@@ -125,6 +140,8 @@ def _fallback_method_gate(question_text: str) -> dict[str, object]:
         ],
         "responseConstraints": [
             "Ask exactly one question.",
+            "Render the clarifying question verbatim; do not add examples, choices, "
+            "or a second question.",
             "Stay with the image, action, or feeling that carries charge.",
         ],
     }
@@ -246,6 +263,7 @@ def build_unavailable_llm_result(
         ref_key=clarification_ref_key,
         run_id=run_id,
         material_id=material_id,
+        input_data=input_data,
     )
     method_gate = _fallback_method_gate(clarifying_question)
     user_facing_response = clarifying_question

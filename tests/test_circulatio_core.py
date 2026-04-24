@@ -181,7 +181,7 @@ class CirculatioCoreTests(unittest.TestCase):
             )
             self.assertEqual(
                 result["userFacingResponse"],
-                "What part of the dream feels most alive right now?",
+                "What personal association comes up around the part of the dream that feels most alive right now?",
             )
             self.assertEqual(result["clarificationPlan"]["captureTarget"], "personal_amplification")
             self.assertEqual(result["methodGate"]["depthLevel"], "personal_amplification_needed")

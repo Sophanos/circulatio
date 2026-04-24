@@ -101,11 +101,11 @@ class HermesModelAdapter(CirculatioLlmPort, CirculatioMethodStateLlmPort):
             request_timeout_seconds
             if request_timeout_seconds is not None
             else os.environ.get("CIRCULATIO_LLM_TIMEOUT_SECONDS"),
-            default=30.0,
+            default=60.0,
         )
         self._interpret_timeout_seconds = self._normalize_timeout_seconds(
             os.environ.get("CIRCULATIO_INTERPRET_TIMEOUT_SECONDS"),
-            default=12.0,
+            default=45.0,
         )
         self._debug_llm = os.environ.get("CIRCULATIO_DEBUG_LLM") == "1"
 

@@ -247,6 +247,8 @@ class CirculatioAgentBridge:
             return await self.generate_practice(request)
         if operation == "circulatio.practice.respond":
             return await self.respond_practice(request)
+        if operation == "circulatio.presentation.plan_ritual":
+            return await self.plan_ritual(request)
         if operation == "circulatio.feedback.interpretation":
             return await self.record_interpretation_feedback(request)
         if operation == "circulatio.feedback.practice":
@@ -609,6 +611,37 @@ class CirculatioAgentBridge:
         if isinstance(practice_session, dict):
             result["practiceSessionId"] = practice_session["id"]
             result["practiceSession"] = deepcopy(practice_session)
+        return self._response(
+            request=request,
+            status=self._bridge_status_for_command(command_result),
+            message=command_result["message"],
+            result=result,
+            affected_entity_ids=command_result.get("affectedEntityIds", []),
+        )
+
+    async def plan_ritual(self, request: BridgeRequestEnvelope) -> BridgeResponseEnvelope:
+        command_result = await self._router.plan_ritual(
+            user_id=request["userId"],
+            payload=deepcopy(request["payload"]),
+        )
+        plan = command_result.get("ritualPlan")
+        result: dict[str, object] = {"command": command_result["command"]}
+        if isinstance(plan, dict):
+            result["plan"] = deepcopy(plan)
+            result["planId"] = plan["id"]
+            result["stableHash"] = plan["stableHash"]
+        if isinstance(command_result.get("renderRequest"), dict):
+            result["renderRequest"] = deepcopy(command_result["renderRequest"])
+        if isinstance(command_result.get("costEstimate"), dict):
+            result["costEstimate"] = deepcopy(command_result["costEstimate"])
+        warnings = command_result.get("warnings", [])
+        if isinstance(warnings, list):
+            result["warnings"] = deepcopy(warnings)
+        continuity = command_result.get("continuity")
+        if isinstance(continuity, dict):
+            result["continuitySummary"] = self._continuity_summary(
+                cast(dict[str, object], continuity)
+            )
         return self._response(
             request=request,
             status=self._bridge_status_for_command(command_result),

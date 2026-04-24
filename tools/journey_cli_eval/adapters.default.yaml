@@ -55,7 +55,7 @@
       "outputMode": "text",
       "timeoutSeconds": 240,
       "versionCommand": ["hermes", "--version"],
-      "maxArgBytes": 65536
+      "maxArgBytes": 200000
     }
   }
 }

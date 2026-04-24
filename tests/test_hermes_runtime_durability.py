@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.abspath("src"))
 
-from circulatio.domain.errors import PersistenceError, ProfileStorageConflictError
+from circulatio.domain.errors import PersistenceError
 from circulatio.hermes.idempotency import SQLiteIdempotencyStore
 from circulatio.hermes.runtime import build_hermes_circulatio_runtime
 from tests._helpers import FakeCirculatioLlm
@@ -293,12 +293,13 @@ class HermesRuntimeDurabilityTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_optimistic_revision_conflict_raises_instead_of_overwriting(self) -> None:
+    def test_optimistic_revision_conflict_retries_without_overwriting(self) -> None:
         async def run() -> None:
             with tempfile.TemporaryDirectory() as tempdir:
                 db_path = os.path.join(tempdir, "circulatio.db")
                 first = build_hermes_circulatio_runtime(db_path=db_path, llm=FakeCirculatioLlm())
                 second = build_hermes_circulatio_runtime(db_path=db_path, llm=FakeCirculatioLlm())
+                verifier = None
                 try:
                     first_workflow = await first.service.create_and_interpret_material(
                         {
@@ -308,19 +309,28 @@ class HermesRuntimeDurabilityTests(unittest.TestCase):
                         }
                     )
                     self.assertTrue(first_workflow["run"])
-                    with self.assertRaises(ProfileStorageConflictError):
-                        await second.service.create_and_interpret_material(
-                            {
-                                "userId": "shared",
-                                "materialType": "reflection",
-                                "text": "A locked chest appeared.",
-                            }
-                        )
-                    healthy = await first.repository.list_interpretation_runs("shared")
-                    self.assertEqual(len(healthy), 1)
+                    second_workflow = await second.service.create_and_interpret_material(
+                        {
+                            "userId": "shared",
+                            "materialType": "reflection",
+                            "text": "A locked chest appeared.",
+                        }
+                    )
+                    self.assertTrue(second_workflow["run"])
+                    verifier = build_hermes_circulatio_runtime(
+                        db_path=db_path, llm=FakeCirculatioLlm()
+                    )
+                    healthy = await verifier.repository.list_interpretation_runs("shared")
+                    self.assertEqual(len(healthy), 2)
+                    self.assertEqual(
+                        {first_workflow["run"]["id"], second_workflow["run"]["id"]},
+                        {item["id"] for item in healthy},
+                    )
                 finally:
                     self._close_runtime(first)
                     self._close_runtime(second)
+                    if verifier is not None:
+                        self._close_runtime(verifier)
 
         asyncio.run(run())
 

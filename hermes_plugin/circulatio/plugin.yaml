@@ -43,6 +43,7 @@ provides_tools:
   - circulatio_threshold_review
   - circulatio_living_myth_review
   - circulatio_analysis_packet
+  - circulatio_plan_ritual
   - circulatio_witness_state
   - circulatio_capture_conscious_attitude
   - circulatio_capture_reality_anchors

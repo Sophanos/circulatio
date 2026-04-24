@@ -25,6 +25,7 @@ BridgeOperation = Literal[
     "circulatio.packet.analysis",
     "circulatio.practice.generate",
     "circulatio.practice.respond",
+    "circulatio.presentation.plan_ritual",
     "circulatio.feedback.interpretation",
     "circulatio.feedback.practice",
     "circulatio.briefs.generate",

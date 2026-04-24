@@ -26,6 +26,16 @@ from ..domain.method_state import (
 )
 from ..domain.patterns import PatternHistoryEntry, PatternRecord
 from ..domain.practices import PracticeSessionRecord
+from ..domain.presentation import (
+    NarrativeMode,
+    PresentationPrivacyClass,
+    PresentationRitualPlanResult,
+    PresentationSourceRef,
+    RequestedRitualSurfaces,
+    RitualCompletionPolicy,
+    RitualIntent,
+    RitualRenderPolicy,
+)
 from ..domain.proactive import ProactiveBriefRecord, RhythmBriefSource
 from ..domain.records import DeletionMode, MaterialSource
 from ..domain.reviews import DashboardSummary, WeeklyReviewRecord
@@ -747,6 +757,26 @@ class JourneyPageResult(TypedDict, total=False):
     analysisPacket: NotRequired[JourneyAnalysisPacketPreview]
     fallbackText: Required[str]
     warnings: Required[list[str]]
+    continuity: NotRequired[ThreadAwareContinuityBundle]
+
+
+class PlanRitualInput(TypedDict, total=False):
+    userId: Required[Id]
+    windowStart: NotRequired[str]
+    windowEnd: NotRequired[str]
+    ritualIntent: NotRequired[RitualIntent]
+    narrativeMode: NotRequired[NarrativeMode]
+    explicitQuestion: NotRequired[str]
+    sourceRefs: NotRequired[list[PresentationSourceRef]]
+    requestedSurfaces: NotRequired[RequestedRitualSurfaces]
+    renderPolicy: NotRequired[RitualRenderPolicy]
+    completionPolicy: NotRequired[RitualCompletionPolicy]
+    privacyClass: NotRequired[PresentationPrivacyClass]
+    locale: NotRequired[str]
+    safetyContext: NotRequired[SafetyContext]
+
+
+class PlanRitualWorkflowResult(PresentationRitualPlanResult, total=False):
     continuity: NotRequired[ThreadAwareContinuityBundle]
 
 

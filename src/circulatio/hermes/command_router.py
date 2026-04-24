@@ -12,6 +12,11 @@ from ..domain.living_myth import AnalysisPacketRecord, LivingMythReviewRecord
 from ..domain.materials import MaterialRecord
 from ..domain.patterns import PatternRecord
 from ..domain.practices import PracticeSessionRecord
+from ..domain.presentation import (
+    PresentationCostEstimate,
+    PresentationRenderRequest,
+    PresentationRitualPlan,
+)
 from ..domain.proactive import ProactiveBriefRecord
 from ..domain.reviews import WeeklyReviewRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
@@ -40,6 +45,10 @@ class HermesCommandResult(TypedDict, total=False):
     individuationRecord: NotRequired[IndividuationRecord]
     practiceSession: NotRequired[PracticeSessionRecord]
     practiceRecommendation: NotRequired[PracticePlan]
+    ritualPlan: NotRequired[PresentationRitualPlan]
+    costEstimate: NotRequired[PresentationCostEstimate]
+    renderRequest: NotRequired[PresentationRenderRequest]
+    warnings: NotRequired[list[str]]
     continuity: NotRequired[dict[str, object]]
     brief: NotRequired[ProactiveBriefRecord]
     briefs: NotRequired[list[ProactiveBriefRecord]]
@@ -179,6 +188,30 @@ class HermesCirculationCommandRouter:
             "practiceRecommendation": workflow["practiceRecommendation"],
             "practiceSession": workflow.get("practiceSession"),
             "affectedEntityIds": affected,
+        }
+
+    async def plan_ritual(
+        self,
+        *,
+        user_id: Id,
+        payload: dict[str, object],
+    ) -> HermesCommandResult:
+        workflow = await self._service.plan_ritual({"userId": user_id, **payload})
+        plan = workflow["plan"]
+        return {
+            "command": "/circulation ritual plan",
+            "userId": user_id,
+            "status": "ok",
+            "message": (
+                "Prepared a ritual plan. "
+                "Render it through the Hermes Rituals artifact renderer."
+            ),
+            "ritualPlan": plan,
+            "costEstimate": workflow["costEstimate"],
+            "renderRequest": workflow["renderRequest"],
+            "warnings": workflow.get("warnings", []),
+            "continuity": workflow.get("continuity"),
+            "affectedEntityIds": [],
         }
 
     async def respond_practice(
