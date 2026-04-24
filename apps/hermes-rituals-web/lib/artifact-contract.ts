@@ -95,6 +95,27 @@ export type PresentationVideoSource = {
   startAtSeconds?: number
 }
 
+export type RitualMusicService = "apple_music" | "host_curated" | "local_render"
+
+export type RitualQueueTrack = {
+  id: string
+  title: string
+  artist: string
+  album?: string
+  artworkUrl?: string
+  durationLabel?: string
+  sectionId?: string
+}
+
+export type RitualMusicQueue = {
+  title: string
+  subtitle?: string
+  mixNote?: string
+  service?: RitualMusicService
+  artworkUrl?: string
+  tracks: RitualQueueTrack[]
+}
+
 export type PresentationArtifact = {
   id: string
   mode: ArtifactMode
@@ -117,6 +138,7 @@ export type PresentationArtifact = {
   breathCycle?: BreathCycle
   scenes?: PresentationScene[]
   ritualSections?: RitualSection[]
+  musicQueue?: RitualMusicQueue
 }
 
 export type SessionPhase = "hold" | "rendering" | "playback" | "review"

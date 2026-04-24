@@ -318,7 +318,62 @@ const artifacts: PresentationArtifact[] = [
         skippable: false,
         channels: { voice: true, ambient: true, breath: true }
       }
-    ]
+    ],
+    musicQueue: {
+      title: "River Gate ritual mix",
+      subtitle: "Infuse shell with Apple Music pacing",
+      mixNote:
+        "A restrained sequence for the threshold return: low pulse first, breath-led middle, then a closing wash without forcing a climax.",
+      service: "apple_music",
+      artworkUrl: "https://picsum.photos/seed/river-gate-mix/800/800",
+      tracks: [
+        {
+          id: "track-arrival",
+          title: "Cold bank, still water",
+          artist: "Hermes Rituals",
+          album: "Threshold sketches",
+          artworkUrl: "https://picsum.photos/seed/track-arrival/300/300",
+          durationLabel: "1:08",
+          sectionId: "section-arrival"
+        },
+        {
+          id: "track-breath",
+          title: "Lengthened exhale under fog",
+          artist: "Hermes Rituals",
+          album: "Threshold sketches",
+          artworkUrl: "https://picsum.photos/seed/track-breath/300/300",
+          durationLabel: "2:54",
+          sectionId: "section-breath"
+        },
+        {
+          id: "track-image",
+          title: "Dog at the reed line",
+          artist: "Hermes Rituals",
+          album: "Threshold sketches",
+          artworkUrl: "https://picsum.photos/seed/track-image/300/300",
+          durationLabel: "1:42",
+          sectionId: "section-image"
+        },
+        {
+          id: "track-reflection",
+          title: "Gate held closed",
+          artist: "Hermes Rituals",
+          album: "Threshold sketches",
+          artworkUrl: "https://picsum.photos/seed/track-reflection/300/300",
+          durationLabel: "1:58",
+          sectionId: "section-reflection"
+        },
+        {
+          id: "track-closing",
+          title: "Return without crossing",
+          artist: "Hermes Rituals",
+          album: "Threshold sketches",
+          artworkUrl: "https://picsum.photos/seed/track-closing/300/300",
+          durationLabel: "2:11",
+          sectionId: "section-closing"
+        }
+      ]
+    }
   },
   {
     id: "broadcast-myth-weather-0422",
