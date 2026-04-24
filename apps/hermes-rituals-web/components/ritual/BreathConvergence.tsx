@@ -44,7 +44,6 @@ type RingTraceRender = {
 }
 
 type ConvergenceRender = {
-  coreOpacity: number
   traces: RingTraceRender[]
 }
 
@@ -60,13 +59,17 @@ const MAX_FRAME_DELTA_MS = 80
 const PLAYBACK_TIME_BLEND = 0.018
 const TWO_PI = Math.PI * 2
 
+function easeOut(value: number) {
+  return 1 - (1 - value) ** 3
+}
+
 const TRACE_BLUEPRINTS: TraceBlueprint[] = [
   {
     startOffsetX: -26,
     startOffsetY: 18,
     startRadiusDelta: 13,
-    driftAmp: 4.4,
-    speed: 0.00042,
+    driftAmp: 6.1,
+    speed: 0.00058,
     phaseOffset: 0.2,
     baseOpacity: 0.32,
     strokeWidth: 1.3
@@ -75,8 +78,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: -11,
     startOffsetY: -24,
     startRadiusDelta: -12,
-    driftAmp: 3.6,
-    speed: 0.00051,
+    driftAmp: 5.3,
+    speed: 0.0007,
     phaseOffset: 0.9,
     baseOpacity: 0.42,
     strokeWidth: 1.1
@@ -85,8 +88,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: 17,
     startOffsetY: -18,
     startRadiusDelta: 15,
-    driftAmp: 4.1,
-    speed: 0.00039,
+    driftAmp: 5.9,
+    speed: 0.00055,
     phaseOffset: 1.6,
     baseOpacity: 0.38,
     strokeWidth: 1.55
@@ -95,8 +98,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: 29,
     startOffsetY: 6,
     startRadiusDelta: -9,
-    driftAmp: 3.1,
-    speed: 0.00047,
+    driftAmp: 4.7,
+    speed: 0.00066,
     phaseOffset: 2.1,
     baseOpacity: 0.47,
     strokeWidth: 1.25
@@ -105,8 +108,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: 12,
     startOffsetY: 27,
     startRadiusDelta: 8,
-    driftAmp: 3.8,
-    speed: 0.00044,
+    driftAmp: 5.6,
+    speed: 0.00062,
     phaseOffset: 2.8,
     baseOpacity: 0.29,
     strokeWidth: 1.7
@@ -115,8 +118,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: -21,
     startOffsetY: -7,
     startRadiusDelta: -15,
-    driftAmp: 2.9,
-    speed: 0.00058,
+    driftAmp: 4.4,
+    speed: 0.00078,
     phaseOffset: 3.4,
     baseOpacity: 0.36,
     strokeWidth: 1.2
@@ -125,8 +128,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: 7,
     startOffsetY: 13,
     startRadiusDelta: 5,
-    driftAmp: 2.4,
-    speed: 0.00063,
+    driftAmp: 3.8,
+    speed: 0.00086,
     phaseOffset: 4,
     baseOpacity: 0.51,
     strokeWidth: 1.45
@@ -135,8 +138,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: -15,
     startOffsetY: 9,
     startRadiusDelta: -4,
-    driftAmp: 2.1,
-    speed: 0.00069,
+    driftAmp: 3.4,
+    speed: 0.00093,
     phaseOffset: 4.7,
     baseOpacity: 0.33,
     strokeWidth: 1.35
@@ -145,8 +148,8 @@ const TRACE_BLUEPRINTS: TraceBlueprint[] = [
     startOffsetX: 22,
     startOffsetY: -3,
     startRadiusDelta: 10,
-    driftAmp: 2.7,
-    speed: 0.00054,
+    driftAmp: 4.2,
+    speed: 0.00075,
     phaseOffset: 5.2,
     baseOpacity: 0.4,
     strokeWidth: 1.15
@@ -311,25 +314,27 @@ function buildRenderState(state: AnimatedConvergenceState): ConvergenceRender {
     baseConvergence + state.coherenceBoost * (1 - baseConvergence)
   )
   const chaos = 1 - convergence
-  const flowTime = state.localTime + state.playbackTime * PLAYBACK_TIME_BLEND
+  const introMotion = 1 - easeOut(clamp01(macro / 0.24))
+  const flowTime = (state.localTime + state.playbackTime * PLAYBACK_TIME_BLEND) *
+    (1.28 + introMotion * 0.54)
 
   return {
-    coreOpacity: state.coreOpacity,
     traces: TRACE_BLUEPRINTS.map((trace, index) => {
-      const t = flowTime * trace.speed * 840 + trace.phaseOffset
-      const driftScale = (0.18 + chaos * 0.82) * state.driftMultiplier
+      const t = flowTime * trace.speed * 920 + trace.phaseOffset
+      const driftScale = (0.22 + chaos * 0.92 + introMotion * 0.38) * state.driftMultiplier
       const liveDrift = trace.driftAmp * driftScale
       const cx =
         SVG_CENTER +
         trace.startOffsetX * chaos +
         Math.cos(t) * liveDrift +
-        Math.sin(flowTime * 0.11 + trace.phaseOffset) * chaos * 0.4
+        Math.sin(flowTime * 0.14 + trace.phaseOffset) * (chaos + introMotion * 0.5) * 0.72
       const cy =
         SVG_CENTER +
         trace.startOffsetY * chaos +
         Math.sin(t * 1.07 + trace.phaseOffset) * liveDrift +
-        Math.cos(flowTime * 0.09 + trace.phaseOffset * 1.4) * chaos * 0.4
-      const radiusJitter = Math.sin(t * 0.73 + trace.phaseOffset) * (0.22 + chaos * 0.58)
+        Math.cos(flowTime * 0.12 + trace.phaseOffset * 1.4) * (chaos + introMotion * 0.5) * 0.72
+      const radiusJitter = Math.sin(t * 0.73 + trace.phaseOffset) *
+        (0.32 + chaos * 0.74 + introMotion * 0.36)
       const radius =
         BASE_RADIUS + trace.startRadiusDelta * chaos + state.sharedRadiusShift + radiusJitter
       const opacity = clamp(
@@ -337,7 +342,7 @@ function buildRenderState(state: AnimatedConvergenceState): ConvergenceRender {
         0.18,
         0.72
       )
-      const liquidTime = flowTime * (0.72 + index * 0.025) + trace.phaseOffset
+      const liquidTime = flowTime * (0.92 + introMotion * 0.22 + index * 0.032) + trace.phaseOffset
 
       return {
         d: buildOrganicRingPath({
@@ -356,17 +361,13 @@ function buildRenderState(state: AnimatedConvergenceState): ConvergenceRender {
 }
 
 function paintConvergence({
-  core,
   traces,
   state
 }: {
-  core: SVGCircleElement | null
   traces: Array<SVGPathElement | null>
   state: AnimatedConvergenceState
 }) {
   const render = buildRenderState(state)
-
-  core?.setAttribute("opacity", formatOpacity(render.coreOpacity))
 
   render.traces.forEach((trace, index) => {
     const path = traces[index]
@@ -388,7 +389,6 @@ export function BreathConvergence({
   )
   const targetRef = useRef(target)
   const animatedRef = useRef<AnimatedConvergenceState>(createInitialState(target))
-  const coreRef = useRef<SVGCircleElement | null>(null)
   const traceRefs = useRef<Array<SVGPathElement | null>>([])
   const traceRefCallbacks = useMemo(
     () =>
@@ -452,7 +452,6 @@ export function BreathConvergence({
       )
 
       paintConvergence({
-        core: coreRef.current,
         traces: traceRefs.current,
         state: animated
       })
@@ -471,14 +470,6 @@ export function BreathConvergence({
   return (
     <div className="flex h-[19rem] w-[19rem] items-center justify-center">
       <svg viewBox="0 0 320 320" className="h-full w-full overflow-visible" aria-hidden="true">
-        <circle
-          ref={coreRef}
-          cx="160"
-          cy="160"
-          r="18"
-          fill="rgba(255,255,255,1)"
-          opacity={initialRender.coreOpacity}
-        />
         {initialRender.traces.map((trace, index) => (
           <path
             key={index}
