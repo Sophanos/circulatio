@@ -11,7 +11,7 @@ export function CaptionOverlay({
     return (
       <p
         className={[
-          "mx-auto max-w-2xl text-balance text-center text-xl font-medium leading-snug tracking-tight transition-all duration-500 md:text-2xl",
+          "mx-auto max-w-xl text-balance text-center text-base font-medium leading-snug tracking-tight transition-all duration-500 md:text-lg",
           muted ? "text-silver-400 opacity-40" : "text-silver-50"
         ].join(" ")}
       >
@@ -25,7 +25,7 @@ export function CaptionOverlay({
       <div className="caption-gradient absolute inset-0" />
       <p
         className={[
-          "relative z-10 mx-auto max-w-2xl text-balance text-center text-xl font-medium leading-snug tracking-tight transition-all duration-500 md:text-2xl lg:text-3xl",
+          "relative z-10 mx-auto max-w-xl text-balance text-center text-base font-medium leading-snug tracking-tight transition-all duration-500 md:text-lg lg:text-xl",
           muted ? "text-silver-400 opacity-40" : "text-silver-50"
         ].join(" ")}
       >

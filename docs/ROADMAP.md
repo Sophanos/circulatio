@@ -327,7 +327,7 @@ The core backend/runtime described through the individuation and living-myth lay
 - **Discovery digest refinement** → the bounded `discovery` workflow now combines graph query, memory-kernel retrieval, and dashboard summary into one read-only browsing surface; remaining work is tuning section quality, host presentation, and defaults without turning it into an interpretive shortcut
 - **Standalone local runtime and product packaging** → deferred distribution track
 - **Optional local semantic/vector recall** → keep as a supplementary, provenance-bound retrieval seam only (for example SQLite-local extensions or embedded vector engines), never as Circulatio's primary symbolic truth layer
-- **Embodied presentation / ritual media layer** → plan-only rituals, scheduled invitation briefs, local artifact manifests, completion sync, and renderer provider gates are present; remaining work is production host orchestration, delivery UX, and provider hardening beyond the local renderer
+- **Embodied presentation / ritual media layer** → plan-only rituals, scheduled invitation briefs, local artifact manifests, completion sync, and renderer provider gates are present; remaining work is production host orchestration, delivery UX, body/emotion follow-up capture, and provider hardening beyond the local renderer
 - **Optional ritual daily surfaces** → later host-rendered outputs such as spoken `alive_today` reflections, brief meditations, 3-5 affirmation sets, short reflective audio or podcast-style scripts, and journaling/reflection prompts derived from dreams, reflections, or charged events
 - **Broader validation and refinement** → wider test coverage, multi-host usage, and polish beyond the targeted backend slices now implemented
 - **Evolution OS expansion** → add reflection/pareto candidate generation, optional execution/judge gates, stronger holdout governance, and tighter release discipline without introducing live prompt mutation
@@ -629,6 +629,23 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 ### Phase 7.7: Completion Sync And Provider Hardening
 
 **Implementation status (April 2026):** Implemented for the local/backend path. Completion is recorded through an idempotent persistence operation keyed by user and idempotency key. The local renderer emits completion manifest fields, preserves fallback captions, and keeps music/video behind explicit beta flags. Provider hardening remains renderer-owned.
+
+### Phase 7.8: Body And Emotion Follow-Up Pickers
+
+**Implementation status (April 2026):** Planned. Hermes Rituals now has a placeholder `Body` lens, but the actual body picker and emotion picker are not implemented.
+
+**Goal:** Decide and implement how post-practice somatic and emotional check-ins should work after breathing, meditation, or a full ritual without turning the ritual player into a wellness tracker.
+
+**Open design decisions:**
+- whether body/emotion capture appears after meditation only, after breathing only, or after the whole ritual
+- how the picker aligns with completion sync and follow-up prompts without reintroducing an always-visible reflection box
+- what minimal body-map and emotion vocabulary should be stored, and how it maps to existing body-state/reflection records
+- how to preserve the hold-first rule: capture body/emotion state without forcing interpretation
+
+**Success criteria:**
+- user can optionally mark body areas and emotional tone after practice
+- capture is explicit, consentful, and dismissible
+- stored data is structured enough for later symbolic/somatic review, but does not expose raw ritual text or create deterministic interpretation shortcuts
 
 ---
 

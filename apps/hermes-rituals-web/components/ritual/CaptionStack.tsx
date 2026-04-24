@@ -44,8 +44,8 @@ export function CaptionStack({
               className={[
                 "text-balance text-center font-medium leading-snug tracking-tight",
                 isCurrent
-                  ? "text-xl text-silver-50 md:text-2xl"
-                  : "text-base text-silver-400 md:text-lg"
+                  ? "text-base text-silver-50 md:text-lg"
+                  : "text-sm text-silver-400 md:text-base"
               ].join(" ")}
             >
               {cue.text}

@@ -28,7 +28,7 @@ export type RitualPlayerHandle = {
   seek: (ms: number) => void
 }
 
-export type RitualStageLens = "cinema" | "photo" | "breath" | "meditation"
+export type RitualStageLens = "cinema" | "photo" | "breath" | "meditation" | "body"
 export type PlayerMode = "full" | "minimal"
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
@@ -105,6 +105,7 @@ function buildYoutubeEmbedUrl(source: PresentationVideoSource) {
 function stageLabel(stageLens: RitualStageLens, videoSource?: PresentationVideoSource) {
   if (stageLens === "breath") return "Breath"
   if (stageLens === "meditation") return "Meditation"
+  if (stageLens === "body") return "Body"
   if (stageLens === "cinema" && videoSource?.provider === "youtube") return "Cinema / YouTube"
   if (stageLens === "cinema" && videoSource?.provider === "direct") return "Cinema / Video"
   return stageLens === "cinema" ? "Cinema" : "Photo"
@@ -112,6 +113,70 @@ function stageLabel(stageLens: RitualStageLens, videoSource?: PresentationVideoS
 
 function isFullStageVideo(stageLens: RitualStageLens, videoSource?: PresentationVideoSource) {
   return stageLens === "cinema" && videoSource?.presentation === "full_background"
+}
+
+function MinimalLensPlayAffordance({
+  stageLens,
+  onPlay
+}: {
+  stageLens: Extract<RitualStageLens, "breath" | "meditation">
+  onPlay: () => void | Promise<void>
+}) {
+  return (
+    <motion.div
+      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      transition={SPRING}
+    >
+      <motion.button
+        type="button"
+        aria-label={`Play ${stageLens} ritual`}
+        onClick={onPlay}
+        className="pointer-events-auto flex size-16 items-center justify-center rounded-full border border-white/25 bg-black/35 text-white shadow-2xl backdrop-blur-2xl md:size-18"
+        whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.18)" }}
+        whileTap={{ scale: 0.97 }}
+        transition={SPRING}
+      >
+        <Play className="ml-0.5 size-6 md:size-7" />
+      </motion.button>
+    </motion.div>
+  )
+}
+
+function BodyStagePreview() {
+  return (
+    <motion.div
+      key="body-preview"
+      className="relative flex h-full w-full overflow-hidden rounded-3xl bg-white/[0.03]"
+      layout
+      initial={{ opacity: 0, scale: 0.985 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.01 }}
+      transition={SPRING}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.62)_100%)]" />
+      <div className="relative z-10 flex h-full w-full flex-col justify-between p-4 md:p-5">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
+            Body
+          </span>
+          <span className="text-sm font-medium text-silver-100">Somatic check-in</span>
+          <span className="text-[11px] text-silver-500">Picker planned</span>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <div className="relative flex size-56 items-center justify-center rounded-full border border-white/10 bg-black/10 md:size-64">
+            <div className="absolute size-36 rounded-full border border-white/15 md:size-40" />
+            <div className="absolute size-16 rounded-full bg-white/[0.04]" />
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
+              Body map
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
 }
 
 function VisualStage({
@@ -181,6 +246,10 @@ function VisualStage({
         durationMs={durationMs}
       />
     )
+  }
+
+  if (stageLens === "body") {
+    return <BodyStagePreview />
   }
 
   if (stageLens === "cinema" && (youtubeEmbedUrl || directVideoSource?.url)) {
@@ -378,7 +447,7 @@ function CinemaCaptionOverlay({
           }}
           exit={{ opacity: 0, y: -4, filter: "blur(2px)" }}
           transition={SPRING}
-          className="max-w-[min(78vw,720px)] text-balance text-center text-xl font-medium leading-snug tracking-tight text-white md:text-2xl [text-shadow:0_2px_18px_rgba(0,0,0,0.95)]"
+          className="max-w-[min(76vw,640px)] text-balance text-center text-base font-medium leading-snug tracking-tight text-white md:text-lg [text-shadow:0_2px_18px_rgba(0,0,0,0.95)]"
         >
           {active.text}
         </motion.p>
@@ -573,6 +642,10 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
   const visualStageCurrentMs =
     stageLens === "breath" ? Math.max(currentTimeMs - breathClockOffsetMs, 0) : currentTimeMs
+  const showMinimalLensPlayAffordance =
+    playerMode === "minimal" &&
+    (stageLens === "breath" || stageLens === "meditation") &&
+    !isPlaying
 
   return (
     <div
@@ -605,6 +678,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
           />
         </AnimatePresence>
       </motion.div>
+
+      <AnimatePresence>
+        {showMinimalLensPlayAffordance && (
+          <MinimalLensPlayAffordance stageLens={stageLens} onPlay={handleTogglePlay} />
+        )}
+      </AnimatePresence>
 
       {fullStageVideo && (
         <motion.div

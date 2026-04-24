@@ -8,12 +8,25 @@ type BreathPacerProps = {
   phase: BreathPhase
 }
 
+type PacerGeometry = {
+  radius: number
+  opacity: number
+  strokeWidth: number
+  edgePulse: number
+  guideOpacity: number
+  loadingProgress?: number
+}
+
 const CENTER = 160
 const INNER_GUIDE_RADIUS = 58
 const OUTER_GUIDE_RADIUS = 104
 const MIN_STROKE_WIDTH = 18
 const MAX_STROKE_WIDTH = 23
+const REST_RING_RADIUS = INNER_GUIDE_RADIUS
+const REST_STROKE_WIDTH = 2.2
+const REST_OPACITY = 0.18
 const MIN_RING_RADIUS = INNER_GUIDE_RADIUS + MIN_STROKE_WIDTH / 2
+const LOADING_STROKE_WIDTH = 2.4
 const MAX_RING_RADIUS = OUTER_GUIDE_RADIUS - MAX_STROKE_WIDTH / 2
 const RING_SPAN = MAX_RING_RADIUS - MIN_RING_RADIUS
 const MORPH_TRANSITION = {
@@ -50,17 +63,17 @@ function exhaleProgress(value: number) {
   return smoothstep(progress)
 }
 
-function getPacerGeometry(phase: BreathPhase) {
+function getPacerGeometry(phase: BreathPhase): PacerGeometry {
   const progress = clamp01(phase.progress)
 
   if (phase.label === "Get ready") {
-    const readiness = smoothstep(progress)
     return {
-      radius: INNER_GUIDE_RADIUS + 6 + readiness * 3,
-      opacity: 0.12 + readiness * 0.12,
-      strokeWidth: 8 + readiness * 4,
+      radius: MIN_RING_RADIUS,
+      opacity: 0.2,
+      strokeWidth: LOADING_STROKE_WIDTH,
       edgePulse: 0,
-      guideOpacity: 0.1 + readiness * 0.05
+      guideOpacity: 0,
+      loadingProgress: progress
     }
   }
 
@@ -90,12 +103,27 @@ function getPacerGeometry(phase: BreathPhase) {
   if (phase.label === "Exhale") {
     const release = exhaleProgress(progress)
     const edgeRelease = 1 - smoothstep(progress / 0.16)
+    const settle = smoothstep((progress - 0.68) / 0.32)
+    const activeRadius = MAX_RING_RADIUS - RING_SPAN * release
+    const activeOpacity = 0.38 - progress * 0.15
+    const activeStrokeWidth = MAX_STROKE_WIDTH - progress * (MAX_STROKE_WIDTH - MIN_STROKE_WIDTH)
+
     return {
-      radius: MAX_RING_RADIUS - RING_SPAN * release,
-      opacity: 0.38 - progress * 0.15,
-      strokeWidth: MAX_STROKE_WIDTH - progress * (MAX_STROKE_WIDTH - MIN_STROKE_WIDTH),
-      edgePulse: edgeRelease * 0.65,
-      guideOpacity: 0.15
+      radius: activeRadius + (REST_RING_RADIUS - activeRadius) * settle,
+      opacity: activeOpacity + (REST_OPACITY - activeOpacity) * settle,
+      strokeWidth: activeStrokeWidth + (REST_STROKE_WIDTH - activeStrokeWidth) * settle,
+      edgePulse: edgeRelease * 0.65 * (1 - settle),
+      guideOpacity: 0.15 + (0.18 - 0.15) * settle
+    }
+  }
+
+  if (phase.label === "Rest") {
+    return {
+      radius: REST_RING_RADIUS,
+      opacity: REST_OPACITY,
+      strokeWidth: REST_STROKE_WIDTH,
+      edgePulse: 0,
+      guideOpacity: 0.18
     }
   }
 
@@ -111,6 +139,7 @@ function getPacerGeometry(phase: BreathPhase) {
 export function BreathPacer({ phase }: BreathPacerProps) {
   const geometry = getPacerGeometry(phase)
   const edgeRadius = geometry.radius + geometry.strokeWidth / 2 + 1 + geometry.edgePulse * 5
+  const loadingProgress = geometry.loadingProgress
 
   return (
     <div className="flex h-[19rem] w-[19rem] items-center justify-center">
@@ -160,6 +189,26 @@ export function BreathPacer({ phase }: BreathPacerProps) {
           }}
           transition={MORPH_TRANSITION}
         />
+        {loadingProgress !== undefined && (
+          <motion.circle
+            cx={CENTER}
+            cy={CENTER}
+            fill="none"
+            stroke="rgba(255,255,255,0.74)"
+            strokeLinecap="round"
+            pathLength={1}
+            strokeDasharray="1"
+            transform={`rotate(-90 ${CENTER} ${CENTER})`}
+            initial={false}
+            animate={{
+              r: geometry.radius,
+              strokeWidth: geometry.strokeWidth,
+              strokeDashoffset: 1 - loadingProgress,
+              opacity: 0.82
+            }}
+            transition={MORPH_TRANSITION}
+          />
+        )}
       </svg>
     </div>
   )

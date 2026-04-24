@@ -11,7 +11,7 @@ import {
 import type { BreathCycle, BreathVisualForm } from "@/lib/artifact-contract"
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
-const PREPARATION_MS = 2600
+const PREPARATION_MS = 5000
 
 function titleCase(value: string) {
   return value
@@ -224,6 +224,10 @@ function BreathVisual({
           : 18 + phase.progress * 12
   const form: BreathVisualForm = cycle.visualForm ?? "orb"
 
+  if (phase.label === "Get ready") {
+    return <BreathPacer phase={phase} />
+  }
+
   if (form === "wave") {
     return <BreathWave currentMs={currentMs} intensity={intensity} />
   }
@@ -255,6 +259,8 @@ export function BreathStage({
   const patternLabel = titleCase(breathCycle.pattern ?? DEFAULT_BREATH_CYCLE.pattern ?? "steadying")
   const techniqueName = breathCycle.techniqueName ?? patternLabel
   const visualForm = breathCycle.visualForm ?? DEFAULT_BREATH_CYCLE.visualForm ?? "orb"
+  const isPreparing = phase.label === "Get ready"
+  const isResting = phase.label === "Rest"
 
   if (immersive) {
     return (
@@ -271,17 +277,35 @@ export function BreathStage({
         </div>
 
         <motion.div
-          className="flex flex-col items-center gap-1 pb-8"
+          className={[
+            "flex flex-col items-center pb-8 text-center",
+            isPreparing ? "gap-4" : isResting ? "gap-0" : "gap-1"
+          ].join(" ")}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: isPlaying ? 1 : 0.72, y: 0 }}
           transition={{ delay: 0.3, ...SPRING }}
         >
-          <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
-            {phase.label}
-          </span>
-          <span className="text-3xl font-light tabular-nums tracking-tight text-silver-100">
-            {formatDuration(remainingMs)}
-          </span>
+          {isPreparing ? (
+            <>
+              <span className="text-2xl font-semibold tracking-tight text-silver-100 md:text-3xl">
+                Get comfortable
+              </span>
+              <span className="max-w-xs text-sm font-medium leading-snug text-silver-500 md:text-base">
+                Sit or lie down in a position to breathe comfortably
+              </span>
+            </>
+          ) : isResting ? (
+            <div className="h-[4.25rem]" aria-hidden="true" />
+          ) : (
+            <>
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
+                {phase.label}
+              </span>
+              <span className="text-3xl font-light tabular-nums tracking-tight text-silver-100">
+                {formatDuration(remainingMs)}
+              </span>
+            </>
+          )}
         </motion.div>
       </motion.div>
     )
@@ -319,13 +343,33 @@ export function BreathStage({
           <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
         </div>
 
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
-            {phase.label}
-          </span>
-          <span className="text-2xl font-semibold tabular-nums tracking-tight text-silver-50">
-            {formatDuration(remainingMs)}
-          </span>
+        <div
+          className={[
+            "flex flex-col items-center text-center",
+            isPreparing ? "gap-2" : isResting ? "gap-0" : "gap-1"
+          ].join(" ")}
+        >
+          {isPreparing ? (
+            <>
+              <span className="text-base font-semibold tracking-tight text-silver-100 md:text-lg">
+                Get comfortable
+              </span>
+              <span className="max-w-xs text-xs font-medium leading-snug text-silver-500 md:text-sm">
+                Sit or lie down in a position to breathe comfortably
+              </span>
+            </>
+          ) : isResting ? (
+            <div className="h-[3.5rem]" aria-hidden="true" />
+          ) : (
+            <>
+              <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
+                {phase.label}
+              </span>
+              <span className="text-2xl font-semibold tabular-nums tracking-tight text-silver-50">
+                {formatDuration(remainingMs)}
+              </span>
+            </>
+          )}
         </div>
       </div>
     </motion.div>
