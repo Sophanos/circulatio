@@ -45,12 +45,14 @@ function formatTimestamp(value: number) {
 function LiquidMixer({
   channels,
   masterVolume,
+  glassy,
   onMasterChange,
   onChannelToggle,
   onChannelGainChange
 }: {
   channels?: ArtifactChannels
   masterVolume: number
+  glassy?: boolean
   onMasterChange: (v: number) => void
   onChannelToggle: (name: ChannelName) => void
   onChannelGainChange: (name: ChannelName, gain: number) => void
@@ -61,14 +63,15 @@ function LiquidMixer({
 
   return (
     <motion.div
-      className="relative flex flex-col overflow-hidden"
-      style={{ backgroundColor: "rgba(255,255,255,0.02)" }}
+      className="relative flex flex-col overflow-hidden border backdrop-blur-2xl"
       layout
       initial={false}
       animate={{
-        width: hovered ? 240 : 36,
-        height: hovered ? 248 : 36,
-        borderRadius: hovered ? 20 : 18
+        width: hovered ? 220 : 36,
+        height: hovered ? 220 : 36,
+        borderRadius: hovered ? 20 : 18,
+        backgroundColor: glassy && hovered ? "rgba(0,0,0,0.38)" : "rgba(255,255,255,0.02)",
+        borderColor: glassy && hovered ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0)"
       }}
       transition={MORPH}
       onMouseEnter={() => setHovered(true)}
@@ -123,7 +126,7 @@ function LiquidMixer({
       <AnimatePresence>
         {hovered && (
           <motion.div
-            className="flex flex-col px-3 pb-3 pt-2"
+            className="flex flex-col px-3 pb-3 pt-1.5"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -142,7 +145,7 @@ function LiquidMixer({
                   <div
                     key={name}
                     className={[
-                      "flex items-center gap-3 rounded-lg px-2 py-2 transition-colors",
+                      "flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors",
                       muted
                         ? "text-silver-500"
                         : "text-silver-100 hover:bg-white/[0.04]"
@@ -287,16 +290,25 @@ export function RitualArtifactClient({
 
   // Immersive breath state
   const [isPlaying, setIsPlaying] = useState(false)
-  const immersive = isPlaying && stageLens === "breath"
+  const breathImmersive = isPlaying && stageLens === "breath"
+  const cinemaImmersive =
+    stageLens === "cinema" && artifact.stageVideo?.presentation === "full_background"
+  const cinemaPlaybackImmersive = cinemaImmersive
+  const autoHideChrome = breathImmersive || cinemaPlaybackImmersive
+  const immersive = breathImmersive
   const [showChrome, setShowChrome] = useState(true)
+  const chromeHidden = autoHideChrome && !showChrome
+  const chromeVisible = !chromeHidden
+  const cinemaChromeGlass = cinemaImmersive && chromeVisible
+  const backgroundImageUrl = artifact.stageVideo?.posterImageUrl ?? artifact.coverImageUrl
 
   const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
   const sessionProgress = Math.min(currentMs / durationMs, 1)
   const remainingSeconds = Math.max(Math.floor((durationMs - currentMs) / 1000), 0)
 
-  // Auto-hide chrome in immersive mode
+  // Auto-hide chrome in immersive modes
   useEffect(() => {
-    if (!immersive) {
+    if (!autoHideChrome) {
       setShowChrome(true)
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current)
@@ -305,48 +317,47 @@ export function RitualArtifactClient({
       return
     }
 
-    // When entering immersive, initially show chrome then fade
     setShowChrome(true)
     hideTimeoutRef.current = setTimeout(() => {
       setShowChrome(false)
-    }, 3500)
+    }, cinemaPlaybackImmersive ? 1800 : 3500)
 
     return () => {
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current)
       }
     }
-  }, [immersive])
+  }, [autoHideChrome, cinemaPlaybackImmersive])
 
-  // Mouse move reveals chrome in immersive mode
+  // Pointer movement reveals chrome in immersive modes
   useEffect(() => {
-    if (!immersive) return
+    if (!autoHideChrome) return
 
-    const handleMouseMove = () => {
+    const revealChrome = () => {
       setShowChrome(true)
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current)
       }
       hideTimeoutRef.current = setTimeout(() => {
         setShowChrome(false)
-      }, 3000)
+      }, cinemaPlaybackImmersive ? 1600 : 3000)
     }
 
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("touchstart", handleMouseMove)
+    window.addEventListener("mousemove", revealChrome)
+    window.addEventListener("touchstart", revealChrome)
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("touchstart", handleMouseMove)
+      window.removeEventListener("mousemove", revealChrome)
+      window.removeEventListener("touchstart", revealChrome)
     }
-  }, [immersive])
+  }, [autoHideChrome, cinemaPlaybackImmersive])
 
-  // Close rail when entering immersive
+  // Close rail when entering immersive playback
   useEffect(() => {
-    if (immersive) {
+    if (autoHideChrome) {
       setRailOpen(false)
     }
-  }, [immersive])
+  }, [autoHideChrome])
 
   useEffect(() => {
     if (!railOpen) return
@@ -417,10 +428,15 @@ export function RitualArtifactClient({
   }, [])
 
   return (
-    <div className="page-shell relative flex h-[100dvh] flex-col overflow-hidden bg-graphite-950 text-silver-50">
+    <div
+      className={[
+        "relative flex h-[100dvh] flex-col overflow-hidden bg-graphite-950 text-silver-50",
+        cinemaImmersive ? "" : "page-shell"
+      ].join(" ")}
+    >
       {/* Full-bleed artwork background — fades to black in immersive breath */}
       <AnimatePresence>
-        {!immersive && artifact.coverImageUrl && (
+        {!immersive && !cinemaImmersive && backgroundImageUrl && (
           <motion.div
             key="bg-image"
             className="pointer-events-none absolute inset-0"
@@ -428,7 +444,7 @@ export function RitualArtifactClient({
             exit={{ opacity: 0 }}
             transition={{ duration: 1.2, ease: "easeInOut" }}
             style={{
-              backgroundImage: `url(${artifact.coverImageUrl})`,
+              backgroundImage: `url(${backgroundImageUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
               filter: "blur(80px) saturate(0.6) brightness(0.35)",
@@ -442,23 +458,39 @@ export function RitualArtifactClient({
       <motion.div
         className="pointer-events-none absolute inset-0"
         animate={{
-          backgroundColor: immersive ? "rgba(0,0,0,0.85)" : "transparent"
+          backgroundColor: immersive ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0)"
         }}
         transition={{ duration: 1.2, ease: "easeInOut" }}
       />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,19,23,0.4),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(16,19,23,0.5),transparent_50%)]" />
+      {!cinemaImmersive && (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,19,23,0.4),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(16,19,23,0.5),transparent_50%)]" />
+      )}
 
       {/* Top chrome — fades out in immersive breath */}
       <motion.header
-        className="relative z-10 flex items-start justify-between gap-4 px-4 py-3 md:px-6"
+        className={[
+          "flex items-start justify-between gap-4 px-4 py-3 md:px-6",
+          cinemaImmersive ? "pointer-events-none absolute inset-x-0 top-0 z-20" : "relative z-10"
+        ].join(" ")}
         animate={{
-          opacity: immersive && !showChrome ? 0 : 1,
-          y: immersive && !showChrome ? -12 : 0
+          opacity: chromeHidden ? 0 : 1,
+          y: chromeHidden ? -12 : 0
         }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
-        style={{ pointerEvents: immersive && !showChrome ? "none" : "auto" }}
+        style={{
+          pointerEvents: chromeHidden ? "none" : cinemaImmersive ? "none" : "auto"
+        }}
       >
-        <div className="flex items-start gap-2">
+        <div
+          className={[
+            "flex items-start gap-2",
+            cinemaChromeGlass
+              ? "pointer-events-auto rounded-[1.375rem] border border-white/10 bg-black/35 px-2.5 py-2.5 backdrop-blur-2xl"
+              : cinemaImmersive
+                ? "pointer-events-auto"
+                : ""
+          ].join(" ")}
+        >
           <button
             type="button"
             onClick={() => router.back()}
@@ -485,13 +517,16 @@ export function RitualArtifactClient({
           </div>
         </div>
 
-        <LiquidMixer
-          channels={channels}
-          masterVolume={masterVolume}
-          onMasterChange={setMasterVolume}
-          onChannelToggle={handleQuickChannelToggle}
-          onChannelGainChange={handleQuickChannelGain}
-        />
+        <div className={cinemaImmersive ? "pointer-events-auto" : ""}>
+          <LiquidMixer
+            channels={channels}
+            masterVolume={masterVolume}
+            glassy={cinemaChromeGlass}
+            onMasterChange={setMasterVolume}
+            onChannelToggle={handleQuickChannelToggle}
+            onChannelGainChange={handleQuickChannelGain}
+          />
+        </div>
       </motion.header>
 
       {/* Subtle top progress bar — always visible in immersive, very dim */}
@@ -535,6 +570,7 @@ export function RitualArtifactClient({
             stageLens={stageLens}
             playerMode={stageLens === "breath" || stageLens === "meditation" ? "minimal" : "full"}
             immersive={immersive}
+            chromeVisible={chromeVisible}
             onTimeUpdate={setCurrentMs}
             onPlayingChange={setIsPlaying}
           />
@@ -573,11 +609,11 @@ export function RitualArtifactClient({
       <motion.div
         className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-end px-5 pb-5 md:px-8 md:pb-8"
         animate={{
-          opacity: immersive && !showChrome ? 0 : 1,
-          y: immersive && !showChrome ? 12 : 0
+          opacity: chromeHidden ? 0 : 1,
+          y: chromeHidden ? 12 : 0
         }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
-        style={{ pointerEvents: immersive && !showChrome ? "none" : "auto" }}
+        style={{ pointerEvents: chromeHidden ? "none" : "auto" }}
       >
         <div ref={toggleRef} className="pointer-events-auto flex items-center gap-2 rounded-full bg-black/40 p-1.5 backdrop-blur-xl">
           <button

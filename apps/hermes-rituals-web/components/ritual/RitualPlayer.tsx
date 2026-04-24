@@ -190,8 +190,8 @@ function VisualStage({
       <motion.div
         key="cinema-video"
         className={[
-          "relative h-full w-full overflow-hidden bg-black/30 shadow-2xl",
-          fullStageVideo ? "rounded-[2rem] border border-white/10" : "rounded-3xl"
+          "relative h-full w-full overflow-hidden bg-black/60",
+          fullStageVideo ? "rounded-none border-0 shadow-none" : "rounded-3xl shadow-2xl"
         ].join(" ")}
         layout
         initial={{ opacity: 0, scale: 0.985 }}
@@ -200,11 +200,15 @@ function VisualStage({
         transition={SPRING}
       >
         {youtubeEmbedUrl ? (
-          <div className="pointer-events-none absolute inset-0">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
             <iframe
               src={youtubeEmbedUrl}
               title={videoSource?.title ?? artifact.title}
-              className="h-full w-full scale-[1.03]"
+              className={[
+                fullStageVideo
+                  ? "absolute left-1/2 top-1/2 h-[56.25vw] min-h-full w-full min-w-[177.78vh] -translate-x-1/2 -translate-y-1/2"
+                  : "h-full w-full scale-[1.03]"
+              ].join(" ")}
               allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
               referrerPolicy="strict-origin-when-cross-origin"
             />
@@ -221,22 +225,33 @@ function VisualStage({
             autoPlay={directPlaybackMode !== "transport_synced"}
           />
         )}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_32%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.34)_48%,rgba(16,19,23,0.82)_100%)]" />
-        <div className="absolute left-4 top-4 rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-300 backdrop-blur-xl">
-          {stageLabel(stageLens, videoSource)}
-        </div>
-        <div className="absolute right-4 top-4 rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400 backdrop-blur-xl">
-          {videoSource?.playbackMode === "transport_synced" ? "Synced" : "Ambient"}
-        </div>
-        {(videoSource?.title || activeScene?.title) && (
-          <div className="absolute bottom-4 left-4 rounded-2xl bg-black/35 px-4 py-2.5 text-sm text-silver-100 backdrop-blur-xl">
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
-              Ritual stage
-            </p>
-            <p className="mt-1 font-medium text-silver-100">
-              {videoSource?.title ?? activeScene?.title}
-            </p>
-          </div>
+        <div
+          className={[
+            "absolute inset-0",
+            fullStageVideo
+              ? "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.10),transparent_34%),linear-gradient(180deg,rgba(16,19,23,0.44)_0%,rgba(16,19,23,0.08)_28%,rgba(16,19,23,0.34)_62%,rgba(16,19,23,0.86)_100%)]"
+              : "bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_32%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.34)_48%,rgba(16,19,23,0.82)_100%)]"
+          ].join(" ")}
+        />
+        {!fullStageVideo && (
+          <>
+            <div className="absolute left-4 top-4 rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-300 backdrop-blur-xl">
+              {stageLabel(stageLens, videoSource)}
+            </div>
+            <div className="absolute right-4 top-4 rounded-full bg-black/25 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400 backdrop-blur-xl">
+              {videoSource?.playbackMode === "transport_synced" ? "Synced" : "Ambient"}
+            </div>
+            {(videoSource?.title || activeScene?.title) && (
+              <div className="absolute bottom-4 left-4 rounded-2xl bg-black/35 px-4 py-2.5 text-sm text-silver-100 backdrop-blur-xl">
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
+                  Ritual stage
+                </p>
+                <p className="mt-1 font-medium text-silver-100">
+                  {videoSource?.title ?? activeScene?.title}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </motion.div>
     )
@@ -337,15 +352,60 @@ function MinimalCaption({
   )
 }
 
+function CinemaCaptionOverlay({
+  captions,
+  currentMs,
+  muted
+}: {
+  captions: CaptionCue[]
+  currentMs: number
+  muted?: boolean
+}) {
+  const active = captions.find(
+    (c) => currentMs >= c.startMs && currentMs < c.endMs
+  )
+
+  return (
+    <AnimatePresence mode="wait">
+      {active ? (
+        <motion.p
+          key={`${active.startMs}-${active.endMs}`}
+          initial={{ opacity: 0, y: 6, filter: "blur(2px)" }}
+          animate={{
+            opacity: muted ? 0.4 : 0.94,
+            y: 0,
+            filter: "blur(0px)"
+          }}
+          exit={{ opacity: 0, y: -4, filter: "blur(2px)" }}
+          transition={SPRING}
+          className="max-w-[min(78vw,720px)] text-balance text-center text-xl font-medium leading-snug tracking-tight text-white md:text-2xl [text-shadow:0_2px_18px_rgba(0,0,0,0.95)]"
+        >
+          {active.text}
+        </motion.p>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
 export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   artifact: PresentationArtifact
   sections: RitualSection[]
   stageLens: RitualStageLens
   playerMode?: PlayerMode
   immersive?: boolean
+  chromeVisible?: boolean
   onTimeUpdate?: (ms: number) => void
   onPlayingChange?: (playing: boolean) => void
-}>(function RitualPlayer({ artifact, sections, stageLens, playerMode = "full", immersive, onTimeUpdate, onPlayingChange }, ref) {
+}>(function RitualPlayer({
+  artifact,
+  sections,
+  stageLens,
+  playerMode = "full",
+  immersive,
+  chromeVisible = true,
+  onTimeUpdate,
+  onPlayingChange
+}, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
@@ -356,6 +416,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const [currentTime, setCurrentTime] = useState(0)
   const stageVideoSource = resolveStageVideo(artifact)
   const fullStageVideo = isFullStageVideo(stageLens, stageVideoSource)
+  const fullStageChromeVisible = !fullStageVideo || chromeVisible
 
   useImperativeHandle(ref, () => ({
     seek: (ms: number) => {
@@ -495,14 +556,22 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   }
 
   return (
-    <div className="relative flex h-full flex-col items-center px-5 py-5 md:px-8 md:py-6">
+    <div
+      data-cinema-fullstage={fullStageVideo ? "true" : undefined}
+      className={[
+        "relative flex h-full flex-col items-center",
+        fullStageVideo ? "overflow-hidden px-0 py-0" : "px-5 py-5 md:px-8 md:py-6"
+      ].join(" ")}
+    >
       <audio ref={audioRef} src={audioUrl || undefined} preload="metadata" />
 
       {/* Scene / Video Stage */}
       <motion.div
         className={[
-          "relative z-10 flex w-full flex-1 items-center justify-center",
-          fullStageVideo ? "max-w-5xl" : "max-w-lg"
+          "flex w-full flex-1 items-center justify-center",
+          fullStageVideo
+            ? "absolute inset-0 z-0 min-h-0 max-w-none self-stretch"
+            : "relative z-10 max-w-lg"
         ].join(" ")}
         layout
       >
@@ -518,8 +587,28 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         </AnimatePresence>
       </motion.div>
 
+      {fullStageVideo && (
+        <motion.div
+          data-cinema-caption="true"
+          className="pointer-events-none absolute inset-x-5 z-10 flex justify-center"
+          initial={false}
+          animate={{
+            bottom: fullStageChromeVisible ? 122 : 44,
+            opacity: sectionMuted ? 0.45 : 1,
+            y: fullStageChromeVisible ? -4 : 0
+          }}
+          transition={SPRING}
+        >
+          <CinemaCaptionOverlay
+            captions={artifact.captions ?? []}
+            currentMs={currentTime * 1000}
+            muted={sectionMuted}
+          />
+        </motion.div>
+      )}
+
       {/* Ambient waveform — thin and unobtrusive (full only) */}
-      {playerMode === "full" && (
+      {playerMode === "full" && !fullStageVideo && (
         <motion.div
           className="relative z-10 w-full max-w-md py-2"
           layout
@@ -547,83 +636,170 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
       {/* Bottom controls — morphing between full and minimal */}
       <motion.div
-        className="relative z-10 flex w-full max-w-xl flex-col items-center"
+        data-cinema-controls={fullStageVideo ? "true" : undefined}
+        data-chrome-visible={fullStageChromeVisible ? "true" : "false"}
+        className={[
+          "flex w-full flex-col items-center",
+          fullStageVideo
+            ? "absolute inset-x-0 bottom-6 z-20 mx-auto max-w-6xl px-4 md:bottom-8 md:px-10"
+            : "relative z-10 max-w-xl"
+        ].join(" ")}
         layout
+        animate={{
+          opacity: fullStageChromeVisible ? 1 : 0,
+          y: fullStageChromeVisible ? 0 : 18
+        }}
+        transition={SPRING}
+        style={{ pointerEvents: fullStageChromeVisible ? "auto" : "none" }}
       >
         <AnimatePresence initial={false} mode="wait">
           {playerMode === "full" ? (
             <motion.div
               key="full-bottom"
-              className="flex w-full flex-col items-center gap-3 pb-2"
+              className={[
+                "flex w-full flex-col items-center",
+                fullStageVideo
+                  ? "gap-3 rounded-[1.55rem] border border-white/10 bg-black/40 px-5 py-4 backdrop-blur-2xl md:px-8 md:py-4"
+                  : "gap-3 pb-2"
+              ].join(" ")}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 6 }}
               transition={SPRING}
             >
-              {/* Scrub bar with section markers */}
-              <ScrubBarContainer
-                duration={durationSeconds}
-                value={currentTime}
-                onScrub={handleScrub}
-              >
-                <div className="flex w-full flex-col gap-1.5">
-                  <div className="relative">
-                    <ScrubBarTrack className="h-1.5 bg-white/10">
-                      {/* Section boundary markers */}
-                      {sections.map((section) => {
-                        const left = (section.startMs / 1000 / durationSeconds) * 100
-                        const width =
-                          ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
-                        return (
-                          <div
-                            key={section.id}
-                            className="absolute top-0 bottom-0"
-                            style={{ left: `${left}%`, width: `${width}%` }}
-                          >
-                            <div
-                              className={[
-                                "h-full w-full rounded-full transition-opacity",
-                                section.muted ? "bg-white/5" : "bg-white/15"
-                              ].join(" ")}
-                            />
-                          </div>
-                        )
-                      })}
-                      <ScrubBarProgress className="[&>div]:bg-white" />
-                      <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
-                    </ScrubBarTrack>
+              {fullStageVideo ? (
+                <>
+                  <div className="flex w-full items-center justify-center">
+                    <button
+                      type="button"
+                      aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
+                      onClick={handleTogglePlay}
+                      className={[
+                        "flex size-11 items-center justify-center rounded-full border transition-all duration-300 md:size-12",
+                        sectionMuted
+                          ? "border-white/15 bg-white/8 text-white/30"
+                          : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:scale-105 hover:bg-white/25"
+                      ].join(" ")}
+                    >
+                      {isPlaying ? (
+                        <Pause className="size-5 md:size-5.5" />
+                      ) : (
+                        <Play className="ml-0.5 size-5 md:size-5.5" />
+                      )}
+                    </button>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] font-medium text-silver-400">
-                    <ScrubBarTimeLabel time={currentTime} />
-                    <ScrubBarTimeLabel time={Math.max(durationSeconds - currentTime, 0)} />
-                  </div>
-                </div>
-              </ScrubBarContainer>
 
-              {/* Caption — glassy stack, current + next */}
-              <CaptionStack
-                captions={artifact.captions ?? []}
-                currentMs={currentTime * 1000}
-                muted={sectionMuted}
-              />
+                  <ScrubBarContainer
+                    duration={durationSeconds}
+                    value={currentTime}
+                    onScrub={handleScrub}
+                  >
+                    <div className="flex w-full items-center gap-3 md:gap-5">
+                      <ScrubBarTimeLabel
+                        time={currentTime}
+                        className="w-10 shrink-0 text-left text-sm font-semibold tabular-nums text-silver-100 md:w-12 md:text-base"
+                      />
+                      <div className="relative min-w-0 flex-1">
+                        <ScrubBarTrack className="h-1.5 bg-white/20 md:h-2">
+                          {sections.map((section) => {
+                            const left = (section.startMs / 1000 / durationSeconds) * 100
+                            const width =
+                              ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
+                            return (
+                              <div
+                                key={section.id}
+                                className="absolute top-0 bottom-0"
+                                style={{ left: `${left}%`, width: `${width}%` }}
+                              >
+                                <div
+                                  className={[
+                                    "h-full w-full rounded-full transition-opacity",
+                                    section.muted ? "bg-white/5" : "bg-white/15"
+                                  ].join(" ")}
+                                />
+                              </div>
+                            )
+                          })}
+                          <ScrubBarProgress className="[&>div]:bg-white" />
+                          <ScrubBarThumb className="size-4 bg-white shadow-lg md:size-5" />
+                        </ScrubBarTrack>
+                      </div>
+                      <ScrubBarTimeLabel
+                        time={Math.max(durationSeconds - currentTime, 0)}
+                        className="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-silver-100 md:w-12 md:text-base"
+                      />
+                    </div>
+                  </ScrubBarContainer>
+                </>
+              ) : (
+                <>
+                  {/* Scrub bar with section markers */}
+                  <ScrubBarContainer
+                    duration={durationSeconds}
+                    value={currentTime}
+                    onScrub={handleScrub}
+                  >
+                    <div className="flex w-full flex-col gap-1.5">
+                      <div className="relative">
+                        <ScrubBarTrack className="h-1.5 bg-white/10">
+                          {/* Section boundary markers */}
+                          {sections.map((section) => {
+                            const left = (section.startMs / 1000 / durationSeconds) * 100
+                            const width =
+                              ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
+                            return (
+                              <div
+                                key={section.id}
+                                className="absolute top-0 bottom-0"
+                                style={{ left: `${left}%`, width: `${width}%` }}
+                              >
+                                <div
+                                  className={[
+                                    "h-full w-full rounded-full transition-opacity",
+                                    section.muted ? "bg-white/5" : "bg-white/15"
+                                  ].join(" ")}
+                                />
+                              </div>
+                            )
+                          })}
+                          <ScrubBarProgress className="[&>div]:bg-white" />
+                          <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
+                        </ScrubBarTrack>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-medium text-silver-400">
+                        <ScrubBarTimeLabel time={currentTime} />
+                        <ScrubBarTimeLabel time={Math.max(durationSeconds - currentTime, 0)} />
+                      </div>
+                    </div>
+                  </ScrubBarContainer>
 
-              {/* Play button — compact */}
-              <button
-                type="button"
-                onClick={handleTogglePlay}
-                className={[
-                  "flex size-14 items-center justify-center rounded-full border-2 transition-all duration-300",
-                  sectionMuted
-                    ? "border-white/15 bg-white/8 text-white/30"
-                    : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:scale-105 hover:bg-white/25"
-                ].join(" ")}
-              >
-                {isPlaying ? (
-                  <Pause className="size-6" />
-                ) : (
-                  <Play className="size-6 ml-0.5" />
-                )}
-              </button>
+                  {/* Caption — glassy stack, current + next */}
+                  <CaptionStack
+                    captions={artifact.captions ?? []}
+                    currentMs={currentTime * 1000}
+                    muted={sectionMuted}
+                  />
+
+                  {/* Play button — compact */}
+                  <button
+                    type="button"
+                    aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
+                    onClick={handleTogglePlay}
+                    className={[
+                      "flex size-14 items-center justify-center rounded-full border-2 transition-all duration-300",
+                      sectionMuted
+                        ? "border-white/15 bg-white/8 text-white/30"
+                        : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:scale-105 hover:bg-white/25"
+                    ].join(" ")}
+                  >
+                    {isPlaying ? (
+                      <Pause className="size-6" />
+                    ) : (
+                      <Play className="ml-0.5 size-6" />
+                    )}
+                  </button>
+                </>
+              )}
             </motion.div>
           ) : (
             <motion.div
@@ -682,6 +858,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                   {/* Compact play */}
                   <button
                     type="button"
+                    aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                     onClick={handleTogglePlay}
                     className={[
                       "flex shrink-0 items-center justify-center rounded-full transition-all duration-200",
