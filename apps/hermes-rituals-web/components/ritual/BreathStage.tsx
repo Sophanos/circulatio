@@ -220,7 +220,7 @@ function BreathVisual({
     return <BreathHorizon currentMs={currentMs} intensity={intensity} />
   }
 
-  return <BreathPacer currentMs={currentMs} phase={phase} />
+  return <BreathPacer phase={phase} />
 }
 
 export function BreathStage({

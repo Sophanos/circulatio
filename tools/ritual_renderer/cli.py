@@ -34,6 +34,53 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Public URL base for generated artifact assets.",
     )
+    parser.add_argument(
+        "--provider-profile",
+        default="mock",
+        choices=[
+            "mock",
+            "chutes_speech",
+            "chutes_audio",
+            "chutes_image",
+            "chutes_music",
+            "chutes_video",
+            "chutes_all",
+        ],
+        help="Optional renderer provider profile.",
+    )
+    parser.add_argument(
+        "--chutes-token-env",
+        default="CHUTES_API_TOKEN",
+        help="Environment variable containing the Chutes API token.",
+    )
+    parser.add_argument(
+        "--transcribe-captions",
+        action="store_true",
+        help="Use Chutes Whisper to regenerate captions from rendered speech.",
+    )
+    parser.add_argument(
+        "--request-timeout-seconds",
+        type=int,
+        default=180,
+        help="Timeout for provider requests.",
+    )
+    parser.add_argument(
+        "--max-cost-usd",
+        type=float,
+        default=0,
+        help="Required positive budget guard for external providers.",
+    )
+    parser.add_argument(
+        "--video-image",
+        default="",
+        help="Path, data URL, or base64 image payload for Chutes image-to-video.",
+    )
+    parser.add_argument(
+        "--music-steps",
+        type=int,
+        default=32,
+        help="Chutes Diffrhythm generation steps.",
+    )
     return parser
 
 
@@ -43,6 +90,13 @@ def main(argv: list[str] | None = None) -> int:
     options: RitualRenderOptions = {
         "mockProviders": bool(args.mock_providers),
         "dryRun": bool(args.dry_run),
+        "providerProfile": args.provider_profile,
+        "chutesTokenEnv": args.chutes_token_env,
+        "transcribeCaptions": bool(args.transcribe_captions),
+        "requestTimeoutSeconds": int(args.request_timeout_seconds),
+        "maxCostUsd": float(args.max_cost_usd),
+        "videoImage": args.video_image,
+        "musicSteps": int(args.music_steps),
     }
     if surfaces:
         options["surfaces"] = surfaces

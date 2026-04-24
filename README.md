@@ -59,6 +59,35 @@ Expected shape:
 - Circulatio starts a collaborative interpretation
 - the first reply is usually one bounded question, not a full reading
 
+### Ritual artifact dry run
+
+Create a plan through Hermes or a test fixture, then render it locally with mock providers:
+
+```bash
+.venv/bin/python scripts/render_ritual_artifact.py \
+  --plan artifacts/rituals/plans/{planId}.json \
+  --out apps/hermes-rituals-web/public/artifacts/{artifactId} \
+  --mock-providers \
+  --dry-run
+```
+
+The Hermes Rituals app can load the resulting manifest at `/artifacts/{artifactId}`. The built-in fixture is available at `/artifacts/weekly-ritual-dry-run`.
+
+Chutes provider rendering is available from the renderer only. Keep the API token in your shell or an ignored local env file, then request the provider profile explicitly:
+
+```bash
+export CHUTES_API_TOKEN=...
+.venv/bin/python scripts/render_ritual_artifact.py \
+  --plan artifacts/rituals/plans/{planId}.json \
+  --out apps/hermes-rituals-web/public/artifacts/{artifactId} \
+  --provider-profile chutes_speech \
+  --surfaces audio,captions \
+  --transcribe-captions \
+  --max-cost-usd 0.05
+```
+
+The renderer also has opt-in Chutes profiles for image, music, video, and all surfaces. Those calls still require a plan that allows external providers plus an explicit positive budget flag; raw Circulatio source text is not sent to providers.
+
 Example reply shape:
 
 ```text

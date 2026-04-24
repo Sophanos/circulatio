@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 
+from circulatio.hermes.agent_bridge_contracts import BridgeOperation
+
 from .commands import _boot_failure_response, build_tool_request
 from .runtime import get_runtime
 
@@ -39,7 +41,7 @@ def _tool_payload(
 
 async def _dispatch_tool(
     *,
-    operation: str,
+    operation: BridgeOperation,
     tool_name: str,
     arguments: dict[str, object] | None,
     kwargs: dict[str, object],

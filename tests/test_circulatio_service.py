@@ -282,7 +282,7 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_process_method_state_response_treats_fallback_clarification_as_context_only(
+    def test_process_method_state_response_captures_fallback_personal_association(
         self,
     ) -> None:
         class TimeoutLlm:
@@ -342,14 +342,112 @@ class CirculatioServiceTests(unittest.TestCase):
                 "user_1",
                 run_id=workflow["run"]["id"],
             )
-            self.assertEqual(result["captureRun"]["status"], "no_capture")
+            self.assertEqual(result["captureRun"]["status"], "completed")
             self.assertEqual(result["warnings"], [])
-            self.assertEqual(updated_prompt["status"], "answered_unrouted")
-            self.assertEqual(updated_prompt["captureTarget"], "answer_only")
+            self.assertEqual(updated_prompt["status"], "answered")
+            self.assertEqual(updated_prompt["captureTarget"], "personal_amplification")
             self.assertEqual(len(answers), 1)
-            self.assertEqual(answers[0]["captureTarget"], "answer_only")
-            self.assertEqual(answers[0]["routingStatus"], "unrouted")
-            self.assertEqual(amplifications, [])
+            self.assertEqual(answers[0]["captureTarget"], "personal_amplification")
+            self.assertEqual(answers[0]["routingStatus"], "routed")
+            self.assertEqual(len(amplifications), 1)
+            self.assertEqual(
+                amplifications[0]["associationText"],
+                "The image of the bear still feels the most alive.",
+            )
+            follow_up = result["followUpPrompts"][0]
+            self.assertIn("touch your life right now", follow_up)
+            self.assertIn("makes it sharper", follow_up)
+            self.assertLessEqual(len(follow_up.split()), 30)
+
+        asyncio.run(run())
+
+    def test_process_method_state_response_captures_second_fallback_association(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+            async def route_method_state_response(
+                self, input_data: dict[str, object]
+            ) -> dict[str, object]:
+                del input_data
+                raise AssertionError(
+                    "Fallback personal-association continuations should not hit routing."
+                )
+
+        async def run() -> None:
+            repository = InMemoryCirculatioRepository()
+            service = self._service_with_llm(repository=repository, llm=TimeoutLlm())
+            workflow = await service.create_and_interpret_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "dream",
+                    "text": "The number 9 was on a gate, and a bear chased me.",
+                }
+            )
+            anchor_refs = {
+                "promptId": workflow["pendingClarificationPrompts"][0]["id"],
+                "materialId": workflow["material"]["id"],
+                "runId": workflow["run"]["id"],
+                "clarificationRefKey": workflow["interpretation"]["clarificationIntent"]["refKey"],
+            }
+            await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "fallback_first_association_1",
+                    "source": "clarifying_answer",
+                    "responseText": "The number 9 feels like a last chance before something closes.",
+                    "anchorRefs": anchor_refs,
+                    "expectedTargets": ["personal_amplification"],
+                }
+            )
+            result = await service.process_method_state_response(
+                {
+                    "userId": "user_1",
+                    "idempotencyKey": "fallback_second_association_1",
+                    "source": "freeform_followup",
+                    "responseText": "It touches work, where safe places still feel hard to breathe in.",
+                    "anchorRefs": {
+                        "materialId": workflow["material"]["id"],
+                        "runId": workflow["run"]["id"],
+                        "clarificationRefKey": workflow["interpretation"]["clarificationIntent"][
+                            "refKey"
+                        ],
+                    },
+                }
+            )
+            amplifications = await repository.list_personal_amplifications(
+                "user_1",
+                run_id=workflow["run"]["id"],
+            )
+            self.assertEqual(result["captureRun"]["status"], "completed")
+            self.assertEqual(result["warnings"], [])
+            self.assertEqual(len(amplifications), 2)
+            association_texts = {item["associationText"] for item in amplifications}
+            self.assertIn(
+                "It touches work, where safe places still feel hard to breathe in.",
+                association_texts,
+            )
+            self.assertEqual(
+                {item["materialId"] for item in amplifications},
+                {workflow["material"]["id"]},
+            )
+            follow_up = result["followUpPrompts"][0]
+            self.assertIn("begin lightly", follow_up)
+            self.assertIn("reading now", follow_up)
+            self.assertLessEqual(len(follow_up.split()), 30)
+
+            reading = await service.interpret_existing_material(
+                user_id="user_1",
+                material_id=workflow["material"]["id"],
+                explicit_question="Read it now.",
+            )
+            self.assertNotIn("clarifyingQuestion", reading["interpretation"])
+            self.assertNotIn("pendingClarificationPrompts", reading)
+            self.assertIn(
+                "enough of your associations held",
+                reading["interpretation"]["userFacingResponse"],
+            )
 
         asyncio.run(run())
 

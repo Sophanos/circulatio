@@ -3,7 +3,6 @@
 import type { BreathPhase } from "@/components/ritual/BreathRing"
 
 type BreathPacerProps = {
-  currentMs: number
   phase: BreathPhase
 }
 
@@ -20,7 +19,7 @@ function smoothstep(value: number) {
   return t * t * (3 - 2 * t)
 }
 
-function getPacerGeometry(phase: BreathPhase, currentMs: number) {
+function getPacerGeometry(phase: BreathPhase) {
   const progress = clamp01(phase.progress)
   const minRadius = 58
   const maxRadius = 84
@@ -30,11 +29,11 @@ function getPacerGeometry(phase: BreathPhase, currentMs: number) {
     const edgeArrival = smoothstep((progress - 0.86) / 0.14)
     return {
       label: "Inhale",
-      radius: minRadius + span * smoothstep(progress),
+      radius: progress > 0.985 ? maxRadius : minRadius + span * smoothstep(progress),
       opacity: 0.24 + progress * 0.13,
       strokeWidth: 18 + progress * 5,
       edgePulse: edgeArrival,
-      vibration: Math.sin(currentMs * 0.045) * 0.35 * edgeArrival
+      vibration: 0
     }
   }
 
@@ -46,7 +45,7 @@ function getPacerGeometry(phase: BreathPhase, currentMs: number) {
       opacity: 0.39,
       strokeWidth: 23,
       edgePulse: 0.55 + entryPulse * 0.45,
-      vibration: Math.sin(currentMs * 0.055) * 0.55
+      vibration: 0
     }
   }
 
@@ -59,7 +58,7 @@ function getPacerGeometry(phase: BreathPhase, currentMs: number) {
       opacity: 0.38 - progress * 0.15,
       strokeWidth: 23 - progress * 5,
       edgePulse: edgeRelease * 0.65,
-      vibration: Math.sin(currentMs * 0.042) * 0.28 * edgeRelease
+      vibration: 0
     }
   }
 
@@ -73,8 +72,8 @@ function getPacerGeometry(phase: BreathPhase, currentMs: number) {
   }
 }
 
-export function BreathPacer({ currentMs, phase }: BreathPacerProps) {
-  const geometry = getPacerGeometry(phase, currentMs)
+export function BreathPacer({ phase }: BreathPacerProps) {
+  const geometry = getPacerGeometry(phase)
   const radius = geometry.radius + geometry.vibration
   const edgeRadius = radius + 13 + geometry.edgePulse * 7
 

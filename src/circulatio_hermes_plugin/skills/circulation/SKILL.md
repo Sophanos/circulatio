@@ -236,12 +236,18 @@ brief attuned sentence plus one open question.
 2. Present what Circulatio returns: usually one question, image, amplification
    prompt, or method-gate request.
 3. Work **one symbol, action, feeling, or dynamic at a time**. Ask for personal
-   associations before collective or archetypal framing.
+   associations before collective or archetypal framing. After one association,
+   usually invite one more life-touching association before interpreting; say
+   this makes the interpretation sharper, and keep the invitation under 30
+   words. Do not pressure the user or run an association questionnaire.
 4. Keep active interpretation turns to `1-3` sentences and ask exactly one
    question unless safety requires otherwise.
 5. If Circulatio returns a method gate or clarifying question, ask it and wait.
-   Route anchored follow-up answers through `circulatio_method_state_respond`;
-   only call interpretation again when the user gives materially new input.
+   Route anchored follow-up answers through `circulatio_method_state_respond`.
+   When Circulatio confirms enough association to begin, present that invitation
+   and stop. Only after the user explicitly asks for the reading should you call
+   interpretation with the stored material; the captured associations are then
+   new context (`capturedAssociationsCreateNewContext = true`).
 6. If the tool result shows `llmInterpretationHealth.source = "fallback"`, do
    not turn that into an exposed backend-error speech. If Circulatio returned a
    clarifying question, amplification prompt, or method gate, present that as
@@ -253,8 +259,10 @@ brief attuned sentence plus one open question.
    permission to expose internals. Do not paste raw tool JSON, response bodies,
    internal field names, ids, diagnostics, idempotency/replay details, or
    backend postmortems into the interpretation chat.
-9. If method-state response says to await user input, stop. Do not call
-   `circulatio_interpret_material` again with unchanged material, do not suggest
+9. If method-state response says to await user input or an interpretation
+   request, stop. Present any returned follow-up prompt or invitation exactly in
+   plain language. Do not call
+   `circulatio_interpret_material` again with unchanged context, do not suggest
    rerunning, and do not switch to another synthesis tool as a workaround.
 
 **You MUST NOT:**

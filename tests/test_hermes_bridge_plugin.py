@@ -403,7 +403,7 @@ class HermesBridgePluginTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_method_state_context_only_fallback_returns_terminal_continuation_state(self) -> None:
+    def test_fallback_clarifying_answer_captures_personal_association(self) -> None:
         class TimeoutLlm:
             async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
                 del input_data
@@ -418,7 +418,7 @@ class HermesBridgePluginTests(unittest.TestCase):
                 )
 
         async def run() -> None:
-            self._install_in_memory_runtime(llm=TimeoutLlm())
+            runtime = self._install_in_memory_runtime(llm=TimeoutLlm())
             interpreted = json.loads(
                 await interpret_material_tool(
                     {
@@ -440,13 +440,93 @@ class HermesBridgePluginTests(unittest.TestCase):
                 )
             )
             next_state = responded["result"]["continuationState"]
+            amplifications = await runtime.repository.list_personal_amplifications(
+                "hermes:default:local",
+                run_id=interpreted["result"]["runId"],
+            )
             self.assertEqual(responded["status"], "ok")
-            self.assertEqual(next_state["kind"], "context_answer_recorded")
+            self.assertEqual(next_state["kind"], "capture_completed")
             self.assertTrue(next_state["doNotRetryInterpretMaterialWithUnchangedMaterial"])
             self.assertEqual(next_state["nextAction"], "await_user_input")
-            self.assertEqual(responded["message"], "I've kept that with the material.")
+            self.assertEqual(len(amplifications), 1)
+            self.assertEqual(
+                amplifications[0]["associationText"],
+                "The wolf at the edge still feels the most alive.",
+            )
+            self.assertIn("touch your life right now", responded["message"])
+            self.assertIn("makes it sharper", responded["message"])
+            self.assertLessEqual(len(responded["message"].split()), 30)
             self.assertNotIn("backend", responded["message"].lower())
             self.assertNotIn("failed", responded["message"].lower())
+
+        asyncio.run(run())
+
+    def test_fallback_second_association_is_captured_and_offers_interpretation(self) -> None:
+        class TimeoutLlm:
+            async def interpret_material(self, input_data: dict[str, object]) -> dict[str, object]:
+                del input_data
+                raise TimeoutError("timed out")
+
+            async def route_method_state_response(
+                self, input_data: dict[str, object]
+            ) -> dict[str, object]:
+                del input_data
+                raise AssertionError(
+                    "Fallback personal-association continuations should not hit routing."
+                )
+
+        async def run() -> None:
+            runtime = self._install_in_memory_runtime(llm=TimeoutLlm())
+            interpreted = json.loads(
+                await interpret_material_tool(
+                    {
+                        "materialType": "dream",
+                        "text": "The number 9 was on a gate, and a bear chased me.",
+                    },
+                    **self._tool_kwargs(call_id="tool_fallback_second_interpret"),
+                )
+            )
+            continuation = interpreted["result"]["continuationState"]
+            await method_state_respond_tool(
+                {
+                    "source": "clarifying_answer",
+                    "responseText": "The number 9 feels like a last chance before something closes.",
+                    "anchorRefs": continuation["anchorRefs"],
+                },
+                **self._tool_kwargs(call_id="tool_fallback_second_first_answer"),
+            )
+            responded = json.loads(
+                await method_state_respond_tool(
+                    {
+                        "source": "freeform_followup",
+                        "responseText": "It touches work, where safe places still feel hard to breathe in.",
+                        "anchorRefs": continuation["anchorRefs"],
+                    },
+                    **self._tool_kwargs(call_id="tool_fallback_second_answer"),
+                )
+            )
+            amplifications = await runtime.repository.list_personal_amplifications(
+                "hermes:default:local",
+                run_id=interpreted["result"]["runId"],
+            )
+            self.assertEqual(responded["status"], "ok")
+            self.assertEqual(responded["result"]["continuationState"]["kind"], "capture_completed")
+            self.assertIn("begin lightly", responded["message"])
+            self.assertIn("reading now", responded["message"])
+            self.assertLessEqual(len(responded["message"].split()), 30)
+            continuation_state = responded["result"]["continuationState"]
+            self.assertEqual(
+                continuation_state["nextAction"],
+                "await_interpretation_request",
+            )
+            self.assertTrue(continuation_state["requiresExplicitUserRequest"])
+            self.assertTrue(continuation_state["capturedAssociationsCreateNewContext"])
+            self.assertEqual(continuation_state["nextTool"], "circulatio_interpret_material")
+            self.assertEqual(len(amplifications), 2)
+            self.assertIn(
+                "It touches work, where safe places still feel hard to breathe in.",
+                {item["associationText"] for item in amplifications},
+            )
 
         asyncio.run(run())
 
@@ -485,6 +565,9 @@ class HermesBridgePluginTests(unittest.TestCase):
             )
             self.assertEqual(responded["status"], "ok")
             self.assertEqual(responded["result"]["continuationState"]["kind"], "capture_completed")
+            self.assertIn("touch your life right now", responded["message"])
+            self.assertIn("makes it sharper", responded["message"])
+            self.assertLessEqual(len(responded["message"].split()), 30)
             self.assertEqual(len(amplifications), 1)
             self.assertEqual(
                 amplifications[0]["associationText"],

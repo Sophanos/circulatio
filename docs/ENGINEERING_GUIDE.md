@@ -1,4 +1,4 @@
-> **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
+> **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, the Phase 1 plan-only ritual presentation contract, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
 > **Consolidated docs:** See `ARCHITECTURE.md` for the system framing. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `PRESENTATION_LAYER.md` for the deferred embodied presentation contract.
 
@@ -29,8 +29,10 @@ Circulatio is a **symbolic/individuation backend for Hermes**. It is not a gener
 - Frontend visualization (out of scope for this phase)
 
 ### Integration Boundary
-- **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling
-- **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile
+- **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling, ritual delivery messages
+- **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile, typed ritual plans
+- **Renderer CLI owns:** local/static artifact manifest generation, mock provider output, provider/cache boundaries
+- **Hermes Rituals frontend owns:** playback of artifact manifests, breath pacers, meditation fields, captions, and completion UI
 
 ### Storage Boundary
 - SQLite is the canonical local backend

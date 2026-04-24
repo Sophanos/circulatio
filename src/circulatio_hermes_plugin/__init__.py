@@ -160,7 +160,8 @@ def _register_tools(ctx: Any) -> None:
     if not hasattr(ctx, "register_tool"):
         return
     for schema in TOOL_SCHEMAS:
-        handler = _TOOL_HANDLERS[schema["name"]]
+        name = str(schema["name"])
+        handler = _TOOL_HANDLERS[name]
         _register_tool(ctx, schema, handler)
 
 

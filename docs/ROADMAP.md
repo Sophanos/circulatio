@@ -31,6 +31,8 @@ longitudinal cases in `tests/evals/journey_cli/JOURNEY_FAMILIES.md` to probe hos
 surface boundaries, and anchored follow-up expectations without claiming backend truth. Service,
 bridge, and Hermes host-smoke tests remain authoritative for runtime behavior.
 
+Phase 1 of embodied presentation is also present as a plan-only ritual path: Hermes routes one `circulatio_plan_ritual` call, Circulatio returns a typed presentation plan without writing memory, the repo-local renderer CLI emits a static manifest with mock providers, and Hermes Rituals plays that manifest. Scheduled invitations, provider-backed audio/image/video, completion sync, and render jobs remain later stages.
+
 ---
 
 ## Who This Is For

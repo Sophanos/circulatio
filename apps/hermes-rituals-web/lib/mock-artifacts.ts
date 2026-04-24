@@ -1,7 +1,9 @@
-import type {
-  ArtifactMode,
-  PresentationArtifact,
-  SessionShell
+import {
+  ritualArtifactFromManifest,
+  type ArtifactMode,
+  type PresentationArtifact,
+  type RitualArtifactManifest,
+  type SessionShell
 } from "@/lib/artifact-contract"
 
 const sessions: Record<string, SessionShell> = {
@@ -34,10 +36,163 @@ const sessions: Record<string, SessionShell> = {
     aliveToday: ["bridge crossing", "silver current", "fog field"],
     holdAcknowledgement:
       "The source image is still primary. Cinema is a rendering path, not a new interpretation layer."
+  },
+  "session-weekly-ritual": {
+    id: "session-weekly-ritual",
+    phase: "playback",
+    continuity:
+      "This dry-run artifact comes from a Circulatio ritual plan and static manifest, not from live media generation.",
+    lastTouchedAt: "2026-04-24T09:00:00.000Z",
+    aliveToday: ["weekly continuity", "lengthened exhale", "settling field"],
+    holdAcknowledgement:
+      "The ritual is rendered from a plan and does not add symbolic memory by itself."
+  }
+}
+
+export const weeklyRitualDryRunManifest: RitualArtifactManifest = {
+  schemaVersion: "hermes_ritual_artifact.v1",
+  artifactId: "weekly-ritual-dry-run",
+  planId: "ritual_plan_fixture_weekly",
+  createdAt: "2026-04-24T09:00:00Z",
+  title: "This week's holding ritual",
+  description: "A static dry-run ritual from an existing Circulatio weekly surface.",
+  privacyClass: "private",
+  locale: "en-US",
+  sourceRefs: [
+    {
+      sourceType: "weekly_review",
+      recordId: "weekly_review_fixture",
+      role: "primary",
+      label: "Weekly review",
+      evidenceIds: []
+    }
+  ],
+  durationMs: 300000,
+  surfaces: {
+    text: {
+      body:
+        "Let this arrive as material already held, not as a task to solve. Take a few measured breaths. The week can be present as a field of continuity before it becomes explanation. Let the breath and the image loosen their grip on each other."
+    },
+    audio: {
+      src: null,
+      mimeType: null,
+      durationMs: null,
+      provider: null,
+      voiceId: null,
+      checksum: null
+    },
+    captions: {
+      tracks: [
+        {
+          src: "/artifacts/weekly-ritual-dry-run/captions.vtt",
+          format: "webvtt",
+          lang: "en-US",
+          kind: "subtitles",
+          label: "English"
+        }
+      ],
+      segments: [
+        {
+          id: "cap_1",
+          startMs: 0,
+          endMs: 7000,
+          text: "Let this arrive as material already held, not as a task to solve."
+        },
+        {
+          id: "cap_2",
+          startMs: 9000,
+          endMs: 17000,
+          text: "Take a few measured breaths, letting the exhale be slightly longer."
+        },
+        {
+          id: "cap_3",
+          startMs: 20000,
+          endMs: 34000,
+          text: "The week can be present as a field of continuity before it becomes explanation."
+        },
+        {
+          id: "cap_4",
+          startMs: 36000,
+          endMs: 48000,
+          text: "Let the field settle around what is already known."
+        },
+        {
+          id: "cap_5",
+          startMs: 50000,
+          endMs: 60000,
+          text: "Notice one body response and leave the rest unforced."
+        }
+      ]
+    },
+    breath: {
+      enabled: true,
+      pattern: "lengthened_exhale",
+      inhaleSeconds: 4,
+      holdSeconds: 0,
+      exhaleSeconds: 6,
+      restSeconds: 2,
+      cycles: 5,
+      visualForm: "pacer",
+      phaseLabels: true
+    },
+    meditation: {
+      enabled: true,
+      fieldType: "coherence_convergence",
+      durationMs: 180000,
+      macroProgressPolicy: "session_progress",
+      microMotion: "convergence",
+      instructionDensity: "sparse"
+    },
+    image: {
+      enabled: false,
+      src: null,
+      alt: "No generated image for this artifact.",
+      provider: null
+    },
+    cinema: {
+      enabled: true,
+      src: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      posterSrc: "https://picsum.photos/seed/river-gate-video/1920/1080",
+      mimeType: null,
+      durationMs: null,
+      provider: "youtube",
+      title: "River gate ambient study",
+      playbackMode: "ambient_loop",
+      presentation: "full_background",
+      startAtSeconds: 12
+    }
+  },
+  timeline: [
+    { atMs: 0, kind: "voice", ref: "cap_1" },
+    { atMs: 9000, kind: "breath_phase", phase: "inhale" },
+    { atMs: 90000, kind: "meditation_phase", phase: "settle" }
+  ],
+  interaction: {
+    finishPrompt: "What did you notice in your body or attention after this?",
+    captureBodyResponse: true,
+    completionEndpoint: "/api/artifacts/weekly-ritual-dry-run/complete",
+    returnCommand: "/circulation ritual complete weekly-ritual-dry-run"
+  },
+  safety: {
+    stopInstruction: "Stop if this increases activation; orient to the room.",
+    contraindications: [],
+    blockedSurfaces: []
+  },
+  render: {
+    rendererVersion: "ritual-renderer.v1",
+    mode: "dry_run_manifest",
+    providers: ["mock"],
+    cacheKeys: [],
+    budget: { currency: "USD", estimated: 0, actual: 0 },
+    warnings: []
   }
 }
 
 const artifacts: PresentationArtifact[] = [
+  {
+    ...ritualArtifactFromManifest(weeklyRitualDryRunManifest),
+    sessionId: "session-weekly-ritual"
+  },
   {
     id: "ritual-river-gate",
     mode: "ritual",
@@ -273,5 +428,5 @@ export function getArtifactDuration(artifact: PresentationArtifact) {
   const captionEnd = artifact.captions?.at(-1)?.endMs ?? 0
   const sceneEnd = artifact.scenes?.at(-1)?.endMs ?? 0
   const sectionEnd = artifact.ritualSections?.at(-1)?.endMs ?? 0
-  return Math.max(captionEnd, sceneEnd, sectionEnd, 60000)
+  return Math.max(captionEnd, sceneEnd, sectionEnd, artifact.durationMs ?? 60000)
 }

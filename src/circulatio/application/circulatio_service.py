@@ -3138,14 +3138,26 @@ class CirculatioService:
             "routingWarnings": [],
         }
         fallback_candidate = None
-        if source == "amplification_answer" and "personal_amplification" in expected_targets:
+        fallback_follow_up_prompt: str | None = None
+        if source in {"amplification_answer", "clarifying_answer"} and (
+            "personal_amplification" in expected_targets
+        ):
             fallback_candidate = self._fallback_personal_amplification_candidate(
                 response_text=response_text,
                 clarification_prompt=clarification_prompt,
                 anchors=anchors,
             )
+            fallback_follow_up_prompt = self._fallback_personal_amplification_follow_up_prompt()
+        elif source == "freeform_followup":
+            fallback_candidate = self._fallback_personal_amplification_continuation_candidate(
+                response_text=response_text,
+                anchors=anchors,
+            )
+            fallback_follow_up_prompt = self._fallback_personal_amplification_ready_prompt()
         if fallback_candidate is not None:
             routing_output["captureCandidates"] = [fallback_candidate]
+            if fallback_follow_up_prompt:
+                routing_output["followUpPrompts"] = [fallback_follow_up_prompt]
         elif expected_targets and self._method_state_llm is not None:
             routing_output = await self._method_state_llm.route_method_state_response(
                 {
@@ -10174,14 +10186,20 @@ class CirculatioService:
         prompt: ClarificationPromptRecord | None,
         expected_targets: list[MethodStateCaptureTargetKind],
     ) -> bool:
-        if "personal_amplification" in expected_targets and source == "amplification_answer":
+        if "personal_amplification" in expected_targets and source in {
+            "amplification_answer",
+            "clarifying_answer",
+        }:
             return False
         if prompt is not None and self._optional_str(prompt.get("captureTarget")) == "answer_only":
             return True
         routing_hints = prompt.get("routingHints") if prompt is not None else None
         if isinstance(routing_hints, dict):
             continuation_mode = self._optional_str(routing_hints.get("continuationMode"))
-            if continuation_mode == "personal_amplification" and source == "amplification_answer":
+            if continuation_mode == "personal_amplification" and source in {
+                "amplification_answer",
+                "clarifying_answer",
+            }:
                 return False
             if self._optional_str(routing_hints.get("source")) == "fallback_collaborative_opening":
                 return True
@@ -10193,7 +10211,9 @@ class CirculatioService:
         result = run.get("result")
         if not isinstance(result, dict):
             return False
-        if source == "amplification_answer" and "personal_amplification" in expected_targets:
+        if source in {"amplification_answer", "clarifying_answer"} and (
+            "personal_amplification" in expected_targets
+        ):
             return False
         llm_health = result.get("llmInterpretationHealth")
         if (
@@ -10426,6 +10446,13 @@ class CirculatioService:
             for item in clarification_intent.get("expectedTargets", []):
                 if isinstance(item, str):
                     resolved.append(item)  # type: ignore[arg-type]
+        clarification_prompt = anchors.get("clarificationPrompt")
+        if isinstance(clarification_prompt, dict):
+            routing_hints = clarification_prompt.get("routingHints")
+            if isinstance(routing_hints, dict):
+                for item in routing_hints.get("expectedTargets", []):
+                    if isinstance(item, str):
+                        resolved.append(item)  # type: ignore[arg-type]
         source_defaults: dict[str, list[MethodStateCaptureTargetKind]] = {
             "body_note": ["body_state"],
             "practice_feedback": ["practice_outcome", "practice_preference"],
@@ -10480,6 +10507,98 @@ class CirculatioService:
             "consentScopes": [],
             "reason": "The user answered the pending personal-association prompt.",
         }
+
+    def _fallback_personal_amplification_continuation_candidate(
+        self,
+        *,
+        response_text: str,
+        anchors: dict[str, object],
+    ) -> MethodStateCaptureCandidate | None:
+        if not self._anchors_expect_personal_amplification(anchors):
+            return None
+        canonical_name, surface_text = self._fallback_personal_amplification_surface_from_anchors(
+            anchors
+        )
+        if not canonical_name or not surface_text:
+            return None
+        return {
+            "targetKind": "personal_amplification",
+            "application": "direct_write",
+            "confidence": "high",
+            "payload": {
+                "canonicalName": canonical_name,
+                "surfaceText": surface_text,
+                "associationText": response_text,
+            },
+            "supportingEvidenceRefs": ["response_primary"],
+            "consentScopes": [],
+            "reason": (
+                "The user added a life-touching personal association to the anchored "
+                "interpretation thread."
+            ),
+        }
+
+    def _anchors_expect_personal_amplification(self, anchors: dict[str, object]) -> bool:
+        run = anchors.get("run")
+        if not isinstance(run, dict):
+            return False
+        result = run.get("result")
+        if not isinstance(result, dict):
+            return False
+        intent = result.get("clarificationIntent")
+        if isinstance(intent, dict) and "personal_amplification" in [
+            str(item) for item in intent.get("expectedTargets", [])
+        ]:
+            return True
+        method_gate = result.get("methodGate")
+        if not isinstance(method_gate, dict):
+            return False
+        if "personal_association" in [
+            str(item) for item in method_gate.get("missingPrerequisites", [])
+        ]:
+            return True
+        return self._optional_str(method_gate.get("depthLevel")) == "personal_amplification_needed"
+
+    def _fallback_personal_amplification_surface_from_anchors(
+        self,
+        anchors: dict[str, object],
+    ) -> tuple[str, str]:
+        run = anchors.get("run")
+        result = run.get("result") if isinstance(run, dict) else {}
+        plan = result.get("clarificationPlan") if isinstance(result, dict) else {}
+        routing_hints = plan.get("routingHints") if isinstance(plan, dict) else {}
+        if not isinstance(routing_hints, dict):
+            routing_hints = {}
+        material = anchors.get("material") if isinstance(anchors.get("material"), dict) else {}
+        material_type = self._optional_str(material.get("materialType"))
+        canonical_default = (
+            "life context around the dream image"
+            if material_type == "dream"
+            else "life context around the material image"
+        )
+        canonical_name = self._optional_str(routing_hints.get("canonicalName")) or canonical_default
+        surface_text = (
+            self._optional_str(routing_hints.get("surfaceText"))
+            or self._optional_str(material.get("summary"))
+            or self._optional_str(material.get("title"))
+            or self._optional_str(
+                result.get("clarifyingQuestion") if isinstance(result, dict) else None
+            )
+            or canonical_default
+        )
+        return canonical_name, surface_text
+
+    def _fallback_personal_amplification_follow_up_prompt(self) -> str:
+        return (
+            "Stay with it a little longer: where does this feeling, number, or image "
+            "touch your life right now? We can interpret soon; this makes it sharper."
+        )
+
+    def _fallback_personal_amplification_ready_prompt(self) -> str:
+        return (
+            "That gives enough to begin lightly. Say if you want the reading now; "
+            "I'll stay close to your words."
+        )
 
     def _method_state_anchor_summary(self, anchors: dict[str, object]) -> str | None:
         prompt = anchors.get("prompt")
@@ -10752,11 +10871,15 @@ class CirculatioService:
             association_text = str(payload.get("associationText") or "").strip()
             if not canonical_name or not surface_text or not association_text:
                 return {"warning": "personal_amplification_missing_required_fields"}
+            anchor_material = (
+                anchors.get("material") if isinstance(anchors.get("material"), dict) else {}
+            )
+            anchor_material_id = anchor_material.get("id") or response_material["id"]
             created = await self.answer_amplification_prompt(
                 {
                     "userId": user_id,
                     "promptId": prompt.get("id"),
-                    "materialId": response_material["id"],
+                    "materialId": anchor_material_id,
                     "runId": anchors.get("run", {}).get("id")
                     if isinstance(anchors.get("run"), dict)
                     else None,
@@ -11348,26 +11471,62 @@ class CirculatioService:
         )
         if method_context is not None:
             coach_runtime = await self._load_coach_runtime_inputs(user_id=material["userId"])
-            material_input["methodContextSnapshot"] = deepcopy(
-                self._enrich_method_context_snapshot(
-                    method_context,
-                    window_start=window_start,
-                    window_end=window_end,
-                    surface="generic",
-                    existing_briefs=cast(
-                        list[ProactiveBriefRecord], coach_runtime["existingBriefs"]
-                    ),
-                    recent_practices=cast(
-                        list[PracticeSessionRecord], coach_runtime["recentPractices"]
-                    ),
-                    journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
-                    adaptation_profile=cast(
-                        UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
-                    ),
-                    safety_context=safety_context,
-                )
+            enriched_method_context = self._enrich_method_context_snapshot(
+                method_context,
+                window_start=window_start,
+                window_end=window_end,
+                surface="generic",
+                existing_briefs=cast(list[ProactiveBriefRecord], coach_runtime["existingBriefs"]),
+                recent_practices=cast(
+                    list[PracticeSessionRecord], coach_runtime["recentPractices"]
+                ),
+                journeys=cast(list[JourneyRecord], coach_runtime["journeys"]),
+                adaptation_profile=cast(
+                    UserAdaptationProfileSummary | None, coach_runtime["adaptationSummary"]
+                ),
+                safety_context=safety_context,
             )
+            await self._attach_material_personal_amplifications(
+                enriched_method_context,
+                user_id=material["userId"],
+                material_id=material["id"],
+            )
+            material_input["methodContextSnapshot"] = deepcopy(enriched_method_context)
         return material_input
+
+    async def _attach_material_personal_amplifications(
+        self,
+        method_context: MethodContextSnapshot,
+        *,
+        user_id: Id,
+        material_id: Id,
+    ) -> None:
+        records = await self._repository.list_personal_amplifications(
+            user_id,
+            material_id=material_id,
+            limit=10,
+        )
+        if not records:
+            return
+        existing = list(method_context.get("personalAmplifications", []))
+        seen_ids = {str(item.get("id")) for item in existing if isinstance(item, dict)}
+        for record in records:
+            if record["id"] in seen_ids:
+                continue
+            summary: dict[str, object] = {
+                "id": record["id"],
+                "canonicalName": record["canonicalName"],
+                "surfaceText": record["surfaceText"],
+                "associationText": record["associationText"],
+                "createdAt": record["createdAt"],
+            }
+            if record.get("feelingTone"):
+                summary["feelingTone"] = record["feelingTone"]
+            if record.get("bodySensations"):
+                summary["bodySensations"] = list(record["bodySensations"])
+            existing.append(summary)
+            seen_ids.add(record["id"])
+        method_context["personalAmplifications"] = existing[:10]  # type: ignore[typeddict-item]
 
     async def _store_context_snapshot(
         self,

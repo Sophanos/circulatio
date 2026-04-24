@@ -11,6 +11,16 @@ dist/
 # Secrets / environment
 .env*
 !.env.example
+.chutes*
+!.chutes.example
+
+# Renderer outputs with provider-generated media
+artifacts/rituals/plans/
+artifacts/rituals/rendered/
+apps/hermes-rituals-web/public/artifacts/*
+!apps/hermes-rituals-web/public/artifacts/weekly-ritual-dry-run/
+!apps/hermes-rituals-web/public/artifacts/weekly-ritual-dry-run/manifest.json
+!apps/hermes-rituals-web/public/artifacts/weekly-ritual-dry-run/captions.vtt
 
 # Databases (user data)
 *.db

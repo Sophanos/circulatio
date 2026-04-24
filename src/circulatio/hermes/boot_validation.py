@@ -85,7 +85,10 @@ def validate_plugin_distribution(*, strict_installed: bool) -> BootValidationRep
         return _report(profile="installed-distribution", checks=checks)
 
     status: BootCheckStatus = "ok"
-    message = "The installed circulatio entry point resolves to the circulatio_hermes_plugin module."
+    message = (
+        "The installed circulatio entry point resolves to the "
+        "circulatio_hermes_plugin module."
+    )
     if (
         entry_point.value != _EXPECTED_ENTRY_POINT
         or entry_point.module != _EXPECTED_ENTRY_POINT_MODULE

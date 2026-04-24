@@ -555,14 +555,14 @@ class CirculatioAgentBridge:
         message = "Method-state response was processed without durable capture."
         if continuation_state["kind"] in {"context_answer_recorded", "provider_unavailable"}:
             message = "I've kept that with the material."
+        elif workflow["followUpPrompts"]:
+            message = str(workflow["followUpPrompts"][0])
         elif workflow["pendingProposals"]:
             message = (
                 "Method-state response was processed; approval-gated proposals remain pending."
             )
         elif workflow["appliedEntityRefs"]:
             message = "Method-state response was processed and durable method state was updated."
-        elif workflow["followUpPrompts"]:
-            message = str(workflow["followUpPrompts"][0])
         affected_entity_ids = [workflow["responseMaterial"]["id"], capture_run["id"]]
         affected_entity_ids.extend(
             str(item.get("entityId") or "")
@@ -2238,14 +2238,17 @@ class CirculatioAgentBridge:
         reason = "clarifying_question" if clarifying_question else "method_gate"
         llm_health = interpretation.get("llmInterpretationHealth")
         depth_engine_health = interpretation.get("depthEngineHealth")
-        if (
-            isinstance(llm_health, dict)
-            and self._optional_string(llm_health.get("source")) == "fallback"
-        ) or (
-            isinstance(depth_engine_health, dict)
-            and self._optional_string(depth_engine_health.get("source")) == "fallback"
-        ):
-            reason = "fallback_collaborative_opening"
+        fallback_reason = None
+        if isinstance(llm_health, dict) and self._optional_string(
+            llm_health.get("source")
+        ) == "fallback":
+            fallback_reason = self._optional_string(llm_health.get("reason"))
+        elif isinstance(depth_engine_health, dict) and self._optional_string(
+            depth_engine_health.get("source")
+        ) == "fallback":
+            fallback_reason = self._optional_string(depth_engine_health.get("reason"))
+        if fallback_reason:
+            reason = "fallback_collaborative_opening" if clarifying_question else fallback_reason
         anchor_refs: dict[str, object] = {"materialId": material_id, "runId": run_id}
         expected_targets: list[str] = []
         storage_policy = "await_new_input"
@@ -2297,11 +2300,22 @@ class CirculatioAgentBridge:
             kind = "context_answer_recorded"
         else:
             kind = "no_capture"
-        return {
+        follow_up_text = "\n".join(
+            str(item) for item in workflow.get("followUpPrompts", []) if str(item).strip()
+        )
+        next_action = "await_user_input"
+        if "reading now" in follow_up_text and "close to your words" in follow_up_text:
+            next_action = "await_interpretation_request"
+        continuation: dict[str, object] = {
             "kind": kind,
             "doNotRetryInterpretMaterialWithUnchangedMaterial": True,
-            "nextAction": "await_user_input",
+            "nextAction": next_action,
         }
+        if next_action == "await_interpretation_request":
+            continuation["requiresExplicitUserRequest"] = True
+            continuation["capturedAssociationsCreateNewContext"] = True
+            continuation["nextTool"] = "circulatio_interpret_material"
+        return continuation
 
     def _journey_page_summary(self, page: dict[str, object]) -> dict[str, object]:
         summary: dict[str, object] = {

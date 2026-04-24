@@ -1,8 +1,45 @@
+import { readFile } from "node:fs/promises"
+import path from "node:path"
+
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { RitualArtifactClient } from "@/components/ritual/RitualArtifactClient"
 import { Button } from "@/components/ui/button"
+import {
+  ritualArtifactFromManifest,
+  type RitualArtifactManifest
+} from "@/lib/artifact-contract"
 import { getArtifact } from "@/lib/mock-artifacts"
+
+async function loadManifest(artifactId: string) {
+  const candidates = [
+    path.join(process.cwd(), "public", "artifacts", artifactId, "manifest.json"),
+    path.join(
+      process.cwd(),
+      "apps",
+      "hermes-rituals-web",
+      "public",
+      "artifacts",
+      artifactId,
+      "manifest.json"
+    )
+  ]
+
+  for (const filePath of candidates) {
+    try {
+      const raw = await readFile(filePath, "utf-8")
+      const manifest = JSON.parse(raw) as RitualArtifactManifest
+      if (manifest.schemaVersion === "hermes_ritual_artifact.v1") {
+        return manifest
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
 
 export default async function ArtifactDetailPage({
   params
@@ -10,6 +47,12 @@ export default async function ArtifactDetailPage({
   params: Promise<{ artifactId: string }>
 }) {
   const { artifactId } = await params
+  const manifest = await loadManifest(artifactId)
+
+  if (manifest) {
+    return <RitualArtifactClient artifact={ritualArtifactFromManifest(manifest)} />
+  }
+
   const artifact = getArtifact(artifactId)
 
   if (!artifact) {

@@ -147,6 +147,31 @@ def _fallback_method_gate(question_text: str) -> dict[str, object]:
     }
 
 
+def _fallback_association_ready_gate() -> dict[str, object]:
+    return {
+        "depthLevel": "cautious_pattern_note",
+        "missingPrerequisites": [],
+        "blockedMoves": [
+            "symbolic_conclusion",
+            "collective_amplification",
+            "memory_write_proposals",
+        ],
+        "requiredPrompts": [],
+        "responseConstraints": [
+            "Do not ask for the same personal association again.",
+            "Do not substitute a host-authored symbolic interpretation.",
+            "Acknowledge that the associations are held and pause cleanly.",
+        ],
+    }
+
+
+def _input_has_personal_ground(input_data: MaterialInterpretationInput) -> bool:
+    if input_data.get("userAssociations"):
+        return True
+    method_context = input_data.get("methodContextSnapshot")
+    return isinstance(method_context, dict) and bool(method_context.get("personalAmplifications"))
+
+
 def build_blocked_by_safety_result(
     *,
     run_id: str,
@@ -250,6 +275,55 @@ def build_unavailable_llm_result(
             }
         )
     practice = _fresh_fallback_practice(_JOURNALING_FALLBACK)
+    if _input_has_personal_ground(input_data):
+        user_facing_response = (
+            "I have enough of your associations held. I do not want to force a deeper "
+            "reading in this pass; pausing is cleaner."
+        )
+        llm_health = build_llm_interpretation_health(
+            source="fallback",
+            status="opened",
+            reason="association_ready_interpretation_unavailable",
+            diagnostic_reason=fallback_reason,
+            symbol_mentions=[],
+            figure_mentions=[],
+            motif_mentions=[],
+            observations=observations,
+            hypotheses=[],
+            proposal_candidates=[],
+        )
+        result: InterpretationResult = {
+            "runId": run_id,
+            "materialId": material_id,
+            "safetyDisposition": safety,
+            "observations": observations,
+            "evidence": evidence_ledger.all(),
+            "symbolMentions": [],
+            "figureMentions": [],
+            "motifMentions": [],
+            "personalSymbolUpdates": [],
+            "culturalAmplifications": [],
+            "hypotheses": [],
+            "complexCandidateUpdates": [],
+            "lifeContextLinks": life_context_links,
+            "practiceRecommendation": practice,
+            "memoryWritePlan": {
+                "runId": run_id,
+                "proposals": [],
+                "evidenceItems": cast(list, evidence_ledger.all()),
+            },
+            "userFacingResponse": user_facing_response,
+            "methodGate": cast(object, _fallback_association_ready_gate()),
+            "llmInterpretationHealth": llm_health,
+            "depthEngineHealth": {
+                "status": "opened",
+                "reason": "association_ready_interpretation_unavailable",
+                "diagnosticReason": fallback_reason,
+                "source": "fallback",
+            },
+        }
+        validate_evidence_integrity(result)
+        return result
     clarifying_question = _fallback_clarifying_question(input_data)
     clarification_ref_key = _fallback_clarification_ref_key(input_data)
     clarification_intent = _fallback_clarification_intent(

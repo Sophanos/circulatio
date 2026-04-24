@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react"
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, forwardRef } from "react"
 import { Pause, Play } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 
@@ -414,6 +414,10 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const [audioUrl, setAudioUrl] = useState("")
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
+  const [breathClockOffsetMs, setBreathClockOffsetMs] = useState(0)
+  const currentTimeMs = currentTime * 1000
+  const currentTimeMsRef = useRef(0)
+  currentTimeMsRef.current = currentTimeMs
   const stageVideoSource = resolveStageVideo(artifact)
   const fullStageVideo = isFullStageVideo(stageLens, stageVideoSource)
   const fullStageChromeVisible = !fullStageVideo || chromeVisible
@@ -427,6 +431,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (!audio.paused && !audio.ended) {
         playbackAnchorRef.current = { audioSeconds: seconds, startedAtMs: performance.now() }
       }
+      if (stageLens === "breath") {
+        setBreathClockOffsetMs(ms)
+      }
       setCurrentTime(seconds)
       onTimeUpdate?.(ms)
     }
@@ -437,6 +444,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     setAudioUrl(url)
     return () => URL.revokeObjectURL(url)
   }, [durationMs])
+
+  useLayoutEffect(() => {
+    if (stageLens === "breath") {
+      setBreathClockOffsetMs(currentTimeMsRef.current)
+    }
+  }, [stageLens])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -550,10 +563,16 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (!audioRef.current.paused && !audioRef.current.ended) {
         playbackAnchorRef.current = { audioSeconds: time, startedAtMs: performance.now() }
       }
+      if (stageLens === "breath") {
+        setBreathClockOffsetMs(time * 1000)
+      }
       setCurrentTime(time)
       onTimeUpdate?.(time * 1000)
     }
   }
+
+  const visualStageCurrentMs =
+    stageLens === "breath" ? Math.max(currentTimeMs - breathClockOffsetMs, 0) : currentTimeMs
 
   return (
     <div
@@ -579,7 +598,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
           <VisualStage
             key={stageLens}
             artifact={artifact}
-            currentMs={currentTime * 1000}
+            currentMs={visualStageCurrentMs}
             isPlaying={isPlaying}
             stageLens={stageLens}
             immersive={immersive}

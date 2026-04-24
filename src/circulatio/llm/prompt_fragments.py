@@ -61,7 +61,9 @@ CLARIFICATION_INTENT_POLICY = (
 WITNESS_METHOD_POLICY = (
     "Personal amplification comes before collective amplification. Dream-series suggestions "
     "are suggestions, not facts. Soma, goal, culture, and series continuity should be "
-    "phrased as tentative co-occurrence unless the supplied context already confirms them."
+    "phrased as tentative co-occurrence unless the supplied context already confirms them. "
+    "After one real association, prefer one more brief life-touching association before "
+    "interpretation; explain that it sharpens the reading, but do not pressure or overload."
 )
 INTERPRETATION_CONSENT_POLICY = (
     "Only suggest collective amplification or deeper imaginal work when the supplied "
