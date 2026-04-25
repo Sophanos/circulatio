@@ -1,0 +1,41 @@
+{
+  "adapter": "fake",
+  "case_id": "feedback_correction_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "feedback_correction_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 0.9,
+        "depthLevel": null,
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": null,
+        "selectedSurface": "method_state_response",
+        "selectedToolSequence": [
+          "circulatio_record_interpretation_feedback"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": null,
+            "kind": "feedback",
+            "requiresApproval": null,
+            "tool": "circulatio_record_interpretation_feedback"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"feedback_correction_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_record_interpretation_feedback\"], \"selectedSurface\": \"method_state_response\", \"selectedMoveKind\": null, \"depthLevel\": null, \"captureTargets\": [], \"writeActions\": [{\"kind\": \"feedback\", \"source\": \"explicit_feedback\", \"tool\": \"circulatio_record_interpretation_feedback\"}], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}

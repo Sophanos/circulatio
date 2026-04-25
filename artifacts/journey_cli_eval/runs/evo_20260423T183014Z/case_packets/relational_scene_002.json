@@ -1,0 +1,105 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "consent_gate",
+    "surface_shape",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": true
+  },
+  "caseId": "relational_scene_002",
+  "caseKind": "single_turn_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "consentPreferences": [
+      {
+        "scope": "projection_language",
+        "status": "allow"
+      }
+    ]
+  },
+  "journeyFamily": "RelationalSceneRecurrence",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "execution_skill_routing.jsonl"
+    ],
+    "targetKinds": [
+      "skill"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "holdout",
+  "tags": [
+    "scene_first",
+    "projection_consent"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge",
+    "method_eval"
+  ],
+  "title": "Projection-consented relational pattern stays scene-first and bounded",
+  "turns": [
+    {
+      "expected": {
+        "captureTargets": {
+          "oneOf": [
+            [
+              "relational_scene"
+            ],
+            [
+              "reflection"
+            ],
+            null
+          ]
+        },
+        "depthLevel": {
+          "oneOf": [
+            "standard",
+            null
+          ]
+        },
+        "forbiddenEscalations": [
+          "asserting_projection_as_fact",
+          "active_imagination"
+        ],
+        "forbiddenTools": [
+          "circulatio_living_myth_review"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "this person is your shadow",
+            "this proves projection"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "ask_relational_scene",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "equals": "alive_today"
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_alive_today"
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "explicit_surface_request",
+      "userTurn": "Can you help me see if there's a pattern in why I keep shrinking around loud people?"
+    }
+  ]
+}

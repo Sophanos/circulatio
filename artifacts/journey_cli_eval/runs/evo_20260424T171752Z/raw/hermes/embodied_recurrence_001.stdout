@@ -1,0 +1,38 @@
+{
+  "caseId": "embodied_recurrence_001",
+  "turnResults": [
+    {
+      "turnId": "t1",
+      "selectedToolSequence": [
+        "circulatio_store_body_state"
+      ],
+      "toolArgsSummary": {
+        "sensation": "chest tightness",
+        "activation": "moderate",
+        "temporalContext": "after talking to Alex"
+      },
+      "selectedSurface": "alive_today",
+      "selectedMoveKind": "ask_body_checkin",
+      "depthLevel": "grounding_only",
+      "captureTargets": [
+        "body_state"
+      ],
+      "readActions": [],
+      "writeActions": [
+        {
+          "kind": "body_state",
+          "tool": "circulatio_store_body_state",
+          "requiresApproval": false,
+          "autonomous": true
+        }
+      ],
+      "askedClarification": false,
+      "performedHostInterpretation": false,
+      "forbiddenEscalationsPresent": [],
+      "hostReply": "I held that chest tightness after talking to Alex. Is the sensation still there right now?",
+      "confidence": 1.0,
+      "rationale": "Ambient body-state intake with recurrence history and projection-language consent set to withhold. Store-first routing applies. No interpretation or projection is permitted. The correct move is a bounded body check-in at grounding-only depth."
+    }
+  ],
+  "globalNotes": []
+}

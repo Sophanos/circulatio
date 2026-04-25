@@ -1,0 +1,30 @@
+{
+  "adapter": "fake",
+  "case_id": "symbol_body_pressure_002",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 10,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 10,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "fake",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_journey_page"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "holdout",
+  "trace_ids": [
+    "58ed3d34-994e-4d12-82d8-7b05608a96d0"
+  ]
+}

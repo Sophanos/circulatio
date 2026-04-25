@@ -1,0 +1,115 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "no_host_interpretation",
+    "write_budget",
+    "surface_shape",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": false
+  },
+  "caseId": "symbol_body_pressure_001",
+  "caseKind": "single_turn_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "goals": [
+      {
+        "label": "finish and rest"
+      }
+    ]
+  },
+  "journeyFamily": "SymbolBodyPressure",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "execution_skill_routing.jsonl",
+      "grounding_pacing.jsonl"
+    ],
+    "targetKinds": [
+      "skill",
+      "prompt_fragments"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "dev",
+  "tags": [
+    "store_first",
+    "body_pacing"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge",
+    "method_eval"
+  ],
+  "title": "Recurring dream image plus body pressure",
+  "turns": [
+    {
+      "expected": {
+        "allowedWrites": [
+          {
+            "kind": "material",
+            "source": "ambient_intake",
+            "tool": "circulatio_store_dream"
+          },
+          {
+            "kind": "body_state",
+            "source": "ambient_intake",
+            "tool": "circulatio_store_body_state"
+          }
+        ],
+        "captureTargets": {
+          "contains": [
+            "body_state"
+          ]
+        },
+        "depthLevel": {
+          "oneOf": [
+            "gentle",
+            "grounding_only",
+            null
+          ]
+        },
+        "forbiddenEscalations": [
+          "archetypal_patterning"
+        ],
+        "forbiddenTools": [
+          "circulatio_interpret_material"
+        ],
+        "replyStyle": {
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "ask_body_checkin",
+            "hold_silence",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "oneOf": [
+            "alive_today",
+            "none",
+            null
+          ]
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "contains": [
+            "circulatio_store_dream",
+            "circulatio_store_body_state"
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "ambient_intake",
+      "userTurn": "I had the locked door dream again and now I have this pressure behind my eyes."
+    }
+  ]
+}

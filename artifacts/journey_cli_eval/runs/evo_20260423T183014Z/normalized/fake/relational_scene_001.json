@@ -1,0 +1,43 @@
+{
+  "adapter": "fake",
+  "case_id": "relational_scene_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "relational_scene_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "relational_scene"
+        ],
+        "confidence": 0.9,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": "ask_relational_scene",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_record_relational_scene"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": null,
+            "kind": "relational_scene",
+            "requiresApproval": null,
+            "tool": "circulatio_record_relational_scene"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"relational_scene_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_record_relational_scene\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_relational_scene\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"relational_scene\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}

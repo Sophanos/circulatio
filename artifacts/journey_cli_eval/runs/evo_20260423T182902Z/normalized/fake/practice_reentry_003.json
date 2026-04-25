@@ -1,0 +1,43 @@
+{
+  "adapter": "fake",
+  "case_id": "practice_reentry_003",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "practice_reentry_003",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "practice_outcome"
+        ],
+        "confidence": 0.9,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": "ask_practice_followup",
+        "selectedSurface": "practice_followup",
+        "selectedToolSequence": [
+          "circulatio_method_state_respond"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": null,
+            "kind": "practice_response",
+            "requiresApproval": null,
+            "tool": "circulatio_method_state_respond"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"practice_reentry_003\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_method_state_respond\"], \"selectedSurface\": \"practice_followup\", \"selectedMoveKind\": \"ask_practice_followup\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"practice_outcome\"], \"writeActions\": [{\"kind\": \"practice_response\", \"source\": \"anchored_method_state_response\", \"tool\": \"circulatio_method_state_respond\"}], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}

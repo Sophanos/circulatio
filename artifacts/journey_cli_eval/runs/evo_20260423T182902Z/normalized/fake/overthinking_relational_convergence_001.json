@@ -1,0 +1,43 @@
+{
+  "adapter": "fake",
+  "case_id": "overthinking_relational_convergence_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "overthinking_relational_convergence_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "body_state"
+        ],
+        "confidence": 0.9,
+        "depthLevel": "grounding_only",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": "ask_body_checkin",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_store_body_state"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": null,
+            "kind": "body_state",
+            "requiresApproval": null,
+            "tool": "circulatio_store_body_state"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"overthinking_relational_convergence_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_store_body_state\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_body_checkin\", \"depthLevel\": \"grounding_only\", \"captureTargets\": [\"body_state\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}

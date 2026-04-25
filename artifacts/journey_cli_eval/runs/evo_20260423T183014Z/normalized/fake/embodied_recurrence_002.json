@@ -1,0 +1,38 @@
+{
+  "adapter": "fake",
+  "case_id": "embodied_recurrence_002",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "embodied_recurrence_002",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "body_state"
+        ],
+        "confidence": 0.9,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [
+          "circulatio_alive_today"
+        ],
+        "selectedMoveKind": "ask_body_checkin",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_alive_today"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": []
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"embodied_recurrence_002\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_alive_today\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_body_checkin\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"body_state\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}

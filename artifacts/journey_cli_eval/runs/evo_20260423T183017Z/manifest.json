@@ -1,0 +1,67 @@
+{
+  "adapterSummaries": {
+    "fake": {
+      "blockingFailures": 1,
+      "failCount": 1,
+      "maxScore": 2,
+      "passCount": 0,
+      "score": 0,
+      "scorePercent": 0.0,
+      "skipped": false
+    }
+  },
+  "adapterVersions": {
+    "fake": "built-in"
+  },
+  "adaptersRequested": [
+    "fake"
+  ],
+  "adaptersRun": [
+    "fake"
+  ],
+  "adaptersSkipped": {},
+  "artifactHashes": {
+    "JOURNEY_FAMILIES.md": "037d68ebac76c457f1e84d8fe4dd5960abf22d414da01a1fcbeb393eb01cc244",
+    "SKILL.md": "285ca0340d74d8f2f9604a37e31b91c0239edd04c3ae7681bfb94c8a171118ba",
+    "prompt_fragments.py": "b0d44896ab03f9cb2b8a6adffa32bb03ea01933bd7894a51a729c753467527dc",
+    "schemas.py": "d41f9df40aad4f0111e0c36fa76b40b01ab9a6f83c80c813fffc5af3c33de7a2"
+  },
+  "baselineComparison": {
+    "hasRegression": true,
+    "regressions": [
+      {
+        "adapter": "fake",
+        "baselinePassed": true,
+        "baselineScore": 13,
+        "caseId": "embodied_recurrence_001",
+        "currentPassed": false,
+        "currentScore": 0
+      }
+    ]
+  },
+  "caseConsensus": {
+    "embodied_recurrence_001": {
+      "adaptersFailed": [
+        "fake"
+      ],
+      "adaptersPassed": [],
+      "allAdaptersPassed": false,
+      "disagreementTags": []
+    }
+  },
+  "caseIds": [
+    "embodied_recurrence_001"
+  ],
+  "commandConfigHash": "70813c8b38d89f7c52876bb8967ae5ca39e1a8b1dec181347c0a403268ff6a4b",
+  "createdAt": "2026-04-23T18:30:17.969963+00:00",
+  "datasets": [
+    "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl"
+  ],
+  "dryRun": false,
+  "gitSha": "ade438f6b124935d12190e3fb80622c0c92ec31b",
+  "missingRequiredAdapters": [],
+  "repoRoot": "/Users/mibook/circulatio",
+  "runDir": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T183017Z",
+  "runId": "evo_20260423T183017Z",
+  "splitFilter": []
+}

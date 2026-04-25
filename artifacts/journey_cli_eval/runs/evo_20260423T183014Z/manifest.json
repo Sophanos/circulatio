@@ -1,0 +1,180 @@
+{
+  "adapterSummaries": {
+    "fake": {
+      "blockingFailures": 0,
+      "failCount": 0,
+      "maxScore": 173,
+      "passCount": 15,
+      "score": 173,
+      "scorePercent": 1.0,
+      "skipped": false
+    }
+  },
+  "adapterVersions": {
+    "fake": "built-in"
+  },
+  "adaptersRequested": [
+    "fake"
+  ],
+  "adaptersRun": [
+    "fake"
+  ],
+  "adaptersSkipped": {},
+  "artifactHashes": {
+    "JOURNEY_FAMILIES.md": "037d68ebac76c457f1e84d8fe4dd5960abf22d414da01a1fcbeb393eb01cc244",
+    "SKILL.md": "285ca0340d74d8f2f9604a37e31b91c0239edd04c3ae7681bfb94c8a171118ba",
+    "prompt_fragments.py": "b0d44896ab03f9cb2b8a6adffa32bb03ea01933bd7894a51a729c753467527dc",
+    "schemas.py": "d41f9df40aad4f0111e0c36fa76b40b01ab9a6f83c80c813fffc5af3c33de7a2"
+  },
+  "caseConsensus": {
+    "embodied_recurrence_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "embodied_recurrence_002": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "embodied_recurrence_003": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "feedback_correction_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "goal_tension_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "journey_page_read_only_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "overthinking_relational_convergence_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "practice_reentry_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "practice_reentry_002": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "practice_reentry_003": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "relational_scene_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "relational_scene_002": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "symbol_body_pressure_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "symbol_body_pressure_002": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    },
+    "thought_loop_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    }
+  },
+  "caseIds": [
+    "embodied_recurrence_001",
+    "embodied_recurrence_002",
+    "symbol_body_pressure_001",
+    "symbol_body_pressure_002",
+    "thought_loop_001",
+    "relational_scene_001",
+    "relational_scene_002",
+    "practice_reentry_001",
+    "practice_reentry_002",
+    "practice_reentry_003",
+    "embodied_recurrence_003",
+    "journey_page_read_only_001",
+    "goal_tension_001",
+    "feedback_correction_001",
+    "overthinking_relational_convergence_001"
+  ],
+  "commandConfigHash": "d921308eeae82fa96b5a272d17e1deb4e1e80fcf2df76db4806b4afe60ff8201",
+  "createdAt": "2026-04-23T18:30:14.842349+00:00",
+  "datasets": [
+    "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl"
+  ],
+  "dryRun": false,
+  "gitSha": "ade438f6b124935d12190e3fb80622c0c92ec31b",
+  "missingRequiredAdapters": [],
+  "repoRoot": "/Users/mibook/circulatio",
+  "runDir": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T183014Z",
+  "runId": "evo_20260423T183014Z",
+  "splitFilter": []
+}

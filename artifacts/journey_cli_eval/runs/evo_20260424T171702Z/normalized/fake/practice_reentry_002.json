@@ -1,0 +1,41 @@
+{
+  "adapter": "fake",
+  "case_id": "practice_reentry_002",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "practice_reentry_002",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 0.9,
+        "depthLevel": "grounding_only",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": "offer_resource",
+        "selectedSurface": "practice_followup",
+        "selectedToolSequence": [
+          "circulatio_generate_practice_recommendation"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": null,
+            "kind": "practice_session",
+            "requiresApproval": null,
+            "tool": "circulatio_generate_practice_recommendation"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"practice_reentry_002\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_generate_practice_recommendation\"], \"selectedSurface\": \"practice_followup\", \"selectedMoveKind\": \"offer_resource\", \"depthLevel\": \"grounding_only\", \"captureTargets\": [], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}

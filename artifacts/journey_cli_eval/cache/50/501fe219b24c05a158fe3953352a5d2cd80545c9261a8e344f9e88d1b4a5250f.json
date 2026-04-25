@@ -1,0 +1,103 @@
+{
+  "cacheKey": "501fe219b24c05a158fe3953352a5d2cd80545c9261a8e344f9e88d1b4a5250f",
+  "normalized": {
+    "adapter": "fake",
+    "case_id": "relational_scene_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "relational_scene_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "relational_scene"
+          ],
+          "confidence": 0.9,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I held that and can stay with the next small step.",
+          "performedHostInterpretation": false,
+          "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+          "readActions": [],
+          "selectedMoveKind": "ask_relational_scene",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_record_relational_scene"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": [
+            {
+              "autonomous": null,
+              "kind": "relational_scene",
+              "requiresApproval": null,
+              "tool": "circulatio_record_relational_scene"
+            }
+          ]
+        }
+      ]
+    },
+    "raw_text": "{\"caseId\": \"relational_scene_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_record_relational_scene\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_relational_scene\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"relational_scene\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "fake",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "relational_scene_001",
+    "command_display": [
+      "<fake>"
+    ],
+    "command_hash": "151569dec192aaefa0ac7d54b46a66fa0c551509fa664d7471290aa837582f1a",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260423T182902Z/fake/relational_scene_001",
+    "duration_ms": 0,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-23T18:29:02.455087+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T182902Z/raw/fake/relational_scene_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T182902Z/raw/fake/relational_scene_001.stdout",
+    "stdout_sha256": "3b32e842fb1705132498dd31e62bc520c6f03ab7e31aeec925d209b4f4531425",
+    "stdout_text": "{\"caseId\": \"relational_scene_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_record_relational_scene\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_relational_scene\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"relational_scene\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+    "timed_out": false,
+    "version": "built-in",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "fake",
+    "case_id": "relational_scene_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_relational_scene"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "ce4888af-0cfa-46a6-b653-bc7d0cc3015d"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"caseId\": \"relational_scene_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_record_relational_scene\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_relational_scene\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"relational_scene\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}"
+}

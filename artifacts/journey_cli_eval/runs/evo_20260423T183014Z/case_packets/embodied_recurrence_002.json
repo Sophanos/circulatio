@@ -1,0 +1,117 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "no_host_interpretation",
+    "surface_shape",
+    "capture_target",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": true
+  },
+  "caseId": "embodied_recurrence_002",
+  "caseKind": "single_turn_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "bodyStates": [
+      {
+        "activation": "moderate",
+        "bodyRegion": "chest",
+        "noteText": "Chest tightness after talking to Alex.",
+        "observedAt": "2026-04-10T09:00:00Z",
+        "sensation": "chest tightness"
+      },
+      {
+        "activation": "moderate",
+        "bodyRegion": "chest",
+        "noteText": "Chest tightness after contact again.",
+        "observedAt": "2026-04-14T09:00:00Z",
+        "sensation": "chest tightness"
+      },
+      {
+        "activation": "moderate",
+        "bodyRegion": "chest",
+        "noteText": "Same body knot after the same contact.",
+        "observedAt": "2026-04-18T09:00:00Z",
+        "sensation": "chest tightness"
+      }
+    ]
+  },
+  "journeyFamily": "EmbodiedRecurrence",
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "holdout",
+  "tags": [
+    "body_first",
+    "grounding_first",
+    "recurrence"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge"
+  ],
+  "title": "Recurring body tension in the same relational context stays grounded",
+  "turns": [
+    {
+      "expected": {
+        "captureTargets": {
+          "oneOf": [
+            [
+              "body_state"
+            ],
+            [
+              "practice_outcome"
+            ],
+            null
+          ]
+        },
+        "depthLevel": {
+          "oneOf": [
+            "gentle",
+            null
+          ]
+        },
+        "forbiddenEscalations": [
+          "active_imagination",
+          "inner_outer_correspondence",
+          "archetypal_patterning"
+        ],
+        "forbiddenTools": [
+          "circulatio_interpret_material"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "Why do you think this keeps happening?",
+            "this means Alex represents"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "ask_body_checkin",
+            "offer_resource",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "equals": "alive_today"
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_alive_today"
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "explicit_surface_request",
+      "userTurn": "What feels alive around this body pattern right now?"
+    }
+  ]
+}

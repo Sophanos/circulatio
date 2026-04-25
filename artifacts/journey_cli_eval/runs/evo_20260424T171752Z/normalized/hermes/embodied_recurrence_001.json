@@ -1,0 +1,47 @@
+{
+  "adapter": "hermes",
+  "case_id": "embodied_recurrence_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "embodied_recurrence_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [
+          "body_state"
+        ],
+        "confidence": 1.0,
+        "depthLevel": "grounding_only",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that chest tightness after talking to Alex. Is the sensation still there right now?",
+        "performedHostInterpretation": false,
+        "rationale": "Ambient body-state intake with recurrence history and projection-language consent set to withhold. Store-first routing applies. No interpretation or projection is permitted. The correct move is a bounded body check-in at grounding-only depth.",
+        "readActions": [],
+        "selectedMoveKind": "ask_body_checkin",
+        "selectedSurface": "alive_today",
+        "selectedToolSequence": [
+          "circulatio_store_body_state"
+        ],
+        "toolArgsSummary": {
+          "activation": "moderate",
+          "sensation": "chest tightness",
+          "temporalContext": "after talking to Alex"
+        },
+        "turnId": "t1",
+        "writeActions": [
+          {
+            "autonomous": true,
+            "kind": "body_state",
+            "requiresApproval": false,
+            "tool": "circulatio_store_body_state"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\n  \"caseId\": \"embodied_recurrence_001\",\n  \"turnResults\": [\n    {\n      \"turnId\": \"t1\",\n      \"selectedToolSequence\": [\n        \"circulatio_store_body_state\"\n      ],\n      \"toolArgsSummary\": {\n        \"sensation\": \"chest tightness\",\n        \"activation\": \"moderate\",\n        \"temporalContext\": \"after talking to Alex\"\n      },\n      \"selectedSurface\": \"alive_today\",\n      \"selectedMoveKind\": \"ask_body_checkin\",\n      \"depthLevel\": \"grounding_only\",\n      \"captureTargets\": [\n        \"body_state\"\n      ],\n      \"readActions\": [],\n      \"writeActions\": [\n        {\n          \"kind\": \"body_state\",\n          \"tool\": \"circulatio_store_body_state\",\n          \"requiresApproval\": false,\n          \"autonomous\": true\n        }\n      ],\n      \"askedClarification\": false,\n      \"performedHostInterpretation\": false,\n      \"forbiddenEscalationsPresent\": [],\n      \"hostReply\": \"I held that chest tightness after talking to Alex. Is the sensation still there right now?\",\n      \"confidence\": 1.0,\n      \"rationale\": \"Ambient body-state intake with recurrence history and projection-language consent set to withhold. Store-first routing applies. No interpretation or projection is permitted. The correct move is a bounded body check-in at grounding-only depth.\"\n    }\n  ],\n  \"globalNotes\": []\n}\n",
+  "warnings": []
+}

@@ -1,0 +1,84 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "write_budget",
+    "no_host_interpretation"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": false
+  },
+  "caseId": "feedback_correction_001",
+  "caseKind": "feedback_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "materials": [
+      {
+        "id": "run_recent",
+        "kind": "interpretation_run"
+      }
+    ]
+  },
+  "journeyFamily": "ThoughtLoopTypology",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "execution_tool_choice.jsonl",
+      "tool_description_routing.jsonl"
+    ],
+    "targetKinds": [
+      "tool_descriptions"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "dev",
+  "tags": [
+    "feedback_route",
+    "verbatim_feedback"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "hermes_bridge",
+    "method_eval"
+  ],
+  "title": "Interpretation feedback routes to feedback storage, not fresh reflection",
+  "turns": [
+    {
+      "expected": {
+        "allowedWrites": [
+          {
+            "kind": "feedback",
+            "source": "explicit_feedback",
+            "tool": "circulatio_record_interpretation_feedback"
+          }
+        ],
+        "forbiddenTools": [
+          "circulatio_store_reflection"
+        ],
+        "replyStyle": {
+          "maxSentences": 2
+        },
+        "selectedSurface": {
+          "oneOf": [
+            "method_state_response",
+            "none",
+            null
+          ]
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_record_interpretation_feedback"
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "explicit_feedback",
+      "userTurn": "That interpretation missed me. Please record that feedback and keep the note verbatim."
+    }
+  ]
+}

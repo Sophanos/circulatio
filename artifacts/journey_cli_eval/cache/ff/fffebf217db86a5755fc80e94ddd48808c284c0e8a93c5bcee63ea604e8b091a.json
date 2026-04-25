@@ -1,0 +1,96 @@
+{
+  "cacheKey": "fffebf217db86a5755fc80e94ddd48808c284c0e8a93c5bcee63ea604e8b091a",
+  "normalized": {
+    "adapter": "fake",
+    "case_id": "journey_page_read_only_001",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "journey_page_read_only_001",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [],
+          "confidence": 0.9,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I held that and can stay with the next small step.",
+          "performedHostInterpretation": false,
+          "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+          "readActions": [
+            "circulatio_journey_page"
+          ],
+          "selectedMoveKind": "return_to_journey",
+          "selectedSurface": "journey_page",
+          "selectedToolSequence": [
+            "circulatio_journey_page"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": []
+        }
+      ]
+    },
+    "raw_text": "{\"caseId\": \"journey_page_read_only_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_journey_page\"], \"selectedSurface\": \"journey_page\", \"selectedMoveKind\": \"return_to_journey\", \"depthLevel\": \"gentle\", \"captureTargets\": [], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "fake",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "journey_page_read_only_001",
+    "command_display": [
+      "<fake>"
+    ],
+    "command_hash": "151569dec192aaefa0ac7d54b46a66fa0c551509fa664d7471290aa837582f1a",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260423T182902Z/fake/journey_page_read_only_001",
+    "duration_ms": 3,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-23T18:29:02.498032+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T182902Z/raw/fake/journey_page_read_only_001.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T182902Z/raw/fake/journey_page_read_only_001.stdout",
+    "stdout_sha256": "9e5ded28ea3a655325c283ca7c6011daff1a6b662ac9a25b6bc309c5f0b85c22",
+    "stdout_text": "{\"caseId\": \"journey_page_read_only_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_journey_page\"], \"selectedSurface\": \"journey_page\", \"selectedMoveKind\": \"return_to_journey\", \"depthLevel\": \"gentle\", \"captureTargets\": [], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+    "timed_out": false,
+    "version": "built-in",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "fake",
+    "case_id": "journey_page_read_only_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 10,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 10,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_journey_page"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "b63377e4-f8ce-4878-a6a8-b5c690d8649a"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"caseId\": \"journey_page_read_only_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_journey_page\"], \"selectedSurface\": \"journey_page\", \"selectedMoveKind\": \"return_to_journey\", \"depthLevel\": \"gentle\", \"captureTargets\": [], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}"
+}

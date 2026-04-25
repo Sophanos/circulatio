@@ -1,0 +1,13 @@
+{
+  "hasRegression": true,
+  "regressions": [
+    {
+      "adapter": "fake",
+      "baselinePassed": true,
+      "baselineScore": 13,
+      "caseId": "embodied_recurrence_001",
+      "currentPassed": false,
+      "currentScore": 0
+    }
+  ]
+}

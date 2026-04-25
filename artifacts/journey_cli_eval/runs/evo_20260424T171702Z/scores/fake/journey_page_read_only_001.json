@@ -1,0 +1,30 @@
+{
+  "adapter": "fake",
+  "case_id": "journey_page_read_only_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 10,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 10,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "fake",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_journey_page"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "c2e4b9f0-5669-4d8e-a699-bd4b63b562db"
+  ]
+}

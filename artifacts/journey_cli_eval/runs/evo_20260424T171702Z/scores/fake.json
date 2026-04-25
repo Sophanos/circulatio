@@ -1,0 +1,363 @@
+[
+  {
+    "adapter": "fake",
+    "case_id": "embodied_recurrence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 13,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 13,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "2ed74879-ef0e-4bda-8de2-6397e2a0fc63"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "symbol_body_pressure_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 11,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 11,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_dream",
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "dfc063cf-d9a9-4888-8a48-87f7a9b541a6"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "thought_loop_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "74000d6c-7356-464f-866a-67cc770f1dd2"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "relational_scene_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_relational_scene"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "a1218264-a325-45da-86be-44ec4a447c4c"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "practice_reentry_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_alive_today"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "5028ded1-06d4-47e5-86f1-efd55ae92ad5"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "practice_reentry_002",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 9,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 9,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_generate_practice_recommendation"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "30c41545-8771-44bc-8730-cb01d3680eb4"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "practice_reentry_003",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_method_state_respond"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "4c5b9a58-aa0d-4634-bc61-aeff338ca704"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "embodied_recurrence_003",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 13,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 13,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "fca3ec27-e3b4-429c-b49a-40c426a8f0d2"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "journey_page_read_only_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 10,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 10,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_journey_page"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "c2e4b9f0-5669-4d8e-a699-bd4b63b562db"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "goal_tension_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_reflection"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "bae69916-516d-42a5-bdf2-3dda85562e27"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "feedback_correction_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 9,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 9,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_record_interpretation_feedback"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "eb7613ef-44d9-402f-ac75-aae8def9ba00"
+    ]
+  },
+  {
+    "adapter": "fake",
+    "case_id": "overthinking_relational_convergence_001",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 12,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 12,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_store_body_state"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "dev",
+    "trace_ids": [
+      "2cb86aed-a0df-44c2-af0c-e545d27b0960"
+    ]
+  }
+]

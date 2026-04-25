@@ -1,0 +1,113 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "no_host_interpretation",
+    "consent_gate",
+    "capture_target",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": false
+  },
+  "caseId": "relational_scene_001",
+  "caseKind": "single_turn_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "consentPreferences": [
+      {
+        "scope": "projection_language",
+        "status": "ask"
+      }
+    ]
+  },
+  "journeyFamily": "RelationalSceneRecurrence",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "execution_skill_routing.jsonl"
+    ],
+    "targetKinds": [
+      "skill"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "dev",
+  "tags": [
+    "scene_first",
+    "consent_boundary"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge",
+    "method_eval"
+  ],
+  "title": "Repeated shrinking scene stays scene-first",
+  "turns": [
+    {
+      "expected": {
+        "captureTargets": {
+          "oneOf": [
+            [
+              "relational_scene"
+            ],
+            [
+              "reflection"
+            ],
+            null
+          ]
+        },
+        "depthLevel": {
+          "oneOf": [
+            "gentle",
+            null
+          ]
+        },
+        "forbiddenEscalations": [
+          "projection_language",
+          "diagnostic_claim"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "you are projecting",
+            "this person symbolizes"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "ask_relational_scene",
+            "hold_silence",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "oneOf": [
+            "alive_today",
+            "none",
+            null
+          ]
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "oneOf": [
+            [
+              "circulatio_record_relational_scene"
+            ],
+            [
+              "circulatio_store_reflection"
+            ]
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "ambient_intake",
+      "userTurn": "It happened again. I went quiet when someone got loud. Different person this time."
+    }
+  ]
+}

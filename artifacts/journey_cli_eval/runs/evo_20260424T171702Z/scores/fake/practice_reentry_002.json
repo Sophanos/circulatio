@@ -1,0 +1,30 @@
+{
+  "adapter": "fake",
+  "case_id": "practice_reentry_002",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 9,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 9,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "fake",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_generate_practice_recommendation"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "30c41545-8771-44bc-8730-cb01d3680eb4"
+  ]
+}

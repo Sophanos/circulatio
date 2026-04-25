@@ -1,0 +1,128 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "no_host_interpretation",
+    "grounding_gate",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": false
+  },
+  "caseId": "overthinking_relational_convergence_001",
+  "caseKind": "single_turn_route",
+  "gateType": "deterministic",
+  "historySeed": {
+    "adaptationProfile": {
+      "typologyConfidence": "low"
+    },
+    "bodyStates": [
+      {
+        "sensation": "chest tightness"
+      }
+    ],
+    "goalTensions": [
+      {
+        "tensionSummary": "clarity and contact"
+      }
+    ],
+    "relationalScenes": [
+      {
+        "summary": "post-conflict collapse"
+      }
+    ]
+  },
+  "journeyFamily": "CrossFamilyUmbrella",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "typology_restraint.jsonl",
+      "grounding_pacing.jsonl",
+      "execution_skill_routing.jsonl"
+    ],
+    "targetKinds": [
+      "prompt_fragments",
+      "skill"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "dev",
+  "tags": [
+    "cross_signal_priority",
+    "body_first"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge",
+    "method_eval"
+  ],
+  "title": "Body pacing outranks typology language when several signals converge",
+  "turns": [
+    {
+      "expected": {
+        "captureTargets": {
+          "oneOf": [
+            [
+              "body_state"
+            ],
+            [
+              "reflection"
+            ],
+            null
+          ]
+        },
+        "depthLevel": {
+          "oneOf": [
+            "grounding_only",
+            "gentle",
+            null
+          ]
+        },
+        "forbiddenEscalations": [
+          "projection_language",
+          "archetypal_patterning"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "You are a thinking type",
+            "you are projecting"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "ask_body_checkin",
+            "offer_resource",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "oneOf": [
+            "alive_today",
+            "none",
+            null
+          ]
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "oneOf": [
+            [
+              "circulatio_store_body_state"
+            ],
+            [
+              "circulatio_store_reflection"
+            ]
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "ambient_intake",
+      "userTurn": "I'm doing it again. My chest is tight and I'm already analyzing what I did wrong."
+    }
+  ]
+}

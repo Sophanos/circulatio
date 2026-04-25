@@ -1,0 +1,98 @@
+{
+  "cacheKey": "9567bda64faa6f34050c290a9e090c9bf26c6385025e5c81eee2e0a24597af34",
+  "normalized": {
+    "adapter": "fake",
+    "case_id": "embodied_recurrence_002",
+    "parse_status": "parsed",
+    "payload": {
+      "caseId": "embodied_recurrence_002",
+      "globalNotes": [],
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnResults": [
+        {
+          "askedClarification": false,
+          "captureTargets": [
+            "body_state"
+          ],
+          "confidence": 0.9,
+          "depthLevel": "gentle",
+          "forbiddenEscalationsPresent": [],
+          "hostReply": "I held that and can stay with the next small step.",
+          "performedHostInterpretation": false,
+          "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+          "readActions": [
+            "circulatio_alive_today"
+          ],
+          "selectedMoveKind": "ask_body_checkin",
+          "selectedSurface": "alive_today",
+          "selectedToolSequence": [
+            "circulatio_alive_today"
+          ],
+          "toolArgsSummary": {},
+          "turnId": "t1",
+          "writeActions": []
+        }
+      ]
+    },
+    "raw_text": "{\"caseId\": \"embodied_recurrence_002\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_alive_today\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_body_checkin\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"body_state\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+    "warnings": []
+  },
+  "rawRun": {
+    "adapter": "fake",
+    "adapter_status": "ok",
+    "attempt": 1,
+    "cache_hit": false,
+    "case_id": "embodied_recurrence_002",
+    "command_display": [
+      "<fake>"
+    ],
+    "command_hash": "151569dec192aaefa0ac7d54b46a66fa0c551509fa664d7471290aa837582f1a",
+    "cwd": "/var/folders/lg/m82vn3t17x71qbntqmf5f8400000gn/T/circulatio-journey-cli-evo_20260423T182902Z/fake/embodied_recurrence_002",
+    "duration_ms": 0,
+    "error": null,
+    "exit_code": 0,
+    "started_at": "2026-04-23T18:29:02.431249+00:00",
+    "stderr_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T182902Z/raw/fake/embodied_recurrence_002.stderr",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_text": "",
+    "stdout_path": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260423T182902Z/raw/fake/embodied_recurrence_002.stdout",
+    "stdout_sha256": "17e1ce19409cf095de6fa0c151bd7dd793fa751fa4ec7446e19d1f6af174aade",
+    "stdout_text": "{\"caseId\": \"embodied_recurrence_002\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_alive_today\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_body_checkin\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"body_state\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+    "timed_out": false,
+    "version": "built-in",
+    "workspace_diff": []
+  },
+  "score": {
+    "adapter": "fake",
+    "case_id": "embodied_recurrence_002",
+    "dataset": "baseline.jsonl",
+    "findings": [],
+    "gate_type": "deterministic",
+    "max_score": 13,
+    "passed": true,
+    "result_kind": "journey_cli",
+    "score": 13,
+    "severity": "blocking",
+    "signals": {
+      "adapter": "fake",
+      "normalizationWarnings": [],
+      "parseStatus": "parsed",
+      "turnSignals": [
+        {
+          "findingsDelta": 0,
+          "selectedTools": [
+            "circulatio_alive_today"
+          ],
+          "turnId": "t1"
+        }
+      ]
+    },
+    "split": "holdout",
+    "trace_ids": [
+      "0a44c964-986f-4e3d-ad67-f93021e73c9a"
+    ]
+  },
+  "stderrText": "",
+  "stdoutText": "{\"caseId\": \"embodied_recurrence_002\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_alive_today\"], \"selectedSurface\": \"alive_today\", \"selectedMoveKind\": \"ask_body_checkin\", \"depthLevel\": \"gentle\", \"captureTargets\": [\"body_state\"], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}"
+}

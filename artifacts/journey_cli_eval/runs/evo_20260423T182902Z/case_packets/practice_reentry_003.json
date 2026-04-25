@@ -1,0 +1,101 @@
+{
+  "_dataset": "baseline.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/baseline.jsonl",
+  "assertionKinds": [
+    "route",
+    "write_budget",
+    "capture_target",
+    "reply_style"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "readMostly": false
+  },
+  "caseId": "practice_reentry_003",
+  "caseKind": "anchored_followup",
+  "gateType": "deterministic",
+  "historySeed": {
+    "practiceSessions": [
+      {
+        "practiceType": "body_scan_5",
+        "status": "completed"
+      }
+    ]
+  },
+  "journeyFamily": "PracticeReentry",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "method_state_connector.jsonl"
+    ],
+    "targetKinds": [
+      "tool_descriptions"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "dev",
+  "tags": [
+    "anchored_followup",
+    "practice_followup"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge"
+  ],
+  "title": "Practice follow-up captures the outcome before a new invitation",
+  "turns": [
+    {
+      "expected": {
+        "allowedWrites": [
+          {
+            "kind": "practice_response",
+            "source": "anchored_method_state_response",
+            "tool": "circulatio_method_state_respond"
+          }
+        ],
+        "captureTargets": {
+          "contains": [
+            "practice_outcome"
+          ]
+        },
+        "depthLevel": {
+          "oneOf": [
+            "gentle",
+            null
+          ]
+        },
+        "forbiddenTools": [
+          "circulatio_interpret_material"
+        ],
+        "replyStyle": {
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "oneOf": [
+            "ask_practice_followup",
+            null
+          ]
+        },
+        "selectedSurface": {
+          "oneOf": [
+            "practice_followup",
+            "method_state_response",
+            null
+          ]
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_method_state_respond"
+          ]
+        }
+      },
+      "turnId": "t1",
+      "turnKind": "anchored_method_state_response",
+      "userTurn": "It softened a bit, but part of me resisted staying there."
+    }
+  ]
+}

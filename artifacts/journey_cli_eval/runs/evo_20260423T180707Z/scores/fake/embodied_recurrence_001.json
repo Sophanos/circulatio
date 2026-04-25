@@ -1,0 +1,30 @@
+{
+  "adapter": "fake",
+  "case_id": "embodied_recurrence_001",
+  "dataset": "baseline.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 13,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 13,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "fake",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_store_body_state"
+        ],
+        "turnId": "t1"
+      }
+    ]
+  },
+  "split": "dev",
+  "trace_ids": [
+    "75de5ea2-54a2-414b-8bab-7115de38ba2a"
+  ]
+}

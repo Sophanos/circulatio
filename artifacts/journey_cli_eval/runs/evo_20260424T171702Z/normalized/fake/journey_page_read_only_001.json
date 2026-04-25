@@ -1,0 +1,36 @@
+{
+  "adapter": "fake",
+  "case_id": "journey_page_read_only_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "journey_page_read_only_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 0.9,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [
+          "circulatio_journey_page"
+        ],
+        "selectedMoveKind": "return_to_journey",
+        "selectedSurface": "journey_page",
+        "selectedToolSequence": [
+          "circulatio_journey_page"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "t1",
+        "writeActions": []
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"journey_page_read_only_001\", \"turnResults\": [{\"turnId\": \"t1\", \"selectedToolSequence\": [\"circulatio_journey_page\"], \"selectedSurface\": \"journey_page\", \"selectedMoveKind\": \"return_to_journey\", \"depthLevel\": \"gentle\", \"captureTargets\": [], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}
