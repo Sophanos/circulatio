@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import os
 import sys
@@ -407,6 +408,29 @@ class HermesBridgePluginTests(unittest.TestCase):
                         self.assertIn("ritual_handoff_open_failed", response["result"]["warnings"])
 
         asyncio.run(run())
+
+    def test_ritual_handoff_import_succeeds_without_repo_root_on_sys_path(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        original_sys_path = list(sys.path)
+        removed_modules: dict[str, object] = {}
+        for name in list(sys.modules):
+            if name == "circulatio_hermes_plugin.ritual_handoff" or name.startswith(
+                "tools.ritual_renderer"
+            ):
+                removed_modules[name] = sys.modules.pop(name)
+        try:
+            sys.path[:] = [
+                entry
+                for entry in original_sys_path
+                if Path(entry or ".").resolve() != repo_root
+            ]
+            module = importlib.import_module("circulatio_hermes_plugin.ritual_handoff")
+            self.assertTrue(hasattr(module, "HermesRitualArtifactHandoff"))
+        finally:
+            sys.path[:] = original_sys_path
+            sys.modules.pop("circulatio_hermes_plugin.ritual_handoff", None)
+            for name, module in removed_modules.items():
+                sys.modules[name] = module
 
     def test_record_ritual_completion_tool_dispatches_without_interpretation(self) -> None:
         async def run() -> None:

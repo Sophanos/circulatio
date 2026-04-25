@@ -6,10 +6,13 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SRC = ROOT / "src"
+for candidate in (SRC, ROOT):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.insert(0, candidate_str)
 
-from tools.ritual_renderer.cli import main  # noqa: E402
+from circulatio.ritual_renderer.cli import main  # noqa: E402
 
 if __name__ == "__main__":
     raise SystemExit(main())

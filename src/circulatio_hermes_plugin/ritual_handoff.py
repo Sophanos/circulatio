@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import cast
 
 from circulatio.hermes.agent_bridge_contracts import BridgeResponseEnvelope
-from tools.ritual_renderer.renderer import (
+from circulatio.ritual_renderer.renderer import (
     MANIFEST_SCHEMA_VERSION,
     RENDERER_VERSION,
     artifact_id_for_plan,

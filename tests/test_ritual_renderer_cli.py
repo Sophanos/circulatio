@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.ritual_renderer.renderer import artifact_id_for_plan
+from circulatio.ritual_renderer.renderer import artifact_id_for_plan
 
 
 class RitualRendererCliTests(unittest.TestCase):
