@@ -47,7 +47,9 @@ class SelfEvolutionArtifactsTests(unittest.TestCase):
         self.assertIn(f"candidate/{target.baseline_relative_path}", diff_text)
         self.assertIn(target.baseline_relative_path, base_hashes)
         self.assertIn(target.baseline_relative_path, staged_hashes)
-        self.assertNotEqual(base_hashes[target.baseline_relative_path], staged_hashes[target.baseline_relative_path])
+        self.assertNotEqual(
+            base_hashes[target.baseline_relative_path], staged_hashes[target.baseline_relative_path]
+        )
 
 
 if __name__ == "__main__":

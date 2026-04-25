@@ -64,7 +64,9 @@ class JourneyFamiliesBridgeTests(unittest.TestCase):
             after_reviews = await runtime.repository.list_weekly_reviews("hermes:default:local")
 
             self.assertEqual(response["status"], "ok")
-            self.assertEqual(response["result"]["journeyPage"]["practiceContainer"]["kind"], "practice_follow_up")
+            self.assertEqual(
+                response["result"]["journeyPage"]["practiceContainer"]["kind"], "practice_follow_up"
+            )
             self.assertEqual(before_reviews, after_reviews)
 
         asyncio.run(run())

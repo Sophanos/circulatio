@@ -2629,7 +2629,9 @@ class CirculatioServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
-    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(self) -> None:
+    def test_generate_discovery_adds_typology_function_dynamics_section_when_requested(
+        self,
+    ) -> None:
         async def run() -> None:
             repository, service, _ = self._service()
             material = await service.store_material(
@@ -2684,7 +2686,9 @@ class CirculatioServiceTests(unittest.TestCase):
                 }
             )
             function_section = next(
-                section for section in discovery["sections"] if section["key"] == "function_dynamics"
+                section
+                for section in discovery["sections"]
+                if section["key"] == "function_dynamics"
             )
             self.assertIn("Foreground", {item["label"] for item in function_section["items"]})
             criteria = {

@@ -851,9 +851,7 @@ class FakeCirculatioLlm:
                             if (
                                 isinstance(payload.get("typologyEvidenceDigest"), dict)
                                 and int(
-                                    payload["typologyEvidenceDigest"].get(
-                                        "evidencedLensCount", 0
-                                    )
+                                    payload["typologyEvidenceDigest"].get("evidencedLensCount", 0)
                                     or 0
                                 )
                                 > 0

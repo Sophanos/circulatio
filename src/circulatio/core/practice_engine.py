@@ -308,9 +308,7 @@ class PracticeEngine:
         practice_type = str(result.get("type") or "journaling")
         current_modality = str(result.get("modality") or "").strip().lower()
         selected_loop_kind = (
-            str(selected_loop.get("kind") or "").strip()
-            if isinstance(selected_loop, dict)
-            else ""
+            str(selected_loop.get("kind") or "").strip() if isinstance(selected_loop, dict) else ""
         )
         selected_move_kind = str(selected_move.get("kind") or "").strip()
         if str(selected_move.get("loopKey") or "").strip():
@@ -321,9 +319,7 @@ class PracticeEngine:
             result["coachMoveKind"] = cast(CoachMoveKind, selected_move_kind)
         resource_invitation_value = selected_move.get("resourceInvitation")
         resource_invitation = (
-            dict(resource_invitation_value)
-            if isinstance(resource_invitation_value, dict)
-            else {}
+            dict(resource_invitation_value) if isinstance(resource_invitation_value, dict) else {}
         )
         resource_invitation_id = str(resource_invitation.get("id") or "").strip()
         if resource_invitation_id:
@@ -341,9 +337,7 @@ class PracticeEngine:
         if not related_resource_ids and resource_invitation:
             resource = resource_invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip()
-                if isinstance(resource, dict)
-                else ""
+                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
             )
             if resource_id:
                 related_resource_ids = [resource_id]

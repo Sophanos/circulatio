@@ -20,13 +20,7 @@ from tools.self_evolution.traces import JsonlTraceSink
 
 class SelfEvolutionExecutionTests(unittest.TestCase):
     def _dataset_path(self, name: str) -> Path:
-        return (
-            Path(__file__).resolve().parents[1]
-            / "tests"
-            / "evals"
-            / "circulatio_method"
-            / name
-        )
+        return Path(__file__).resolve().parents[1] / "tests" / "evals" / "circulatio_method" / name
 
     def test_prompt_execution_harness_records_sanitized_trace(self) -> None:
         cases = load_case_set([self._dataset_path("execution_prompt_behavior.jsonl")])
@@ -57,8 +51,8 @@ class SelfEvolutionExecutionTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].passed)
         self.assertIn("execution_interpretation_next_question_001", outputs)
-        self.assertIn("\"outputSummary\"", trace_text)
-        self.assertIn("\"prompt_fragments_cand_0001\"", trace_text)
+        self.assertIn('"outputSummary"', trace_text)
+        self.assertIn('"prompt_fragments_cand_0001"', trace_text)
 
     def test_skill_routing_harness_scores_store_first_case(self) -> None:
         cases = load_case_set([self._dataset_path("execution_skill_routing.jsonl")])

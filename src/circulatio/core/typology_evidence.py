@@ -182,9 +182,7 @@ def overlay_typology_method_state(
         "signals_only": "signals_only",
         "insufficient_evidence": "insufficient_evidence",
     }
-    mapped_status: Literal[
-        "insufficient_evidence", "signals_only", "candidate_available"
-    ] = cast(
+    mapped_status: Literal["insufficient_evidence", "signals_only", "candidate_available"] = cast(
         Literal["insufficient_evidence", "signals_only", "candidate_available"],
         status_map[str(digest["status"])],
     )
@@ -300,8 +298,7 @@ def build_typology_packet_fallback(
             {
                 "label": "Foreground",
                 "summary": (
-                    "Foreground pressure currently clusters around "
-                    f"{', '.join(foreground)}."
+                    f"Foreground pressure currently clusters around {', '.join(foreground)}."
                 ),
                 "evidenceIds": list(digest["foreground"].get("evidenceIds", [])),
                 "relatedRecordRefs": related_record_refs,
@@ -312,8 +309,7 @@ def build_typology_packet_fallback(
             {
                 "label": "Compensation",
                 "summary": (
-                    "Compensatory pressure currently clusters around "
-                    f"{', '.join(compensation)}."
+                    f"Compensatory pressure currently clusters around {', '.join(compensation)}."
                 ),
                 "evidenceIds": list(digest["compensation"].get("evidenceIds", [])),
                 "relatedRecordRefs": related_record_refs,

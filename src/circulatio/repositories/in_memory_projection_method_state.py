@@ -1224,9 +1224,7 @@ def _derive_typology_method_state_summary(
         ("background", background_functions),
     ):
         if len(functions) > 1:
-            ambiguity_notes.append(
-                f"Multiple {label} functions remain active in this window."
-            )
+            ambiguity_notes.append(f"Multiple {label} functions remain active in this window.")
     active_pairs = {
         (str(lens.get("role") or "").strip(), str(lens.get("function") or "").strip())
         for lens in active_lenses

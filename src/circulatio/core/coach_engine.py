@@ -167,9 +167,7 @@ class CoachEngine:
                 if str(item).strip()
             ],
             "reasons": [
-                str(item).strip()
-                for item in runtime_policy.get("reasons", [])
-                if str(item).strip()
+                str(item).strip() for item in runtime_policy.get("reasons", []) if str(item).strip()
             ],
             "updatedAt": updated_at,
         }
@@ -256,7 +254,8 @@ class CoachEngine:
             "doNotAskReasons": [
                 *(
                     ["coach_state_no_eligible_move"]
-                    if selected_move is None and not any(
+                    if selected_move is None
+                    and not any(
                         str(loop.get("status") or "").strip() == "eligible" for loop in active_loops
                     )
                     else []
@@ -326,16 +325,8 @@ class CoachEngine:
     ) -> CoachMoveContract | None:
         loops = active_loops
         if loops is None:
-            loops = (
-                coach_state.get("activeLoops", [])
-                if isinstance(coach_state, dict)
-                else []
-            )
-        eligible = [
-            loop
-            for loop in loops
-            if str(loop.get("status") or "").strip() == "eligible"
-        ]
+            loops = coach_state.get("activeLoops", []) if isinstance(coach_state, dict) else []
+        eligible = [loop for loop in loops if str(loop.get("status") or "").strip() == "eligible"]
         if not eligible:
             return None
         eligible.sort(key=lambda item: self._loop_sort_key(item, surface=surface))
@@ -676,9 +667,7 @@ class CoachEngine:
         practice = self._select_recent_practice(recent_practices=recent_practices, now=now)
         recent_outcome_trend = str(practice_loop.get("recentOutcomeTrend") or "").strip()
         skipped_count = sum(
-            1
-            for item in recent_practices[:3]
-            if str(item.get("status") or "").strip() == "skipped"
+            1 for item in recent_practices[:3] if str(item.get("status") or "").strip() == "skipped"
         )
         if practice is None and recent_outcome_trend not in {"activating", "mixed", "settling"}:
             return None, None
@@ -797,9 +786,7 @@ class CoachEngine:
     ) -> tuple[CoachLoopSummary | None, CoachWithheldMoveSummary | None]:
         del recent_practices, dashboard
         active_journeys = [
-            item
-            for item in journeys
-            if str(item.get("status") or "").strip() == "active"
+            item for item in journeys if str(item.get("status") or "").strip() == "active"
         ] or [
             item
             for item in self._dict_list(method_context.get("activeJourneys"))
@@ -876,9 +863,7 @@ class CoachEngine:
         grounding_recommendation = str(grounding.get("recommendation") or "").strip()
         recent_outcome_trend = str(practice_loop.get("recentOutcomeTrend") or "").strip()
         skipped_count = sum(
-            1
-            for item in recent_practices[:3]
-            if str(item.get("status") or "").strip() == "skipped"
+            1 for item in recent_practices[:3] if str(item.get("status") or "").strip() == "skipped"
         )
         if (
             depth_level != "grounding_only"
@@ -916,8 +901,7 @@ class CoachEngine:
             move_kind="offer_resource",
             title="Resource support",
             summary=(
-                "A gentler resource fits the current pacing better "
-                "than a stronger symbolic move."
+                "A gentler resource fits the current pacing better than a stronger symbolic move."
             ),
             prompt_frame={
                 "stance": "grounding_first",
@@ -969,16 +953,8 @@ class CoachEngine:
             consent_scopes=["somatic_correlation"] if source == "body_note" else [],
             reasons=self._dedupe_strings(
                 [
-                    *(
-                        ["runtime_policy_grounding_only"]
-                        if depth_level == "grounding_only"
-                        else []
-                    ),
-                    *(
-                        ["practice_repeated_skips"]
-                        if skipped_count >= 2
-                        else []
-                    ),
+                    *(["runtime_policy_grounding_only"] if depth_level == "grounding_only" else []),
+                    *(["practice_repeated_skips"] if skipped_count >= 2 else []),
                     *(
                         [f"practice_loop_recent_outcome_trend_{recent_outcome_trend}"]
                         if recent_outcome_trend
@@ -1067,14 +1043,13 @@ class CoachEngine:
             loop["status"] = status
         if cooldown_until:
             loop["cooldownUntil"] = cooldown_until
-        if (
-            str(runtime_policy.get("depthLevel") or "").strip() == "grounding_only"
-            and move_kind in {
-                "ask_goal_tension",
-                "ask_relational_scene",
-                "return_to_journey",
-            }
-        ):
+        if str(
+            runtime_policy.get("depthLevel") or ""
+        ).strip() == "grounding_only" and move_kind in {
+            "ask_goal_tension",
+            "ask_relational_scene",
+            "return_to_journey",
+        }:
             loop["status"] = "track_only"
         if not isinstance(method_context.get("methodState"), dict):
             loop["status"] = "track_only"
@@ -1124,9 +1099,7 @@ class CoachEngine:
         if isinstance(invitation, dict):
             resource = invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip()
-                if isinstance(resource, dict)
-                else ""
+                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
             )
             if resource_id:
                 refs.append({"recordType": "EmbodiedResource", "recordId": resource_id})
@@ -1169,9 +1142,7 @@ class CoachEngine:
         if not related_resource_ids and isinstance(invitation, dict):
             resource = invitation.get("resource")
             resource_id = (
-                str(resource.get("id") or "").strip()
-                if isinstance(resource, dict)
-                else ""
+                str(resource.get("id") or "").strip() if isinstance(resource, dict) else ""
             )
             if resource_id:
                 related_resource_ids = [resource_id]

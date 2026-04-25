@@ -79,9 +79,7 @@ class ResourceEngine:
     ) -> bool:
         del consent_preferences
         blocked_moves = {
-            str(item).strip()
-            for item in loop.get("blockedMoves", [])
-            if str(item).strip()
+            str(item).strip() for item in loop.get("blockedMoves", []) if str(item).strip()
         }
         depth_level = str(runtime_policy.get("depthLevel") or "").strip()
         modality = str(resource.get("modality") or "").strip()
