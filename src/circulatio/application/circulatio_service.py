@@ -70,7 +70,7 @@ from ..domain.proactive import ProactiveBriefRecord, ProactiveBriefType
 from ..domain.readiness import ConsentPreferenceRecord
 from ..domain.records import DeletionMode
 from ..domain.reviews import DashboardSummary, WeeklyReviewRecord
-from ..domain.soma import BodyStateRecord
+from ..domain.soma import BodyActivation, BodyStateRecord
 from ..domain.symbols import SymbolHistoryEntry, SymbolRecord
 from ..domain.types import (
     AdaptationPreferenceScope,
@@ -4086,6 +4086,16 @@ class CirculatioService:
                 raise ValidationError("durationMs cannot be negative.")
         source_refs = self._normalize_completion_source_refs(input_data.get("sourceRefs"))
         metadata = self._normalize_completion_metadata(input_data.get("clientMetadata"))
+        body_state_input = self._normalize_completion_body_state(
+            input_data.get("bodyState"),
+            user_id=input_data["userId"],
+            completed_at=completed_at,
+        )
+        normalized_body_state = (
+            self._completion_body_state_fingerprint_payload(body_state_input)
+            if body_state_input is not None
+            else None
+        )
         practice_feedback = input_data.get("practiceFeedback")
         if isinstance(practice_feedback, dict) and not self._optional_str(
             practice_feedback.get("practiceSessionId")
@@ -4105,6 +4115,7 @@ class CirculatioService:
             "practiceFeedback": deepcopy(practice_feedback)
             if isinstance(practice_feedback, dict)
             else None,
+            "bodyState": normalized_body_state,
             "metadata": metadata,
         }
         fingerprint = self._completion_payload_fingerprint(normalized_payload)
@@ -4135,6 +4146,10 @@ class CirculatioService:
                 }
             )
             reflection_material_id = reflection["id"]
+        body_state_id: Id | None = None
+        if body_state_input is not None:
+            stored_body_state = await self.store_body_state(body_state_input)
+            body_state_id = stored_body_state["bodyState"]["id"]
         practice_feedback_id: Id | None = None
         if isinstance(practice_feedback, dict):
             feedback_value = self._optional_str(practice_feedback.get("feedback")) or "helpful"
@@ -4169,6 +4184,8 @@ class CirculatioService:
             event["reflectionMaterialId"] = reflection_material_id
         if practice_feedback_id:
             event["practiceFeedbackId"] = practice_feedback_id
+        if body_state_id:
+            event["bodyStateId"] = body_state_id
         stored = await self._repository.create_ritual_completion_event(event)
         return {"event": stored, "replayed": False}
 
@@ -9569,6 +9586,45 @@ class CirculatioService:
         return {
             str(key): deepcopy(item) for key, item in value.items() if str(key) not in blocked_keys
         }
+
+    def _normalize_completion_body_state(
+        self,
+        value: object | None,
+        *,
+        user_id: Id,
+        completed_at: str,
+    ) -> CreateBodyStateInput | None:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValidationError("bodyState must be an object when supplied.")
+        sensation = self._optional_str(value.get("sensation"))
+        if not sensation:
+            raise ValidationError("bodyState.sensation is required when bodyState is supplied.")
+        body_state: CreateBodyStateInput = {
+            "userId": user_id,
+            "sensation": sensation,
+            "observedAt": completed_at,
+        }
+        activation = self._optional_str(value.get("activation"))
+        if activation:
+            if activation not in {"low", "moderate", "high", "overwhelming"}:
+                raise ValidationError(
+                    "bodyState.activation must be low, moderate, high, or overwhelming."
+                )
+            body_state["activation"] = cast(BodyActivation, activation)
+        for key in ("bodyRegion", "tone", "temporalContext", "noteText", "privacyClass"):
+            item = self._optional_str(value.get(key))
+            if item:
+                body_state[key] = item  # type: ignore[literal-required]
+        return body_state
+
+    def _completion_body_state_fingerprint_payload(
+        self, value: CreateBodyStateInput
+    ) -> dict[str, object]:
+        payload = dict(value)
+        payload.pop("userId", None)
+        return payload
 
     def _completion_payload_fingerprint(self, payload: dict[str, object]) -> str:
         encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode()

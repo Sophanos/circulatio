@@ -31,6 +31,7 @@ from ..domain.presentation import (
     PresentationRitualPlanResult,
     PresentationSourceRef,
     RequestedRitualSurfaces,
+    RitualCompletionBodyStatePayload,
     RitualCompletionEvent,
     RitualCompletionPolicy,
     RitualIntent,
@@ -978,6 +979,10 @@ class RejectLivingMythReviewProposalsInput(TypedDict, total=False):
     reason: NotRequired[str]
 
 
+class RecordRitualCompletionBodyStateInput(RitualCompletionBodyStatePayload, total=False):
+    pass
+
+
 class RecordRitualCompletionInput(TypedDict, total=False):
     userId: Required[Id]
     artifactId: Required[str]
@@ -991,6 +996,7 @@ class RecordRitualCompletionInput(TypedDict, total=False):
     completedSections: NotRequired[list[str]]
     reflectionText: NotRequired[str]
     practiceFeedback: NotRequired[dict[str, object]]
+    bodyState: NotRequired[RecordRitualCompletionBodyStateInput]
     clientMetadata: NotRequired[dict[str, object]]
 
 

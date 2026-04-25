@@ -296,6 +296,61 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_record_ritual_completion_stores_body_state_idempotently(self) -> None:
+        async def run() -> None:
+            repository, service, _ = self._service()
+            payload = {
+                "userId": "user_1",
+                "artifactId": "artifact_1",
+                "manifestVersion": "hermes_ritual_artifact.v1",
+                "idempotencyKey": "completion_body_1",
+                "completedAt": "2026-04-19T12:00:00Z",
+                "playbackState": "completed",
+                "bodyState": {
+                    "sensation": "tightness",
+                    "bodyRegion": "chest",
+                    "activation": "high",
+                    "tone": "charged",
+                    "temporalContext": "post_ritual_completion",
+                    "noteText": "My chest stayed tight after the closing breath.",
+                    "privacyClass": "private",
+                },
+            }
+
+            first = await service.record_ritual_completion(payload)
+            replay = await service.record_ritual_completion(payload)
+            body_states = await repository.list_body_states("user_1")
+
+            self.assertFalse(first["replayed"])
+            self.assertTrue(replay["replayed"])
+            self.assertEqual(first["event"]["bodyStateId"], body_states[0]["id"])
+            self.assertEqual(replay["event"]["bodyStateId"], first["event"]["bodyStateId"])
+            self.assertEqual(len(body_states), 1)
+            self.assertEqual(body_states[0]["bodyRegion"], "chest")
+            self.assertEqual(body_states[0]["activation"], "high")
+            self.assertEqual(len(await repository.list_materials("user_1")), 1)
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+
+        asyncio.run(run())
+
+    def test_record_ritual_completion_rejects_body_state_without_sensation(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            with self.assertRaises(Exception):
+                await service.record_ritual_completion(
+                    {
+                        "userId": "user_1",
+                        "artifactId": "artifact_1",
+                        "manifestVersion": "hermes_ritual_artifact.v1",
+                        "idempotencyKey": "completion_body_invalid_1",
+                        "completedAt": "2026-04-19T12:00:00Z",
+                        "playbackState": "completed",
+                        "bodyState": {"bodyRegion": "chest"},
+                    }
+                )
+
+        asyncio.run(run())
+
     def test_record_ritual_completion_rejects_idempotency_conflict(self) -> None:
         async def run() -> None:
             _, service, _ = self._service()

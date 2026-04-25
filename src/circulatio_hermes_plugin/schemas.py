@@ -655,6 +655,21 @@ RECORD_RITUAL_COMPLETION_TOOL_SCHEMA = _schema(
         "completedSections": {"type": "array", "items": {"type": "string"}},
         "reflectionText": {"type": "string"},
         "practiceFeedback": {"type": "object"},
+        "bodyState": {
+            "type": "object",
+            "properties": {
+                "sensation": {"type": "string"},
+                "bodyRegion": {"type": "string"},
+                "activation": {
+                    "type": "string",
+                    "enum": ["low", "moderate", "high", "overwhelming"],
+                },
+                "tone": {"type": "string"},
+                "temporalContext": {"type": "string"},
+                "noteText": {"type": "string"},
+                "privacyClass": {"type": "string"},
+            },
+        },
         "clientMetadata": {"type": "object"},
     },
     required=["artifactId", "manifestVersion", "playbackState"],

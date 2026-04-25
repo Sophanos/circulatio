@@ -420,12 +420,21 @@ class HermesBridgePluginTests(unittest.TestCase):
                         "completedAt": "2026-04-19T12:00:00Z",
                         "playbackState": "completed",
                         "reflectionText": "The closing felt steady.",
+                        "bodyState": {
+                            "sensation": "warmth",
+                            "bodyRegion": "chest",
+                            "activation": "moderate",
+                        },
                     },
                     **self._tool_kwargs(call_id="tool_ritual_completion"),
                 )
             )
             self.assertEqual(response["status"], "ok")
             self.assertEqual(response["result"]["completionEvent"]["artifactId"], "artifact_1")
+            self.assertIn("bodyStateId", response["result"]["completionEvent"])
+            self.assertEqual(
+                len(await runtime.repository.list_body_states("hermes:default:local")), 1
+            )
             self.assertEqual(runtime.llm.interpret_calls, [])
 
         asyncio.run(run())

@@ -173,6 +173,16 @@ class RitualCompletionPolicy(TypedDict, total=False):
     returnMode: NotRequired[Literal["hermes_chat", "frontend_callback", "local_completion_file"]]
 
 
+class RitualCompletionBodyStatePayload(TypedDict, total=False):
+    sensation: Required[str]
+    bodyRegion: NotRequired[str]
+    activation: NotRequired[Literal["low", "moderate", "high", "overwhelming"]]
+    tone: NotRequired[str]
+    temporalContext: NotRequired[str]
+    noteText: NotRequired[str]
+    privacyClass: NotRequired[str]
+
+
 class VoiceScriptSegment(TypedDict, total=False):
     id: Required[str]
     role: Required[
@@ -423,6 +433,7 @@ class RitualCompletionEvent(TypedDict, total=False):
     completedSections: Required[list[str]]
     reflectionMaterialId: NotRequired[Id]
     practiceFeedbackId: NotRequired[Id]
+    bodyStateId: NotRequired[Id]
     metadata: Required[dict[str, object]]
     createdAt: Required[ISODateString]
 
@@ -448,6 +459,7 @@ __all__ = [
     "PresentationSourceRole",
     "PresentationSourceType",
     "RequestedRitualSurfaces",
+    "RitualCompletionBodyStatePayload",
     "RitualCompletionEvent",
     "RitualCompletionPlaybackState",
     "RitualCompletionPolicy",
