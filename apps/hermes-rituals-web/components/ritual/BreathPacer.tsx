@@ -18,7 +18,7 @@ type PacerGeometry = {
 }
 
 const CENTER = 160
-const INNER_GUIDE_RADIUS = 58
+const INNER_GUIDE_RADIUS = 48
 const OUTER_GUIDE_RADIUS = 104
 const MIN_STROKE_WIDTH = 18
 const MAX_STROKE_WIDTH = 23
