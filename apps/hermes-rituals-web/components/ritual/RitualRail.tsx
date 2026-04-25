@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { motion, AnimatePresence } from "motion/react"
 
 import { CompactChannelMixer, type ChannelName } from "@/components/ritual/CompactChannelMixer"
@@ -12,7 +12,7 @@ import type {
   RitualSection
 } from "@/lib/artifact-contract"
 
-export type RailTab = "sections" | "transcript" | "channels"
+export type RailTab = "sections" | "transcript" | "channels" | "body"
 
 const TAB_CONTENT = {
   initial: { opacity: 0, y: 8 },
@@ -31,7 +31,8 @@ export function RitualRail({
   onToggleSectionMute,
   onToggleChannelMute,
   onChannelGainChange,
-  onSeek
+  onSeek,
+  bodyPanel
 }: {
   artifact: PresentationArtifact
   currentMs: number
@@ -43,6 +44,7 @@ export function RitualRail({
   onToggleChannelMute?: (name: string, muted: boolean) => void
   onChannelGainChange?: (name: ChannelName, gain: number) => void
   onSeek?: (ms: number) => void
+  bodyPanel?: ReactNode
 }) {
   const [internalTab, setInternalTab] = useState<RailTab>("sections")
   const tab = activeTab ?? internalTab
@@ -60,6 +62,9 @@ export function RitualRail({
         </TabButton>
         <TabButton active={tab === "channels"} onClick={() => setTab("channels")}>
           Channels
+        </TabButton>
+        <TabButton active={tab === "body"} onClick={() => setTab("body")}>
+          Body
         </TabButton>
       </div>
 
@@ -85,13 +90,20 @@ export function RitualRail({
               />
             </motion.div>
           )}
-        {tab === "channels" && (
-          <CompactChannelMixer
-            channels={channels}
-            onToggle={(name, muted) => onToggleChannelMute?.(name, muted)}
-            onGainChange={(name, gain) => onChannelGainChange?.(name, gain)}
-          />
-        )}
+          {tab === "channels" && (
+            <motion.div key="channels" {...TAB_CONTENT}>
+              <CompactChannelMixer
+                channels={channels}
+                onToggle={(name, muted) => onToggleChannelMute?.(name, muted)}
+                onGainChange={(name, gain) => onChannelGainChange?.(name, gain)}
+              />
+            </motion.div>
+          )}
+          {tab === "body" && bodyPanel ? (
+            <motion.div key="body" className="h-full" {...TAB_CONTENT}>
+              {bodyPanel}
+            </motion.div>
+          ) : null}
         </AnimatePresence>
       </div>
     </div>

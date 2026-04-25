@@ -125,6 +125,7 @@ export type PresentationArtifact = {
   durationMs?: number
   completionPrompt?: string
   completionEndpoint?: string
+  captureBodyResponse?: boolean
   threadSummary?: string
   sessionId?: string
   journeyId?: string
@@ -171,6 +172,16 @@ export type RitualCompletionContract = {
   captureReflection: boolean
   capturePracticeFeedback: boolean
   completionIdStrategy: "client_uuid"
+}
+
+export type RitualCompletionBodyStatePayload = {
+  sensation: string
+  bodyRegion?: string
+  activation?: "low" | "moderate" | "high" | "overwhelming"
+  tone?: string
+  temporalContext?: string
+  noteText?: string
+  privacyClass?: string
 }
 
 export type RitualArtifactManifest = {
@@ -379,6 +390,7 @@ export function ritualArtifactFromManifest(
     completionPrompt: manifest.interaction.finishPrompt,
     completionEndpoint:
       manifest.interaction.completion?.endpoint ?? manifest.interaction.completionEndpoint,
+    captureBodyResponse: manifest.interaction.captureBodyResponse,
     audioUrl: manifest.surfaces.audio?.src ?? undefined,
     videoUrl: cinema?.enabled && cinema.src ? cinema.src : undefined,
     stageVideo,

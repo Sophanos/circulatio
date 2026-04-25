@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, forw
 import { Pause, Play } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 
+import { BodyPicker, type BodyStateDraft } from "@/components/ritual/BodyPicker"
 import { BreathStage } from "@/components/ritual/BreathStage"
 import { MeditationStage } from "@/components/ritual/MeditationStage"
 import { CaptionStack } from "@/components/ritual/CaptionStack"
@@ -145,52 +146,23 @@ function MinimalLensPlayAffordance({
   )
 }
 
-function BodyStagePreview() {
-  return (
-    <motion.div
-      key="body-preview"
-      className="relative flex h-full w-full overflow-hidden rounded-3xl bg-white/[0.03]"
-      layout
-      initial={{ opacity: 0, scale: 0.985 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 1.01 }}
-      transition={SPRING}
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.62)_100%)]" />
-      <div className="relative z-10 flex h-full w-full flex-col justify-between p-4 md:p-5">
-        <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
-            Body
-          </span>
-          <span className="text-sm font-medium text-silver-100">Somatic check-in</span>
-          <span className="text-[11px] text-silver-500">Picker planned</span>
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="relative flex size-56 items-center justify-center rounded-full border border-white/10 bg-black/10 md:size-64">
-            <div className="absolute size-36 rounded-full border border-white/15 md:size-40" />
-            <div className="absolute size-16 rounded-full bg-white/[0.04]" />
-            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
-              Body map
-            </span>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  )
-}
 
 function VisualStage({
   artifact,
   currentMs,
   isPlaying,
   stageLens,
-  immersive
+  immersive,
+  bodyDraft,
+  onBodyDraftChange
 }: {
   artifact: PresentationArtifact
   currentMs: number
   isPlaying: boolean
   stageLens: RitualStageLens
   immersive?: boolean
+  bodyDraft: BodyStateDraft
+  onBodyDraftChange: (value: BodyStateDraft) => void
 }) {
   const scenes = artifact.scenes ?? []
   const activeScene = scenes.find(
@@ -249,7 +221,27 @@ function VisualStage({
   }
 
   if (stageLens === "body") {
-    return <BodyStagePreview />
+    return (
+      <motion.div
+        key="body-picker-stage"
+        className="relative h-full w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl"
+        layout
+        initial={{ opacity: 0, scale: 0.985 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 1.01 }}
+        transition={SPRING}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.62)_100%)]" />
+        <div className="relative z-10 h-full overflow-y-auto">
+          <BodyPicker
+            value={bodyDraft}
+            onChange={onBodyDraftChange}
+            variant="stage"
+            completionPrompt={artifact.completionPrompt}
+          />
+        </div>
+      </motion.div>
+    )
   }
 
   if (stageLens === "cinema" && (youtubeEmbedUrl || directVideoSource?.url)) {
@@ -463,6 +455,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   playerMode?: PlayerMode
   immersive?: boolean
   chromeVisible?: boolean
+  bodyDraft: BodyStateDraft
+  onBodyDraftChange: (value: BodyStateDraft) => void
+  onComplete?: () => void
   onTimeUpdate?: (ms: number) => void
   onPlayingChange?: (playing: boolean) => void
 }>(function RitualPlayer({
@@ -472,6 +467,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   playerMode = "full",
   immersive,
   chromeVisible = true,
+  bodyDraft,
+  onBodyDraftChange,
+  onComplete,
   onTimeUpdate,
   onPlayingChange
 }, ref) {
@@ -555,6 +553,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       onPlayingChange?.(false)
       setCurrentTime(0)
       onTimeUpdate?.(0)
+      onComplete?.()
     }
 
     const tick = () => {
@@ -610,7 +609,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("ended", handleEnded)
     }
-  }, [durationSeconds, onPlayingChange, onTimeUpdate])
+  }, [durationSeconds, onComplete, onPlayingChange, onTimeUpdate])
 
   const activeSection = sections.find(
     (s) => currentTime * 1000 >= s.startMs && currentTime * 1000 < s.endMs
@@ -675,6 +674,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
             isPlaying={isPlaying}
             stageLens={stageLens}
             immersive={immersive}
+            bodyDraft={bodyDraft}
+            onBodyDraftChange={onBodyDraftChange}
           />
         </AnimatePresence>
       </motion.div>

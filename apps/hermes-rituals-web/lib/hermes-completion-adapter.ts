@@ -1,4 +1,7 @@
-import type { RitualArtifactSourceRef } from "@/lib/artifact-contract"
+import type {
+  RitualArtifactSourceRef,
+  RitualCompletionBodyStatePayload
+} from "@/lib/artifact-contract"
 
 export type HermesCompletionPayload = {
   artifactId: string
@@ -12,6 +15,7 @@ export type HermesCompletionPayload = {
   completedSections: string[]
   reflectionText?: string
   practiceFeedback?: Record<string, unknown>
+  bodyState?: RitualCompletionBodyStatePayload
   clientMetadata?: Record<string, unknown>
 }
 
