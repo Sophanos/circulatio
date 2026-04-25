@@ -138,7 +138,8 @@ def build_prompt_package(
         "- Read-mostly surfaces must not invent writes.",
         "- Ritual planning is read-only and may return an artifact URL for the host/frontend.",
         "- Frontend artifact completion routes to ritual completion only, without interpretation.",
-        "- Scheduled cron may create ritual_invitation rhythmic briefs only; no scheduled ritual planning or rendering.",
+        "- Scheduled cron may create ritual_invitation rhythmic briefs only; "
+        "no scheduled ritual planning or rendering.",
         "",
         "Available tools:",
         tool_schemas_json,

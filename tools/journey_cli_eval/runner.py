@@ -44,7 +44,9 @@ def _artifact_hashes() -> dict[str, str]:
             REPO_ROOT / "src" / "circulatio_hermes_plugin" / "skills" / "circulation" / "SKILL.md"
         ),
         "schemas.py": sha256_file(REPO_ROOT / "src" / "circulatio_hermes_plugin" / "schemas.py"),
-        "JOURNEY_FAMILIES.md": sha256_file(REPO_ROOT / "tests" / "evals" / "journey_cli" / "JOURNEY_FAMILIES.md"),
+        "JOURNEY_FAMILIES.md": sha256_file(
+            REPO_ROOT / "tests" / "evals" / "journey_cli" / "JOURNEY_FAMILIES.md"
+        ),
         "prompt_fragments.py": sha256_file(
             REPO_ROOT / "src" / "circulatio" / "llm" / "prompt_fragments.py"
         ),
