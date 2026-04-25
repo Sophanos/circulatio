@@ -42,6 +42,53 @@ function formatTimestamp(value: number) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`
 }
 
+function resolveDurationMs(artifact: PresentationArtifact) {
+  const artifactDuration = artifact.durationMs ?? 0
+  const captionDuration = artifact.captions?.at(-1)?.endMs ?? 0
+  const duration = Math.max(artifactDuration, captionDuration)
+
+  return duration > 0 ? duration : 60000
+}
+
+function SectionMarkers({
+  sections,
+  durationSeconds
+}: {
+  sections: RitualSection[]
+  durationSeconds: number
+}) {
+  if (durationSeconds <= 0 || sections.length === 0) return null
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+      {sections.map((section) => {
+        const startSeconds = Math.min(Math.max(section.startMs / 1000, 0), durationSeconds)
+        const endSeconds = Math.min(Math.max(section.endMs / 1000, startSeconds), durationSeconds)
+        const width = ((endSeconds - startSeconds) / durationSeconds) * 100
+
+        if (width <= 0) return null
+
+        const left = (startSeconds / durationSeconds) * 100
+
+        return (
+          <div
+            key={section.id}
+            className="absolute bottom-0 top-0"
+            style={{ left: `${left}%`, width: `${width}%` }}
+          >
+            <div
+              className={[
+                "h-full w-full rounded-full transition-opacity",
+                section.muted ? "bg-white/5" : "bg-white/15"
+              ].join(" ")}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function resolveStageVideo(artifact: PresentationArtifact): PresentationVideoSource | undefined {
   if (artifact.stageVideo) {
     return artifact.stageVideo
@@ -174,7 +221,7 @@ function VisualStage({
   const directVideoSource = videoSource?.provider === "direct" ? videoSource : undefined
   const directPlaybackMode = directVideoSource?.playbackMode
   const directVideoRef = useRef<HTMLVideoElement>(null)
-  const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
+  const durationMs = resolveDurationMs(artifact)
 
   useEffect(() => {
     const video = directVideoRef.current
@@ -476,7 +523,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const audioRef = useRef<HTMLAudioElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
-  const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
+  const durationMs = resolveDurationMs(artifact)
   const durationSeconds = durationMs / 1000
   const [audioUrl, setAudioUrl] = useState("")
   const [isPlaying, setIsPlaying] = useState(false)
@@ -800,25 +847,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                       />
                       <div className="relative min-w-0 flex-1">
                         <ScrubBarTrack className="h-1.5 bg-white/20 md:h-2">
-                          {sections.map((section) => {
-                            const left = (section.startMs / 1000 / durationSeconds) * 100
-                            const width =
-                              ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
-                            return (
-                              <div
-                                key={section.id}
-                                className="absolute top-0 bottom-0"
-                                style={{ left: `${left}%`, width: `${width}%` }}
-                              >
-                                <div
-                                  className={[
-                                    "h-full w-full rounded-full transition-opacity",
-                                    section.muted ? "bg-white/5" : "bg-white/15"
-                                  ].join(" ")}
-                                />
-                              </div>
-                            )
-                          })}
+                          <SectionMarkers sections={sections} durationSeconds={durationSeconds} />
                           <ScrubBarProgress className="[&>div]:bg-white" />
                           <ScrubBarThumb className="size-4 bg-white shadow-lg md:size-5" />
                         </ScrubBarTrack>
@@ -841,26 +870,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                     <div className="flex w-full flex-col gap-1.5">
                       <div className="relative">
                         <ScrubBarTrack className="h-1.5 bg-white/10">
-                          {/* Section boundary markers */}
-                          {sections.map((section) => {
-                            const left = (section.startMs / 1000 / durationSeconds) * 100
-                            const width =
-                              ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
-                            return (
-                              <div
-                                key={section.id}
-                                className="absolute top-0 bottom-0"
-                                style={{ left: `${left}%`, width: `${width}%` }}
-                              >
-                                <div
-                                  className={[
-                                    "h-full w-full rounded-full transition-opacity",
-                                    section.muted ? "bg-white/5" : "bg-white/15"
-                                  ].join(" ")}
-                                />
-                              </div>
-                            )
-                          })}
+                          <SectionMarkers sections={sections} durationSeconds={durationSeconds} />
                           <ScrubBarProgress className="[&>div]:bg-white" />
                           <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
                         </ScrubBarTrack>
