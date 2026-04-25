@@ -1,0 +1,44 @@
+{
+  "adapter": "fake",
+  "case_id": "ritual_artifact_chat_website_cron_001",
+  "dataset": "compound.jsonl",
+  "findings": [],
+  "gate_type": "deterministic",
+  "max_score": 31,
+  "passed": true,
+  "result_kind": "journey_cli",
+  "score": 31,
+  "severity": "blocking",
+  "signals": {
+    "adapter": "fake",
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnSignals": [
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_plan_ritual"
+        ],
+        "turnId": "chat_plan"
+      },
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_record_ritual_completion"
+        ],
+        "turnId": "website_completion"
+      },
+      {
+        "findingsDelta": 0,
+        "selectedTools": [
+          "circulatio_generate_rhythmic_briefs"
+        ],
+        "turnId": "scheduled_cron"
+      }
+    ]
+  },
+  "split": "regression",
+  "trace_ids": [
+    "9376b97f-fb44-4105-8cba-99f1cbc9cd4f"
+  ]
+}

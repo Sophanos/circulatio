@@ -1,0 +1,195 @@
+{
+  "_dataset": "compound.jsonl",
+  "_datasetPath": "/Users/mibook/circulatio/tests/evals/journey_cli/compound.jsonl",
+  "assertionKinds": [
+    "route",
+    "no_host_interpretation",
+    "write_budget",
+    "backend_invariant",
+    "bridge_invariant"
+  ],
+  "backendAssertions": {
+    "maxNewInterpretationRuns": 0,
+    "maxNewPracticeSessions": 0,
+    "maxNewWeeklyReviews": 0,
+    "readMostly": false
+  },
+  "caseId": "ritual_artifact_chat_website_cron_001",
+  "caseKind": "multi_turn_story",
+  "gateType": "deterministic",
+  "historySeed": {
+    "consentPreferences": [
+      {
+        "scope": "proactive_briefing",
+        "status": "allow"
+      }
+    ],
+    "journeys": [
+      {
+        "id": "journey_river_gate",
+        "label": "River gate thread"
+      }
+    ],
+    "materials": [
+      {
+        "id": "reflection_weekly_gate",
+        "materialType": "reflection",
+        "summary": "River gate image repeated through the week"
+      }
+    ]
+  },
+  "journeyFamily": "CrossFamilyUmbrella",
+  "methodEvalFeedback": {
+    "suggestedDatasets": [
+      "execution_skill_routing.jsonl",
+      "execution_tool_choice.jsonl",
+      "tool_description_routing.jsonl"
+    ],
+    "targetKinds": [
+      "skill",
+      "tool_descriptions"
+    ]
+  },
+  "schemaVersion": 1,
+  "severity": "blocking",
+  "split": "regression",
+  "tags": [
+    "ritual_artifact",
+    "hermes_chat",
+    "frontend_completion",
+    "scheduled_cron",
+    "no_scheduled_render"
+  ],
+  "targetKinds": [],
+  "testLayers": [
+    "cli_comparison",
+    "backend",
+    "hermes_bridge",
+    "real_host_smoke"
+  ],
+  "title": "Ritual artifact flows from Hermes chat to website completion before scheduled cron",
+  "turns": [
+    {
+      "expected": {
+        "depthLevel": {
+          "oneOf": [
+            "gentle",
+            "grounding_only",
+            null
+          ]
+        },
+        "forbiddenTools": [
+          "circulatio_interpret_material",
+          "circulatio_weekly_review",
+          "circulatio_generate_rhythmic_briefs"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "I interpreted",
+            "meaning of your"
+          ],
+          "maxSentences": 3
+        },
+        "selectedMoveKind": {
+          "equals": "offer_ritual"
+        },
+        "selectedSurface": {
+          "equals": "ritual_artifact"
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_plan_ritual"
+          ]
+        }
+      },
+      "turnId": "chat_plan",
+      "turnKind": "explicit_surface_request",
+      "userTurn": "Make me a quiet weekly ritual from my recent Circulatio material with breath and a simple meditation surface, and give me the Hermes Rituals website link."
+    },
+    {
+      "expected": {
+        "allowedWrites": [
+          {
+            "autonomous": false,
+            "kind": "ritual_completion",
+            "requiresApproval": false,
+            "source": "artifact_completion",
+            "tool": "circulatio_record_ritual_completion"
+          }
+        ],
+        "forbiddenTools": [
+          "circulatio_interpret_material",
+          "circulatio_store_reflection",
+          "circulatio_generate_practice_recommendation"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "symbolizes",
+            "archetype"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "equals": "record_completion"
+        },
+        "selectedSurface": {
+          "equals": "artifact_completion"
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_record_ritual_completion"
+          ]
+        }
+      },
+      "turnId": "website_completion",
+      "turnKind": "artifact_completion",
+      "userTurn": "The Hermes Rituals website POSTed completion for artifact ritual_artifact_river_gate: completionId completion_river_gate_001, playbackState completed, reflectionText 'The breathing made the gate feel less sharp.' Record the completion only."
+    },
+    {
+      "expected": {
+        "allowedWrites": [
+          {
+            "autonomous": true,
+            "kind": "proactive_brief",
+            "requiresApproval": false,
+            "source": "scheduled_cron",
+            "tool": "circulatio_generate_rhythmic_briefs"
+          }
+        ],
+        "forbiddenTools": [
+          "circulatio_plan_ritual",
+          "circulatio_record_ritual_completion",
+          "circulatio_interpret_material",
+          "circulatio_weekly_review"
+        ],
+        "replyStyle": {
+          "forbiddenSubstrings": [
+            "rendered",
+            "artifact URL"
+          ],
+          "maxSentences": 2
+        },
+        "selectedMoveKind": {
+          "equals": "scheduled_invitation"
+        },
+        "selectedSurface": {
+          "equals": "ritual_invitation"
+        },
+        "shouldAskClarification": false,
+        "shouldPerformHostInterpretation": false,
+        "toolSequence": {
+          "equals": [
+            "circulatio_generate_rhythmic_briefs"
+          ]
+        }
+      },
+      "turnId": "scheduled_cron",
+      "turnKind": "scheduled_cron",
+      "userTurn": "Scheduled cron tick after that: run due Circulatio proactive surfaces for the week. Create invitation briefs only; do not plan or render rituals."
+    }
+  ]
+}

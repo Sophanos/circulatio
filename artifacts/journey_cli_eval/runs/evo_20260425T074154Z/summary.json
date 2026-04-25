@@ -1,0 +1,100 @@
+{
+  "adapterSummaries": {
+    "fake": {
+      "blockingFailures": 0,
+      "failCount": 0,
+      "maxScore": 31,
+      "passCount": 1,
+      "score": 31,
+      "scorePercent": 1.0,
+      "skipped": false
+    }
+  },
+  "adapterVersions": {
+    "fake": "built-in"
+  },
+  "adaptersRequested": [
+    "fake"
+  ],
+  "adaptersRun": [
+    "fake"
+  ],
+  "adaptersSkipped": {},
+  "artifactHashes": {
+    "JOURNEY_FAMILIES.md": "3e7faa19ed3231402201462f951581007040dbb96a665aa05a509b3a64648136",
+    "SKILL.md": "afcc22335b64be9569645ad678351411e89e665b425ff5c543e6f397cb3c956b",
+    "prompt_fragments.py": "7f7e064a1bffa0635de6095b63fc450b0da81d8065afdf1921a5c8f3daacc5cb",
+    "schemas.py": "fe0eb867f5f69cafc32a81fc7ea7f55bf8c52473fbfe669e1e98c457c216655a"
+  },
+  "caseConsensus": {
+    "ritual_artifact_chat_website_cron_001": {
+      "adaptersFailed": [],
+      "adaptersPassed": [
+        "fake"
+      ],
+      "allAdaptersPassed": true,
+      "disagreementTags": []
+    }
+  },
+  "caseIds": [
+    "ritual_artifact_chat_website_cron_001"
+  ],
+  "commandConfigHash": "51ef0b0612caf4976eccc2ae6106fb0bb3a34b27f61ed8447678d511b5511de9",
+  "createdAt": "2026-04-25T07:41:54.089929+00:00",
+  "datasets": [
+    "/Users/mibook/circulatio/tests/evals/journey_cli/compound.jsonl"
+  ],
+  "dryRun": false,
+  "gitSha": "10c6caa5472ef80b6b4e348ee775f54a6bb2f743",
+  "missingRequiredAdapters": [],
+  "repoRoot": "/Users/mibook/circulatio",
+  "results": [
+    {
+      "adapter": "fake",
+      "case_id": "ritual_artifact_chat_website_cron_001",
+      "dataset": "compound.jsonl",
+      "findings": [],
+      "gate_type": "deterministic",
+      "max_score": 31,
+      "passed": true,
+      "result_kind": "journey_cli",
+      "score": 31,
+      "severity": "blocking",
+      "signals": {
+        "adapter": "fake",
+        "normalizationWarnings": [],
+        "parseStatus": "parsed",
+        "turnSignals": [
+          {
+            "findingsDelta": 0,
+            "selectedTools": [
+              "circulatio_plan_ritual"
+            ],
+            "turnId": "chat_plan"
+          },
+          {
+            "findingsDelta": 0,
+            "selectedTools": [
+              "circulatio_record_ritual_completion"
+            ],
+            "turnId": "website_completion"
+          },
+          {
+            "findingsDelta": 0,
+            "selectedTools": [
+              "circulatio_generate_rhythmic_briefs"
+            ],
+            "turnId": "scheduled_cron"
+          }
+        ]
+      },
+      "split": "regression",
+      "trace_ids": [
+        "9376b97f-fb44-4105-8cba-99f1cbc9cd4f"
+      ]
+    }
+  ],
+  "runDir": "/Users/mibook/circulatio/artifacts/journey_cli_eval/runs/evo_20260425T074154Z",
+  "runId": "evo_20260425T074154Z",
+  "splitFilter": []
+}

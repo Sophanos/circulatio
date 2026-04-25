@@ -1,0 +1,88 @@
+{
+  "adapter": "fake",
+  "case_id": "ritual_artifact_chat_website_cron_001",
+  "parse_status": "parsed",
+  "payload": {
+    "caseId": "ritual_artifact_chat_website_cron_001",
+    "globalNotes": [],
+    "normalizationWarnings": [],
+    "parseStatus": "parsed",
+    "turnResults": [
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 0.9,
+        "depthLevel": "gentle",
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [
+          "circulatio_plan_ritual"
+        ],
+        "selectedMoveKind": "offer_ritual",
+        "selectedSurface": "ritual_artifact",
+        "selectedToolSequence": [
+          "circulatio_plan_ritual"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "chat_plan",
+        "writeActions": []
+      },
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 0.9,
+        "depthLevel": null,
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": "record_completion",
+        "selectedSurface": "artifact_completion",
+        "selectedToolSequence": [
+          "circulatio_record_ritual_completion"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "website_completion",
+        "writeActions": [
+          {
+            "autonomous": false,
+            "kind": "ritual_completion",
+            "requiresApproval": false,
+            "tool": "circulatio_record_ritual_completion"
+          }
+        ]
+      },
+      {
+        "askedClarification": false,
+        "captureTargets": [],
+        "confidence": 0.9,
+        "depthLevel": null,
+        "forbiddenEscalationsPresent": [],
+        "hostReply": "I held that and can stay with the next small step.",
+        "performedHostInterpretation": false,
+        "rationale": "Fake adapter mirrors the case expectation for deterministic harness tests.",
+        "readActions": [],
+        "selectedMoveKind": "scheduled_invitation",
+        "selectedSurface": "ritual_invitation",
+        "selectedToolSequence": [
+          "circulatio_generate_rhythmic_briefs"
+        ],
+        "toolArgsSummary": {},
+        "turnId": "scheduled_cron",
+        "writeActions": [
+          {
+            "autonomous": true,
+            "kind": "proactive_brief",
+            "requiresApproval": false,
+            "tool": "circulatio_generate_rhythmic_briefs"
+          }
+        ]
+      }
+    ]
+  },
+  "raw_text": "{\"caseId\": \"ritual_artifact_chat_website_cron_001\", \"turnResults\": [{\"turnId\": \"chat_plan\", \"selectedToolSequence\": [\"circulatio_plan_ritual\"], \"selectedSurface\": \"ritual_artifact\", \"selectedMoveKind\": \"offer_ritual\", \"depthLevel\": \"gentle\", \"captureTargets\": [], \"writeActions\": [], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}, {\"turnId\": \"website_completion\", \"selectedToolSequence\": [\"circulatio_record_ritual_completion\"], \"selectedSurface\": \"artifact_completion\", \"selectedMoveKind\": \"record_completion\", \"depthLevel\": null, \"captureTargets\": [], \"writeActions\": [{\"kind\": \"ritual_completion\", \"source\": \"artifact_completion\", \"tool\": \"circulatio_record_ritual_completion\", \"requiresApproval\": false, \"autonomous\": false}], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}, {\"turnId\": \"scheduled_cron\", \"selectedToolSequence\": [\"circulatio_generate_rhythmic_briefs\"], \"selectedSurface\": \"ritual_invitation\", \"selectedMoveKind\": \"scheduled_invitation\", \"depthLevel\": null, \"captureTargets\": [], \"writeActions\": [{\"kind\": \"proactive_brief\", \"source\": \"scheduled_cron\", \"tool\": \"circulatio_generate_rhythmic_briefs\", \"requiresApproval\": false, \"autonomous\": true}], \"askedClarification\": false, \"performedHostInterpretation\": false, \"forbiddenEscalationsPresent\": [], \"hostReply\": \"I held that and can stay with the next small step.\", \"confidence\": 0.9, \"rationale\": \"Fake adapter mirrors the case expectation for deterministic harness tests.\"}], \"globalNotes\": []}",
+  "warnings": []
+}
