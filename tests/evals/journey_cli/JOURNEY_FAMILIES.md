@@ -510,8 +510,8 @@ behavior.
 
 ## Canonical E2E Cases
 
-The first 12 cases are the baseline suite. The last 6 are compound or red-team style cases that
-should be added once the baseline passes.
+The first 12 cases are the baseline suite. The remaining cases are compound or red-team style
+cases that should be added once the baseline passes.
 
 ### Baseline Cases
 
@@ -914,6 +914,28 @@ should outrank typology language.
   - jumping to symbolic interpretation
 - `expectedCaptureTarget`: `body_state`
 - `testLayers`: `backend`, `hermes_bridge`, `method_eval`
+
+#### 19. `ritual_artifact_chat_website_cron_001`
+
+A ritual request moves through Hermes chat into Circulatio planning, then through website
+completion sync, then through the scheduled proactive cron boundary.
+
+- `journeyFamily`: `CrossFamilyUmbrella`
+- `storySteps`:
+  - chat turn: user asks for a quiet weekly ritual and Hermes calls `circulatio_plan_ritual`
+  - website turn: frontend completion sync routes only to `circulatio_record_ritual_completion`
+  - cron turn: scheduled proactive pass calls `circulatio_generate_rhythmic_briefs`
+- `expectedOutcome`:
+  - planning stays read-only and returns an artifact-oriented surface
+  - completion stores only a ritual completion event and literal user-authored reflection
+  - scheduled cron creates only a `ritual_invitation` brief candidate
+  - scheduled cron never calls ritual planning, completion, interpretation, or rendering
+- `forbiddenEscalation`:
+  - scheduled `circulatio_plan_ritual`
+  - scheduled renderer or artifact URL creation
+  - completion-triggered interpretation
+  - reflection detour during completion sync
+- `testLayers`: `backend`, `hermes_bridge`, `real_host_smoke`
 
 ## Triage: Where A Failure Belongs
 

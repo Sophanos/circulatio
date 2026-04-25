@@ -48,6 +48,9 @@ _WRITE_KIND_BY_TOOL = {
     "circulatio_respond_practice_recommendation": "practice_response",
     "circulatio_record_interpretation_feedback": "feedback",
     "circulatio_record_practice_feedback": "feedback",
+    "circulatio_record_ritual_completion": "ritual_completion",
+    "circulatio_generate_rhythmic_briefs": "proactive_brief",
+    "circulatio_respond_rhythmic_brief": "proactive_brief_response",
     "circulatio_threshold_review": "review",
     "circulatio_living_myth_review": "review",
     "circulatio_approve_proposals": "proposal",
@@ -64,6 +67,7 @@ _READ_ONLY_TOOLS = {
     "circulatio_query_graph",
     "circulatio_memory_kernel",
     "circulatio_dashboard_summary",
+    "circulatio_plan_ritual",
 }
 _SURFACE_ALIASES = {
     "alive today": "alive_today",
@@ -83,6 +87,14 @@ _SURFACE_ALIASES = {
     "living_myth_review": "living_myth_review",
     "weekly review": "weekly_review",
     "weekly_review": "weekly_review",
+    "ritual artifact": "ritual_artifact",
+    "ritual_artifact": "ritual_artifact",
+    "artifact completion": "artifact_completion",
+    "artifact_completion": "artifact_completion",
+    "ritual invitation": "ritual_invitation",
+    "ritual_invitation": "ritual_invitation",
+    "rhythmic brief": "rhythmic_brief",
+    "rhythmic_brief": "rhythmic_brief",
     "discovery": "discovery",
     "none": "none",
 }

@@ -20,7 +20,9 @@ class JourneyCliEvalTests(unittest.TestCase):
     def test_schema_validation_accepts_committed_datasets(self) -> None:
         cases = load_journey_cases([BASELINE_PATH, COMPOUND_PATH, REDTEAM_PATH])
         self.assertGreaterEqual(len(cases), 10)
-        self.assertIn("embodied_recurrence_001", {case["caseId"] for case in cases})
+        case_ids = {case["caseId"] for case in cases}
+        self.assertIn("embodied_recurrence_001", case_ids)
+        self.assertIn("ritual_artifact_chat_website_cron_001", case_ids)
 
     def test_invalid_case_reports_field_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -63,6 +65,20 @@ class JourneyCliEvalTests(unittest.TestCase):
         self.assertEqual(summary["missingRequiredAdapters"], [])
         self.assertEqual(len(summary["results"]), 1)
         self.assertTrue(summary["results"][0]["passed"])
+
+    def test_ritual_artifact_flow_fake_adapter_success_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            summary = run_journey_cli_eval(
+                adapters_requested=["fake"],
+                dataset_paths=[COMPOUND_PATH],
+                case_ids=["ritual_artifact_chat_website_cron_001"],
+                cache_root=Path(temp_dir) / "cache",
+                use_cache=False,
+            )
+        self.assertEqual(summary["missingRequiredAdapters"], [])
+        self.assertEqual(len(summary["results"]), 1)
+        result = summary["results"][0]
+        self.assertTrue(result["passed"], result["findings"])
 
     def test_fake_adapter_malformed_json_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

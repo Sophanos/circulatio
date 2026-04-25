@@ -75,6 +75,8 @@ _TURN_KINDS = {
     "explicit_feedback",
     "practice_response",
     "return_after_absence",
+    "artifact_completion",
+    "scheduled_cron",
 }
 _TEST_LAYERS = {
     "cli_comparison",

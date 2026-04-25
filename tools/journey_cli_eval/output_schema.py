@@ -9,6 +9,10 @@ CANONICAL_SURFACES = (
     "threshold_review",
     "living_myth_review",
     "weekly_review",
+    "ritual_artifact",
+    "artifact_completion",
+    "ritual_invitation",
+    "rhythmic_brief",
     "discovery",
     "none",
 )
@@ -23,6 +27,9 @@ CANONICAL_MOVE_KINDS = (
     "ask_relational_scene",
     "ask_practice_followup",
     "offer_practice",
+    "offer_ritual",
+    "record_completion",
+    "scheduled_invitation",
 )
 
 CANONICAL_WRITE_KINDS = (
@@ -35,6 +42,9 @@ CANONICAL_WRITE_KINDS = (
     "feedback",
     "review",
     "proposal",
+    "proactive_brief",
+    "proactive_brief_response",
+    "ritual_completion",
     "unknown",
 )
 
