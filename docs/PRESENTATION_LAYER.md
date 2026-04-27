@@ -14,6 +14,40 @@ The product-facing frame is **Hermes Rituals**:
 
 These are not separate intelligence systems and not separate backend tool calls. They are different host renderings of shared derived context, enabled by arguments on one presentation-planning call.
 
+For live camera/body-reading guidance, see `EMBODIED_GUIDANCE_SURFACE.md`. That future surface is Hermes/host-owned and sensor-aware; it must stay separate from this read-only presentation planner.
+
+---
+
+## Bridge To Embodied Guidance
+
+Embodied presentation should become the stable base that live body guidance can attach to later.
+
+Do now in the presentation layer:
+- make artifact playback timeline-aware through sections, captions, current time, and completion state;
+- derive the recommended lens from the current section rather than hardcoding one static view;
+- keep body-response capture available at closing/completion as an explicit user action;
+- emit host-side session events as a no-op contract for future Hermes subscription;
+- keep artifact completion idempotent and separate from practice, active imagination, and camera telemetry.
+
+Do later in the embodied guidance surface:
+- add camera/body signals as a sensor track;
+- add reference-video comparison as a media track extension;
+- attach Hermes-agent to a `guidanceSessionId`;
+- use Coach OS `coachState` for live cue selection;
+- persist only explicit body states, practice outcomes, reflections, or active imagination material.
+
+The clean connection is:
+
+```text
+PresentationArtifact
+-> timeline/media/lens orchestration
+-> optional body response at closing
+-> optional launch into guidanceSessionId
+-> Embodied Guidance adds sensor + coach tracks
+```
+
+The ritual planner must not know about webcam frames, pose landmarks, live coaching, or training loops. It should only produce stable presentation sections and safe artifact metadata that a host can later use as context.
+
 ---
 
 ## Ownership Boundary
@@ -818,6 +852,11 @@ Renderer-owned responsibilities:
 `contracts.py` should model completion fields in the manifest. `renderer.py` should fill them. `providers/chutes.py` should remain provider-specific and should not leak provider assumptions into Circulatio domain types.
 
 `scripts/render_ritual_artifact.py` should remain a manual renderer entrypoint unless a later host job system explicitly owns scheduling. Phase 2 cron must not call it.
+
+`scripts/evaluate_journey_cli.py --ritual-eval` is the local long-form audit path for this contract.
+It simulates daily and weekly ritual journeys, verifies invitation and provider gates, renders
+accepted artifacts, records completion, and writes artifact/browser reports. It is not the proactive
+runtime and must not weaken the cron rule above.
 
 ---
 

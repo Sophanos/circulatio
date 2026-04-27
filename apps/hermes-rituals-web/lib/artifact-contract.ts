@@ -1,6 +1,7 @@
 export type ArtifactMode = "ritual" | "broadcast" | "cinema"
 
 export type RitualSectionKind = "arrival" | "breath" | "image" | "reflection" | "closing"
+export type RitualSectionPreferredLens = "cinema" | "photo" | "breath" | "meditation" | "body"
 
 export type RitualSection = {
   id: string
@@ -8,6 +9,8 @@ export type RitualSection = {
   startMs: number
   endMs: number
   kind: RitualSectionKind
+  preferredLens?: RitualSectionPreferredLens
+  capturePrompt?: string
   transcript?: string
   captionCount?: number
   muted?: boolean
@@ -67,6 +70,7 @@ export type BreathCycle = {
 }
 
 export type CaptionCue = {
+  id?: string
   startMs: number
   endMs: number
   text: string
@@ -95,6 +99,15 @@ export type PresentationVideoSource = {
   playbackMode?: PresentationVideoPlaybackMode
   presentation?: PresentationVideoPresentation
   startAtSeconds?: number
+}
+
+export type PresentationMeditationSurface = {
+  enabled: boolean
+  fieldType: string
+  durationMs: number
+  macroProgressPolicy: string
+  microMotion: string
+  instructionDensity: string
 }
 
 export type RitualMusicService = "apple_music" | "host_curated" | "local_render"
@@ -140,6 +153,7 @@ export type PresentationArtifact = {
   captions?: CaptionCue[]
   channels?: ArtifactChannels
   breathCycle?: BreathCycle
+  meditation?: PresentationMeditationSurface
   scenes?: PresentationScene[]
   ritualSections?: RitualSection[]
   musicQueue?: RitualMusicQueue
@@ -197,6 +211,7 @@ export type RitualArtifactManifest = {
   locale: string
   sourceRefs: RitualArtifactSourceRef[]
   durationMs: number
+  sections?: RitualSection[]
   surfaces: {
     text: { body: string }
     audio?: {
@@ -224,14 +239,7 @@ export type RitualArtifactManifest = {
       visualForm?: BreathVisualForm
       phaseLabels?: boolean
     }
-    meditation?: {
-      enabled: boolean
-      fieldType: string
-      durationMs: number
-      macroProgressPolicy: string
-      microMotion: string
-      instructionDensity: string
-    }
+    meditation?: PresentationMeditationSurface
     image?: {
       enabled: boolean
       src: string | null
@@ -314,9 +322,213 @@ function manifestVideoPresentation(value?: string | null): PresentationVideoPres
   return value === "full_background" ? "full_background" : "stage_card"
 }
 
-function manifestSections(manifest: RitualArtifactManifest): RitualSection[] {
+function isRitualSectionKind(value: unknown): value is RitualSectionKind {
+  return (
+    value === "arrival" ||
+    value === "breath" ||
+    value === "image" ||
+    value === "reflection" ||
+    value === "closing"
+  )
+}
+
+function isRitualSectionPreferredLens(value: unknown): value is RitualSectionPreferredLens {
+  return (
+    value === "cinema" ||
+    value === "photo" ||
+    value === "breath" ||
+    value === "meditation" ||
+    value === "body"
+  )
+}
+
+function sectionTitle(kind: RitualSectionKind) {
+  switch (kind) {
+    case "arrival":
+      return "Arrival"
+    case "breath":
+      return "Breath"
+    case "image":
+      return "Image return"
+    case "reflection":
+      return "Reflection"
+    case "closing":
+      return "Closing"
+  }
+}
+
+function captionOverlapsSection(caption: CaptionCue, section: Pick<RitualSection, "startMs" | "endMs">) {
+  return caption.endMs > section.startMs && caption.startMs < section.endMs
+}
+
+function attachCaptionMetadata(section: RitualSection, captions: CaptionCue[]): RitualSection {
+  const overlapping = captions.filter((caption) => captionOverlapsSection(caption, section))
+  if (overlapping.length === 0) return section
+
+  return {
+    ...section,
+    transcript: section.transcript ?? overlapping.map((caption) => caption.text).join(" "),
+    captionCount: section.captionCount ?? overlapping.length
+  }
+}
+
+function cleanManifestSections(
+  manifest: RitualArtifactManifest,
+  captions: CaptionCue[]
+): RitualSection[] {
   const durationMs = manifest.durationMs || 60000
-  const captions = manifest.surfaces.captions?.segments ?? []
+  const rawSections = manifest.sections ?? []
+  if (rawSections.length === 0) return []
+
+  return rawSections
+    .map((section, index): RitualSection | null => {
+      const startMs = Math.max(0, Math.min(Number(section.startMs), durationMs))
+      const endMs = Math.max(startMs, Math.min(Number(section.endMs), durationMs))
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null
+
+      const kind = isRitualSectionKind(section.kind) ? section.kind : "reflection"
+      const preferredLens = isRitualSectionPreferredLens(section.preferredLens)
+        ? section.preferredLens
+        : undefined
+
+      return attachCaptionMetadata(
+        {
+          ...section,
+          id: section.id?.trim() || `section-${index + 1}`,
+          title: section.title?.trim() || sectionTitle(kind),
+          startMs,
+          endMs,
+          kind,
+          preferredLens,
+          capturePrompt: section.capturePrompt?.trim() || undefined
+        },
+        captions
+      )
+    })
+    .filter((section): section is RitualSection => Boolean(section))
+    .sort((a, b) => a.startMs - b.startMs)
+}
+
+function breathDurationMs(manifest: RitualArtifactManifest) {
+  const breath = manifest.surfaces.breath
+  if (!breath?.enabled) return 0
+  const cycleMs = Math.max(
+    (breath.inhaleSeconds + breath.holdSeconds + breath.exhaleSeconds + breath.restSeconds) * 1000,
+    1
+  )
+  return cycleMs * Math.max(breath.cycles ?? 1, 1)
+}
+
+function surfacePreferredLens(manifest: RitualArtifactManifest): RitualSectionPreferredLens {
+  const cinema = manifest.surfaces.cinema
+  if (cinema?.enabled && cinema.src) return "cinema"
+  const image = manifest.surfaces.image
+  if (image?.enabled && image.src) return "photo"
+  return "breath"
+}
+
+function hasVisualSurface(manifest: RitualArtifactManifest) {
+  return Boolean(
+    (manifest.surfaces.cinema?.enabled && manifest.surfaces.cinema.src) ||
+      (manifest.surfaces.image?.enabled && manifest.surfaces.image.src)
+  )
+}
+
+function surfaceAwareManifestSections(
+  manifest: RitualArtifactManifest,
+  captions: CaptionCue[]
+): RitualSection[] {
+  const durationMs = Math.max(manifest.durationMs || 60000, 1)
+  const sections: RitualSection[] = []
+  const closingDurationMs = Math.min(
+    48000,
+    Math.max(18000, Math.round(durationMs * 0.16))
+  )
+  const arrivalDurationMs = Math.min(
+    12000,
+    Math.max(6000, Math.round(durationMs * 0.04))
+  )
+  const closingStartMs = Math.max(arrivalDurationMs, durationMs - closingDurationMs)
+  let cursor = 0
+
+  const push = (section: RitualSection) => {
+    if (section.endMs <= section.startMs) return
+    sections.push(attachCaptionMetadata(section, captions))
+    cursor = section.endMs
+  }
+
+  push({
+    id: "section-arrival",
+    title: "Arrival",
+    startMs: cursor,
+    endMs: Math.min(arrivalDurationMs, durationMs),
+    kind: "arrival",
+    preferredLens: surfacePreferredLens(manifest),
+    channels: { voice: true, ambient: true }
+  })
+
+  const breathMs = breathDurationMs(manifest)
+  if (breathMs > 0 && cursor < closingStartMs) {
+    push({
+      id: "section-breath",
+      title: "Breath",
+      startMs: cursor,
+      endMs: Math.min(cursor + breathMs, closingStartMs),
+      kind: "breath",
+      preferredLens: "breath",
+      skippable: true,
+      channels: { voice: true, breath: true, pulse: true }
+    })
+  }
+
+  if (hasVisualSurface(manifest) && cursor < closingStartMs) {
+    const imageDurationMs = Math.min(
+      30000,
+      Math.max(12000, Math.round(durationMs * 0.1))
+    )
+    push({
+      id: "section-image",
+      title: "Image return",
+      startMs: cursor,
+      endMs: Math.min(cursor + imageDurationMs, closingStartMs),
+      kind: "image",
+      preferredLens: surfacePreferredLens(manifest),
+      skippable: true,
+      channels: { voice: true, ambient: true }
+    })
+  }
+
+  if (cursor < closingStartMs) {
+    push({
+      id: "section-reflection",
+      title: "Reflection",
+      startMs: cursor,
+      endMs: closingStartMs,
+      kind: "reflection",
+      preferredLens: manifest.surfaces.meditation?.enabled ? "meditation" : surfacePreferredLens(manifest),
+      skippable: true,
+      channels: { voice: true, ambient: true }
+    })
+  }
+
+  if (closingStartMs < durationMs) {
+    push({
+      id: "section-closing",
+      title: "Closing",
+      startMs: closingStartMs,
+      endMs: durationMs,
+      kind: "closing",
+      preferredLens: "body",
+      capturePrompt: manifest.interaction.finishPrompt,
+      channels: { voice: true, breath: true }
+    })
+  }
+
+  return sections
+}
+
+function legacyCaptionSections(manifest: RitualArtifactManifest, captions: CaptionCue[]): RitualSection[] {
+  const durationMs = manifest.durationMs || 60000
   if (captions.length > 0) {
     return captions.map((caption, index) => {
       const isFirst = index === 0
@@ -362,47 +574,18 @@ function manifestSections(manifest: RitualArtifactManifest): RitualSection[] {
     })
   }
 
-  const arrivalEnd = Math.min(18000, durationMs)
-  const breathEnd = Math.min(durationMs, 90000)
-  const meditationStart = Math.min(durationMs, Math.max(breathEnd, durationMs - 180000))
-  const sections: RitualSection[] = [
-    {
-      id: "section-arrival",
-      title: "Arrival",
-      startMs: 0,
-      endMs: arrivalEnd,
-      kind: "arrival",
-      channels: { voice: true, ambient: true }
-    },
-    {
-      id: "section-breath",
-      title: "Breath",
-      startMs: arrivalEnd,
-      endMs: breathEnd,
-      kind: "breath",
-      skippable: true,
-      channels: { voice: true, breath: true, pulse: true }
-    },
-    {
-      id: "section-reflection",
-      title: "Reflection",
-      startMs: breathEnd,
-      endMs: meditationStart,
-      kind: "reflection",
-      skippable: true,
-      channels: { voice: true, ambient: true }
-    },
-    {
-      id: "section-closing",
-      title: "Closing",
-      startMs: meditationStart,
-      endMs: durationMs,
-      kind: "closing",
-      channels: { voice: true, breath: true }
-    }
-  ]
+  return []
+}
 
-  return sections.filter((section) => section.endMs > section.startMs)
+export function deriveRitualSectionsFromManifest(manifest: RitualArtifactManifest): RitualSection[] {
+  const captions = manifest.surfaces.captions?.segments ?? []
+  const explicitSections = cleanManifestSections(manifest, captions)
+  if (explicitSections.length > 0) return explicitSections
+
+  const surfaceSections = surfaceAwareManifestSections(manifest, captions)
+  if (surfaceSections.length > 0) return surfaceSections
+
+  return legacyCaptionSections(manifest, captions)
 }
 
 export function ritualArtifactFromManifest(
@@ -465,6 +648,9 @@ export function ritualArtifactFromManifest(
           visualForm: manifestVisualForm(breath.visualForm)
         }
       : undefined,
+    meditation: manifest.surfaces.meditation?.enabled
+      ? manifest.surfaces.meditation
+      : undefined,
     scenes:
       image?.enabled && image.src
         ? [
@@ -475,8 +661,8 @@ export function ritualArtifactFromManifest(
               startMs: 0,
               endMs: manifest.durationMs
             }
-          ]
-        : undefined,
-    ritualSections: manifestSections(manifest)
+            ]
+          : undefined,
+    ritualSections: deriveRitualSectionsFromManifest(manifest)
   }
 }

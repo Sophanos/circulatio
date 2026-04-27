@@ -68,6 +68,43 @@ export const weeklyRitualDryRunManifest: RitualArtifactManifest = {
     }
   ],
   durationMs: 300000,
+  sections: [
+    {
+      id: "section-arrival",
+      kind: "arrival",
+      title: "Arrival",
+      startMs: 0,
+      endMs: 12000,
+      preferredLens: "cinema"
+    },
+    {
+      id: "section-breath",
+      kind: "breath",
+      title: "Breath",
+      startMs: 12000,
+      endMs: 72000,
+      preferredLens: "breath",
+      skippable: true
+    },
+    {
+      id: "section-reflection",
+      kind: "reflection",
+      title: "Reflection",
+      startMs: 72000,
+      endMs: 252000,
+      preferredLens: "meditation",
+      skippable: true
+    },
+    {
+      id: "section-closing",
+      kind: "closing",
+      title: "Closing",
+      startMs: 252000,
+      endMs: 300000,
+      preferredLens: "body",
+      capturePrompt: "What did you notice in your body or attention after this?"
+    }
+  ],
   surfaces: {
     text: {
       body:

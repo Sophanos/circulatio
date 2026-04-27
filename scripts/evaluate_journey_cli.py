@@ -68,8 +68,7 @@ def parse_args() -> argparse.Namespace:
         "--strict",
         action="store_true",
         help=(
-            "Exit non-zero on scored failures, missing required adapters, "
-            "or baseline regressions."
+            "Exit non-zero on scored failures, missing required adapters, or baseline regressions."
         ),
     )
     parser.add_argument(
@@ -133,6 +132,88 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Write sanitized traces to an explicit path.",
     )
+    parser.add_argument(
+        "--ritual-eval",
+        action="store_true",
+        help="Run the ritual journey simulator, provider gate evaluator, and artifact audit mode.",
+    )
+    parser.add_argument(
+        "--ritual-output-root",
+        type=Path,
+        help="Output root for ritual eval runs. Defaults to artifacts/journey_cli_eval/runs.",
+    )
+    parser.add_argument(
+        "--ritual-render-root",
+        type=Path,
+        help=(
+            "Artifact public root for rendered rituals. Defaults to Hermes Rituals "
+            "public/artifacts."
+        ),
+    )
+    parser.add_argument(
+        "--ritual-plan-root",
+        type=Path,
+        help="Plan storage root for rendered rituals. Defaults to artifacts/rituals/plans.",
+    )
+    parser.add_argument(
+        "--ritual-base-url",
+        default="http://localhost:3000",
+        help="Base URL used for artifact links and optional HTTP checks.",
+    )
+    parser.add_argument(
+        "--ritual-provider-profile",
+        default="mock",
+        choices=[
+            "mock",
+            "chutes_speech",
+            "chutes_audio",
+            "chutes_image",
+            "chutes_video",
+            "chutes_all",
+        ],
+        help="Provider profile for accepted ritual renders in ritual eval mode.",
+    )
+    parser.add_argument(
+        "--ritual-live-providers",
+        action="store_true",
+        help="Allow provider-backed accepted ritual renders when budget and gates pass.",
+    )
+    parser.add_argument(
+        "--ritual-include-video",
+        action="store_true",
+        help="Request cinema in accepted ritual renders. Requires live providers and beta gates.",
+    )
+    parser.add_argument(
+        "--ritual-allow-beta-video",
+        action="store_true",
+        help="Pass the beta video gate for accepted ritual renders.",
+    )
+    parser.add_argument(
+        "--ritual-max-cost-usd",
+        type=float,
+        default=0.0,
+        help="Budget guard for provider-backed accepted ritual renders.",
+    )
+    parser.add_argument(
+        "--ritual-chutes-token-env",
+        default="CHUTES_API_TOKEN",
+        help="Environment variable name containing the Chutes token.",
+    )
+    parser.add_argument(
+        "--ritual-http-check",
+        action="store_true",
+        help="Fetch artifact page URLs during the browser audit.",
+    )
+    parser.add_argument(
+        "--ritual-request-timeout-seconds",
+        type=int,
+        default=180,
+        help="Provider request timeout for accepted ritual renders.",
+    )
+    parser.add_argument(
+        "--ritual-run-id",
+        help="Optional explicit ritual eval run id.",
+    )
     return parser.parse_args()
 
 
@@ -163,10 +244,38 @@ def _print_summary(summary: dict[str, object]) -> None:
             print(f"    {finding}")
 
 
+def _print_ritual_summary(report: dict[str, object]) -> None:
+    print(f"run={report.get('runId')} mode=ritual_eval passed={report.get('passed')}")
+    print(f"report={report.get('runDir')}/report.md")
+    for finding in list(report.get("findings", [])):
+        print(f"  - {finding}")
+
+
 def main() -> int:
+    args = parse_args()
+    if args.ritual_eval:
+        from tools.journey_cli_eval.ritual_mode import run_ritual_journey_eval
+
+        report = run_ritual_journey_eval(
+            output_root=args.ritual_output_root,
+            render_artifact_root=args.ritual_render_root,
+            plan_root=args.ritual_plan_root,
+            base_url=args.ritual_base_url,
+            provider_profile=args.ritual_provider_profile,
+            live_providers=args.ritual_live_providers,
+            include_video=args.ritual_include_video,
+            allow_beta_video=args.ritual_allow_beta_video,
+            max_cost_usd=args.ritual_max_cost_usd,
+            chutes_token_env=args.ritual_chutes_token_env,
+            http_check=args.ritual_http_check,
+            request_timeout_seconds=args.ritual_request_timeout_seconds,
+            run_id=args.ritual_run_id,
+        )
+        _print_ritual_summary(report)
+        return 0 if (not args.strict or bool(report.get("passed"))) else 1
+
     from tools.journey_cli_eval.runner import run_journey_cli_eval
 
-    args = parse_args()
     summary = run_journey_cli_eval(
         adapters_requested=args.adapter or ["all"],
         adapter_config_path=args.adapter_config,

@@ -1,6 +1,6 @@
 > **Implementation status:** Phases 1–9 core backend/runtime surfaces are implemented and targeted-tested. This includes LLM-first interpretation, approval-gated Phase 8/9 durable writes, threshold/living-myth review workflows, bounded analysis packets, the bounded read-only `discovery` digest, derived projections, proactive invitation seeds, Hermes/plugin exposure, the Phase 1 plan-only ritual presentation contract, and an offline Evolution OS for prompt fragments, skills, and tool descriptions.
 >
-> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `PRESENTATION_LAYER.md` for the deferred embodied presentation contract.
+> **Consolidated docs:** See `ARCHITECTURE.md` for the system framing. See `ROADMAP.md` for the product overview and use cases. See `INTERPRETATION_ENGINE_SPEC.md` for the Jungian hermeneutic specification. See `RUNBOOK.md` for safety, evidence, typology, and demo rules. See `PRESENTATION_LAYER.md` for the deferred embodied presentation contract. See `EMBODIED_GUIDANCE_SURFACE.md` for the future live body/camera guidance and Coach OS session contract.
 
 # Circulatio Engineering Guide
 ## Technical Specification For Builders
@@ -230,6 +230,22 @@ Circulatio now also includes a separate repo-local Journey CLI comparison layer 
 .venv/bin/python -m unittest tests.test_journey_cli_eval
 .venv/bin/python scripts/evaluate_journey_cli.py --adapter fake --strict
 ```
+
+**Ritual eval mode:**
+
+`--ritual-eval` runs a local simulator/evaluator for daily and weekly ritual journeys. It records
+Hermes-style tool calls, verifies invite-before-plan behavior, renders accepted artifacts, records
+completion, audits manifest/playback contracts, and writes `report.json`, `report.md`,
+`timeline.json`, `tool_calls.json`, `browser_checks.json`, and `artifacts_checked.json` under
+`artifacts/journey_cli_eval/runs/{runId}/`.
+
+Default ritual eval uses mock/dry-run accepted renders and scores live-media surfaces as expected
+fallbacks. Chutes-backed accepted renders require `--ritual-live-providers`, a positive
+`--ritual-max-cost-usd`, an allowed provider profile, and a configured token. Video remains off by
+default and requires `--ritual-include-video`, `--ritual-allow-beta-video`, plan policy,
+provider-profile, token, and budget gates.
+
+See `docs/JOURNEY_CLI.md` for the JTBD, report shape, and provider/browser examples.
 
 This layer is complementary to Evolution OS. It sharpens the routing contract and surfaces drift,
 but it does not change the adoption gates: method-eval pass, normal repo tests, and explicit human

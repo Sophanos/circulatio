@@ -6,9 +6,14 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
-from .contracts import CaptionSegment, RitualArtifactManifest, RitualRenderOptions
+from .contracts import (
+    CaptionSegment,
+    RitualArtifactManifest,
+    RitualManifestSection,
+    RitualRenderOptions,
+)
 from .providers.chutes import (
     ChutesAsset,
     ChutesProviderError,
@@ -21,7 +26,9 @@ from .providers.chutes import (
 )
 
 RENDERER_VERSION = "ritual-renderer.v1"
-MANIFEST_SCHEMA_VERSION = "hermes_ritual_artifact.v1"
+MANIFEST_SCHEMA_VERSION: Literal["hermes_ritual_artifact.v1"] = "hermes_ritual_artifact.v1"
+RitualSectionKind = Literal["arrival", "breath", "image", "reflection", "closing"]
+RitualSectionLens = Literal["cinema", "photo", "breath", "meditation", "body"]
 
 
 def artifact_id_for_plan(plan: dict[str, object]) -> str:
@@ -61,7 +68,7 @@ class RitualRenderer:
         artifact_id = self._artifact_id(plan)
         public_base = self._public_base(artifact_id)
         duration = cast(dict[str, object], plan.get("duration") or {})
-        duration_ms = int(duration.get("targetSeconds", 300)) * 1000
+        duration_ms = self._int_value(duration.get("targetSeconds"), default=300) * 1000
         captions = self._caption_segments(plan, duration_ms=duration_ms)
         provider_assets, provider_captions, provider_warnings = self._render_provider_assets(
             plan=plan,
@@ -139,18 +146,20 @@ class RitualRenderer:
             "breath": {
                 "enabled": bool(breath.get("enabled", False)),
                 "pattern": str(breath.get("pattern") or "lengthened_exhale"),
-                "inhaleSeconds": int(breath.get("inhaleSeconds", 4) or 4),
-                "holdSeconds": int(breath.get("holdSeconds", 0) or 0),
-                "exhaleSeconds": int(breath.get("exhaleSeconds", 6) or 6),
-                "restSeconds": int(breath.get("restSeconds", 2) or 2),
-                "cycles": int(breath.get("cycles", 5) or 5),
+                "inhaleSeconds": self._int_value(breath.get("inhaleSeconds"), default=4),
+                "holdSeconds": self._int_value(breath.get("holdSeconds"), default=0),
+                "exhaleSeconds": self._int_value(breath.get("exhaleSeconds"), default=6),
+                "restSeconds": self._int_value(breath.get("restSeconds"), default=2),
+                "cycles": self._int_value(breath.get("cycles"), default=5),
                 "visualForm": str(breath.get("visualForm") or "pacer"),
                 "phaseLabels": True,
             },
             "meditation": {
                 "enabled": bool(meditation.get("enabled", False)),
                 "fieldType": str(meditation.get("fieldType") or "coherence_convergence"),
-                "durationMs": int(meditation.get("durationMs", min(duration_ms, 180000)) or 180000),
+                "durationMs": self._int_value(
+                    meditation.get("durationMs"), default=min(duration_ms, 180000)
+                ),
                 "macroProgressPolicy": str(
                     meditation.get("macroProgressPolicy") or "session_progress"
                 ),
@@ -165,6 +174,12 @@ class RitualRenderer:
         providers = ["mock"]
         if any(asset.get("provider") == "chutes" for asset in provider_assets.values()):
             providers.append("chutes")
+        sections = self._sections(
+            plan=plan,
+            surfaces=surfaces,
+            captions=captions,
+            duration_ms=duration_ms,
+        )
         return {
             "schemaVersion": MANIFEST_SCHEMA_VERSION,
             "artifactId": artifact_id,
@@ -178,6 +193,7 @@ class RitualRenderer:
             "locale": str(plan.get("locale") or "en-US"),
             "sourceRefs": cast(list[dict[str, object]], plan.get("sourceRefs") or []),
             "durationMs": duration_ms,
+            "sections": sections,
             "surfaces": surfaces,
             "timeline": self._timeline(plan=plan, captions=captions),
             "interaction": {
@@ -530,7 +546,9 @@ class RitualRenderer:
 
     def _plan_allows_external_providers(self, plan: dict[str, object]) -> bool:
         safety = cast(dict[str, object], plan.get("safetyBoundary") or {})
-        restrictions = {str(item) for item in safety.get("providerRestrictions", [])}
+        restrictions = {
+            str(item) for item in cast(list[object], safety.get("providerRestrictions") or [])
+        }
         if "external_providers_disabled" in restrictions:
             return False
         if "no_raw_material_to_external_provider" not in restrictions:
@@ -635,11 +653,229 @@ class RitualRenderer:
     def _file_sha256(self, path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
 
+    def _sections(
+        self,
+        *,
+        plan: dict[str, object],
+        surfaces: dict[str, object],
+        captions: list[CaptionSegment],
+        duration_ms: int,
+    ) -> list[RitualManifestSection]:
+        explicit = self._explicit_sections(plan=plan, captions=captions, duration_ms=duration_ms)
+        if explicit:
+            return explicit
+
+        breath = cast(dict[str, object], surfaces.get("breath") or {})
+        meditation = cast(dict[str, object], surfaces.get("meditation") or {})
+        image = cast(dict[str, object], surfaces.get("image") or {})
+        cinema = cast(dict[str, object], surfaces.get("cinema") or {})
+
+        sections: list[RitualManifestSection] = []
+        cursor = 0
+        arrival_ms = min(12_000, max(6_000, round(duration_ms * 0.04)))
+        closing_ms = min(48_000, max(18_000, round(duration_ms * 0.16)))
+        closing_start = max(arrival_ms, duration_ms - closing_ms)
+
+        def add(section: RitualManifestSection) -> None:
+            nonlocal cursor
+            if section["endMs"] <= section["startMs"]:
+                return
+            sections.append(self._section_with_captions(section, captions))
+            cursor = section["endMs"]
+
+        add(
+            {
+                "id": "section-arrival",
+                "title": "Arrival",
+                "startMs": 0,
+                "endMs": min(arrival_ms, duration_ms),
+                "kind": "arrival",
+                "preferredLens": self._primary_lens(image=image, cinema=cinema),
+                "channels": {"voice": True, "ambient": True},
+            }
+        )
+
+        breath_ms = self._breath_duration_ms(breath)
+        if breath_ms > 0 and cursor < closing_start:
+            add(
+                {
+                    "id": "section-breath",
+                    "title": "Breath",
+                    "startMs": cursor,
+                    "endMs": min(cursor + breath_ms, closing_start),
+                    "kind": "breath",
+                    "preferredLens": "breath",
+                    "skippable": True,
+                    "channels": {"voice": True, "breath": True, "pulse": True},
+                }
+            )
+
+        if self._has_visual_surface(image=image, cinema=cinema) and cursor < closing_start:
+            image_ms = min(30_000, max(12_000, round(duration_ms * 0.1)))
+            add(
+                {
+                    "id": "section-image",
+                    "title": "Image return",
+                    "startMs": cursor,
+                    "endMs": min(cursor + image_ms, closing_start),
+                    "kind": "image",
+                    "preferredLens": self._primary_lens(image=image, cinema=cinema),
+                    "skippable": True,
+                    "channels": {"voice": True, "ambient": True},
+                }
+            )
+
+        if cursor < closing_start:
+            add(
+                {
+                    "id": "section-reflection",
+                    "title": "Reflection",
+                    "startMs": cursor,
+                    "endMs": closing_start,
+                    "kind": "reflection",
+                    "preferredLens": (
+                        "meditation"
+                        if bool(meditation.get("enabled"))
+                        else self._primary_lens(
+                            image=image,
+                            cinema=cinema,
+                        )
+                    ),
+                    "skippable": True,
+                    "channels": {"voice": True, "ambient": True},
+                }
+            )
+
+        if closing_start < duration_ms:
+            finish_prompt = str(
+                cast(dict[str, object], plan.get("interactionSpec") or {}).get(
+                    "finishPrompt", "What did you notice?"
+                )
+            )
+            add(
+                {
+                    "id": "section-closing",
+                    "title": "Closing",
+                    "startMs": closing_start,
+                    "endMs": duration_ms,
+                    "kind": "closing",
+                    "preferredLens": "body",
+                    "capturePrompt": finish_prompt,
+                    "channels": {"voice": True, "breath": True},
+                }
+            )
+
+        return sections
+
+    def _explicit_sections(
+        self,
+        *,
+        plan: dict[str, object],
+        captions: list[CaptionSegment],
+        duration_ms: int,
+    ) -> list[RitualManifestSection]:
+        raw_sections = plan.get("sections")
+        if not isinstance(raw_sections, list):
+            return []
+
+        sections: list[RitualManifestSection] = []
+        valid_kinds = {"arrival", "breath", "image", "reflection", "closing"}
+        valid_lenses = {"cinema", "photo", "breath", "meditation", "body"}
+        for index, raw in enumerate(raw_sections, start=1):
+            if not isinstance(raw, dict):
+                continue
+            start_ms = self._bounded_ms(raw.get("startMs"), duration_ms)
+            end_ms = self._bounded_ms(raw.get("endMs"), duration_ms)
+            if end_ms <= start_ms:
+                continue
+            raw_kind = str(raw.get("kind") or "reflection")
+            kind: RitualSectionKind = (
+                cast(RitualSectionKind, raw_kind) if raw_kind in valid_kinds else "reflection"
+            )
+            section: RitualManifestSection = {
+                "id": str(raw.get("id") or f"section-{index}"),
+                "title": str(raw.get("title") or kind.replace("_", " ").title()),
+                "startMs": start_ms,
+                "endMs": end_ms,
+                "kind": kind,
+            }
+            raw_preferred_lens = str(raw.get("preferredLens") or "").strip()
+            if raw_preferred_lens in valid_lenses:
+                section["preferredLens"] = cast(RitualSectionLens, raw_preferred_lens)
+            capture_prompt = str(raw.get("capturePrompt") or "").strip()
+            if capture_prompt:
+                section["capturePrompt"] = capture_prompt
+            if isinstance(raw.get("channels"), dict):
+                section["channels"] = {
+                    str(key): bool(value)
+                    for key, value in cast(dict[str, object], raw["channels"]).items()
+                }
+            if "skippable" in raw:
+                section["skippable"] = bool(raw.get("skippable"))
+            sections.append(self._section_with_captions(section, captions))
+        return sorted(sections, key=lambda item: item["startMs"])
+
+    def _bounded_ms(self, value: object, duration_ms: int) -> int:
+        return max(0, min(self._int_value(value, default=0), duration_ms))
+
+    def _section_with_captions(
+        self,
+        section: RitualManifestSection,
+        captions: list[CaptionSegment],
+    ) -> RitualManifestSection:
+        overlapping = [
+            caption
+            for caption in captions
+            if caption["endMs"] > section["startMs"] and caption["startMs"] < section["endMs"]
+        ]
+        if not overlapping:
+            return section
+        enriched = cast(RitualManifestSection, dict(section))
+        enriched["captionCount"] = len(overlapping)
+        enriched["transcript"] = " ".join(caption["text"] for caption in overlapping)
+        return enriched
+
+    def _breath_duration_ms(self, breath: dict[str, object]) -> int:
+        if not breath.get("enabled"):
+            return 0
+        cycle_seconds = sum(
+            self._int_value(breath.get(key), default=0)
+            for key in ("inhaleSeconds", "holdSeconds", "exhaleSeconds", "restSeconds")
+        )
+        cycles = max(self._int_value(breath.get("cycles"), default=1), 1)
+        return max(cycle_seconds, 1) * cycles * 1000
+
+    def _has_visual_surface(
+        self,
+        *,
+        image: dict[str, object],
+        cinema: dict[str, object],
+    ) -> bool:
+        return bool(
+            (image.get("enabled") and image.get("src"))
+            or (cinema.get("enabled") and cinema.get("src"))
+        )
+
+    def _primary_lens(
+        self,
+        *,
+        image: dict[str, object],
+        cinema: dict[str, object],
+    ) -> RitualSectionLens:
+        if cinema.get("enabled") and cinema.get("src"):
+            return "cinema"
+        if image.get("enabled") and image.get("src"):
+            return "photo"
+        return "breath"
+
     def _caption_segments(
         self, plan: dict[str, object], *, duration_ms: int
     ) -> list[CaptionSegment]:
         voice_script = cast(dict[str, object], plan.get("voiceScript") or {})
-        raw_segments = [item for item in voice_script.get("segments", []) if isinstance(item, dict)]
+        raw_voice_segments = voice_script.get("segments") or []
+        raw_segments = [
+            item for item in cast(list[object], raw_voice_segments) if isinstance(item, dict)
+        ]
         captions: list[CaptionSegment] = []
         cursor = 0
         for index, segment in enumerate(raw_segments, start=1):
@@ -648,7 +884,7 @@ class RitualRenderer:
                 continue
             word_count = max(len(text.split()), 1)
             segment_ms = min(max(word_count * 520, 3200), 14000)
-            pause_ms = int(segment.get("pauseAfterMs", 0) or 0)
+            pause_ms = self._int_value(segment.get("pauseAfterMs"), default=0)
             end = min(cursor + segment_ms, duration_ms)
             captions.append({"id": f"cap_{index}", "startMs": cursor, "endMs": end, "text": text})
             cursor = min(end + pause_ms, duration_ms)
@@ -673,7 +909,15 @@ class RitualRenderer:
         meditation = cast(dict[str, object], plan.get("meditation") or {})
         if meditation.get("enabled"):
             timeline.append({"atMs": 90000, "kind": "meditation_phase", "phase": "settle"})
-        return sorted(timeline, key=lambda item: int(item.get("atMs", 0)))
+        return sorted(timeline, key=lambda item: self._int_value(item.get("atMs"), default=0))
+
+    def _int_value(self, value: object, *, default: int) -> int:
+        if value is None:
+            return default
+        try:
+            return int(cast(str | float | int, value))
+        except (TypeError, ValueError):
+            return default
 
     def _webvtt(self, captions: list[CaptionSegment]) -> str:
         blocks = ["WEBVTT", ""]

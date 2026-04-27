@@ -10,6 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
+from circulatio.ritual_renderer.providers import chutes
 from circulatio.ritual_renderer.providers.chutes import ChutesProviderError
 from circulatio.ritual_renderer.renderer import artifact_id_for_plan, render_plan_file
 
@@ -55,12 +56,66 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertTrue(manifest["surfaces"]["breath"]["enabled"])
             self.assertTrue(manifest["surfaces"]["meditation"]["enabled"])
             self.assertTrue(manifest["surfaces"]["captions"]["segments"])
+            self.assertEqual(
+                [section["kind"] for section in manifest["sections"]],
+                ["arrival", "breath", "reflection", "closing"],
+            )
+            self.assertEqual(manifest["sections"][1]["startMs"], 12000)
+            self.assertEqual(manifest["sections"][1]["endMs"], 72000)
+            self.assertEqual(manifest["sections"][-1]["endMs"], 300000)
             self.assertEqual(manifest["render"]["providers"], ["mock"])
             self.assertEqual(
                 manifest["surfaces"]["captions"]["tracks"][0]["src"],
                 "/artifacts/ritual_artifact_abcdef1234567890/captions.vtt",
             )
             self.assertIn("WEBVTT", captions_path.read_text(encoding="utf-8"))
+
+    def test_manifest_explicit_sections_win_and_preserve_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["sections"] = [
+                {
+                    "id": "sec-arrival",
+                    "kind": "arrival",
+                    "title": "Arrival",
+                    "startMs": 0,
+                    "endMs": 12000,
+                    "preferredLens": "breath",
+                },
+                {
+                    "id": "sec-closing",
+                    "kind": "closing",
+                    "title": "Closing",
+                    "startMs": 252000,
+                    "endMs": 300000,
+                    "preferredLens": "body",
+                    "capturePrompt": "What did you notice?",
+                },
+            ]
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            manifest = render_plan_file(
+                plan_path=plan_path,
+                out_dir=out_dir,
+                options={
+                    "mockProviders": True,
+                    "dryRun": True,
+                    "publicBasePath": "/artifacts/test",
+                },
+            )
+
+            self.assertEqual(
+                [section["id"] for section in manifest["sections"]],
+                [
+                    "sec-arrival",
+                    "sec-closing",
+                ],
+            )
+            self.assertEqual(manifest["sections"][0]["endMs"], 12000)
+            self.assertEqual(manifest["sections"][1]["startMs"], 252000)
 
     def test_artifact_id_for_plan_uses_stable_hash_prefix(self) -> None:
         self.assertEqual(
@@ -295,6 +350,49 @@ class RitualRendererCliTests(unittest.TestCase):
                 "chutes_video_skipped_no_sanitized_storyboard",
                 manifest["render"]["warnings"],
             )
+
+    def test_chutes_wan_video_payload_matches_live_i2v_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            captured: dict[str, object] = {}
+
+            def fake_post_asset(**kwargs: object) -> dict[str, object]:
+                captured.update(kwargs)
+                out_path = kwargs["out_path"]
+                assert isinstance(out_path, Path)
+                out_path.write_bytes(b"video")
+                return {
+                    "path": out_path,
+                    "mimeType": "video/mp4",
+                    "provider": "chutes",
+                    "model": "chutes-wan-2-2-i2v-14b-fast",
+                }
+
+            with patch(
+                "circulatio.ritual_renderer.providers.chutes._post_asset",
+                side_effect=fake_post_asset,
+            ):
+                chutes.generate_video(
+                    token="test-token",
+                    prompt="Slow abstract movement.",
+                    image="base64-image",
+                    out_path=temp / "cinema.mp4",
+                    timeout_seconds=9,
+                )
+
+            self.assertEqual(captured["url"], chutes.WAN_I2V_GENERATE_URL)
+            payload = captured["payload"]
+            self.assertIsInstance(payload, dict)
+            payload = payload if isinstance(payload, dict) else {}
+            self.assertEqual(payload["prompt"], "Slow abstract movement.")
+            self.assertEqual(payload["image"], "base64-image")
+            self.assertEqual(payload["frames"], 81)
+            self.assertEqual(payload["resolution"], "480p")
+            self.assertEqual(payload["fps"], 16)
+            self.assertTrue(payload["fast"])
+            self.assertEqual(payload["seed"], 42)
+            self.assertEqual(payload["guidance_scale"], 1.0)
+            self.assertEqual(payload["guidance_scale_2"], 1.0)
 
     def test_chutes_video_warning_is_sanitized(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

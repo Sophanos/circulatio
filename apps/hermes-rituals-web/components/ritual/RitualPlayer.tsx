@@ -36,6 +36,7 @@ import type {
   PresentationVideoSource,
   RitualSection
 } from "@/lib/artifact-contract"
+import type { RitualBodyPromptMode } from "@/lib/ritual-experience"
 import { makeSilentWavBlobUrl } from "@/lib/mock-media"
 
 export type RitualPlayerHandle = {
@@ -269,6 +270,8 @@ function VisualStage({
   bodyDraft,
   bodyCompletionStatus = "idle",
   bodySubmitError,
+  activeSection,
+  bodyPromptMode = "hidden",
   onBodyDraftChange
 }: {
   artifact: PresentationArtifact
@@ -279,6 +282,8 @@ function VisualStage({
   bodyDraft: BodyStateDraft
   bodyCompletionStatus?: BodyCompletionStatus
   bodySubmitError?: string | null
+  activeSection?: RitualSection | null
+  bodyPromptMode?: RitualBodyPromptMode
   onBodyDraftChange: (value: BodyStateDraft) => void
 }) {
   const scenes = artifact.scenes ?? []
@@ -340,6 +345,11 @@ function VisualStage({
   }
 
   if (stageLens === "body") {
+    const bodyPrompt =
+      activeSection?.capturePrompt ??
+      artifact.completionPrompt ??
+      "What did you notice in your body or attention?"
+
     return (
       <motion.div
         key="body-picker-stage"
@@ -356,12 +366,12 @@ function VisualStage({
             value={bodyDraft}
             onChange={onBodyDraftChange}
             variant="stage"
-            completionPrompt={artifact.completionPrompt}
+            completionPrompt={bodyPrompt}
             completionStatus={bodyCompletionStatus}
             submitError={bodySubmitError}
             disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
             mapMode="full2d"
-            showVoiceNote={false}
+            showVoiceNote={bodyPromptMode === "focused_capture" ? false : undefined}
           />
         </div>
       </motion.div>
@@ -582,6 +592,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   bodyDraft: BodyStateDraft
   bodyCompletionStatus?: BodyCompletionStatus
   bodySubmitError?: string | null
+  activeSection?: RitualSection | null
+  bodyPromptMode?: RitualBodyPromptMode
   onBodyDraftChange: (value: BodyStateDraft) => void
   onComplete?: () => void
   onTimeUpdate?: (ms: number) => void
@@ -596,6 +608,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   bodyDraft,
   bodyCompletionStatus = "idle",
   bodySubmitError,
+  activeSection: frameActiveSection,
+  bodyPromptMode,
   onBodyDraftChange,
   onComplete,
   onTimeUpdate,
@@ -799,9 +813,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     }
   }, [durationSeconds, onComplete, onPlayingChange, onTimeUpdate])
 
-  const activeSection = sections.find(
-    (s) => currentTime * 1000 >= s.startMs && currentTime * 1000 < s.endMs
-  )
+  const activeSection =
+    frameActiveSection ??
+    sections.find((s) => currentTime * 1000 >= s.startMs && currentTime * 1000 < s.endMs)
   const sectionMuted = activeSection?.muted ?? false
 
   const handleTogglePlay = async () => {
@@ -870,6 +884,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
             bodyDraft={bodyDraft}
             bodyCompletionStatus={bodyCompletionStatus}
             bodySubmitError={bodySubmitError}
+            activeSection={activeSection}
+            bodyPromptMode={bodyPromptMode}
             onBodyDraftChange={onBodyDraftChange}
           />
         </AnimatePresence>

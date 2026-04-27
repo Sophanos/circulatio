@@ -18,6 +18,20 @@ class CaptionSegment(TypedDict):
     text: str
 
 
+class RitualManifestSection(TypedDict, total=False):
+    id: Required[str]
+    title: Required[str]
+    startMs: Required[int]
+    endMs: Required[int]
+    kind: Required[Literal["arrival", "breath", "image", "reflection", "closing"]]
+    preferredLens: NotRequired[Literal["cinema", "photo", "breath", "meditation", "body"]]
+    capturePrompt: NotRequired[str]
+    transcript: NotRequired[str]
+    captionCount: NotRequired[int]
+    skippable: NotRequired[bool]
+    channels: NotRequired[dict[str, bool]]
+
+
 class RitualRenderOptions(TypedDict, total=False):
     mockProviders: bool
     dryRun: bool
@@ -45,6 +59,7 @@ class RitualArtifactManifest(TypedDict, total=False):
     locale: Required[str]
     sourceRefs: Required[list[dict[str, object]]]
     durationMs: Required[int]
+    sections: Required[list[RitualManifestSection]]
     surfaces: Required[dict[str, object]]
     timeline: Required[list[dict[str, object]]]
     interaction: Required[dict[str, object]]
@@ -52,4 +67,10 @@ class RitualArtifactManifest(TypedDict, total=False):
     render: Required[dict[str, object]]
 
 
-__all__ = ["AssetRef", "CaptionSegment", "RitualArtifactManifest", "RitualRenderOptions"]
+__all__ = [
+    "AssetRef",
+    "CaptionSegment",
+    "RitualArtifactManifest",
+    "RitualManifestSection",
+    "RitualRenderOptions",
+]

@@ -7,8 +7,14 @@ comparison harness.
 
 Use these cases to compare external local coding CLIs such as `kimi`, `codex`, and `opencode`
 against the Hermes routing contract for Circulatio. The harness can also run an opt-in `hermes`
-adapter as a lightweight host probe. It is local-only, opt-in, not backend truth, not runtime
-infrastructure, and not a replacement for Hermes host smoke.
+adapter as a lightweight host probe.
+
+The same CLI now has a separate `--ritual-eval` mode for long-form ritual simulation and artifact
+audits. That mode does not consume these JSONL cases; it writes a run report under
+`artifacts/journey_cli_eval/runs/{runId}/` and is documented in `docs/JOURNEY_CLI.md`.
+
+It is local-only, opt-in, not backend truth, not runtime infrastructure, and not a replacement for
+Hermes host smoke.
 
 Files:
 

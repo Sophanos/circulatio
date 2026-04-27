@@ -8,10 +8,13 @@ import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
 
 import {
+  useRitualExperience,
+  type RitualSessionEvent
+} from "@/hooks/use-ritual-experience"
+import {
   RitualPlayer,
   type RitualPlayerHandle,
-  type RitualStageLens,
-  type PlayerMode
+  type RitualStageLens
 } from "@/components/ritual/RitualPlayer"
 import {
   BodyPicker,
@@ -306,10 +309,12 @@ function RitualLensSwitch({
 
 export function RitualArtifactClient({
   artifact,
-  session
+  session,
+  onSessionEvent
 }: {
   artifact: PresentationArtifact
   session?: SessionShell
+  onSessionEvent?: (event: RitualSessionEvent) => void
 }) {
   const router = useRouter()
   const playerRef = useRef<RitualPlayerHandle>(null)
@@ -320,13 +325,6 @@ export function RitualArtifactClient({
   const [currentMs, setCurrentMs] = useState(0)
   const [railOpen, setRailOpen] = useState(false)
   const [railTab, setRailTab] = useState<RailTab>("sections")
-  const [stageLens, setStageLens] = useState<RitualStageLens>(() =>
-    artifact.stageVideo || (artifact.videoUrl && !artifact.videoUrl.startsWith("mock://"))
-      ? "cinema"
-      : artifact.coverImageUrl
-        ? "photo"
-        : "breath"
-  )
   const [masterVolume, setMasterVolume] = useState(0.75)
   const [sections, setSections] = useState<RitualSection[]>(
     artifact.ritualSections ?? []
@@ -343,12 +341,22 @@ export function RitualArtifactClient({
   const [bodySubmitError, setBodySubmitError] = useState<string | null>(null)
   const completionIdRef = useRef<string | null>(null)
 
+  const ritualExperience = useRitualExperience({
+    artifact,
+    sections,
+    currentMs,
+    completionStatus: bodyCompletionStatus,
+    onSessionEvent
+  })
+  const ritualFrame = ritualExperience.frame
+  const stageLens = ritualExperience.stageLens as RitualStageLens
+
   // Immersive ritual state (breath or meditation)
   const [isPlaying, setIsPlaying] = useState(false)
   const breathImmersive = isPlaying && (stageLens === "breath" || stageLens === "meditation")
   const cinemaImmersive =
     stageLens === "cinema" && artifact.stageVideo?.presentation === "full_background"
-  const cinemaPlaybackImmersive = cinemaImmersive
+  const cinemaPlaybackImmersive = cinemaImmersive && isPlaying
   const autoHideChrome = breathImmersive || cinemaPlaybackImmersive
   const immersive = breathImmersive
   const [showChrome, setShowChrome] = useState(true)
@@ -357,7 +365,12 @@ export function RitualArtifactClient({
   const cinemaChromeGlass = cinemaImmersive && chromeVisible
   const backgroundImageUrl = artifact.stageVideo?.posterImageUrl ?? artifact.coverImageUrl
 
-  const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
+  const durationMs = Math.max(
+    artifact.durationMs ?? 0,
+    artifact.captions?.at(-1)?.endMs ?? 0,
+    sections.at(-1)?.endMs ?? 0,
+    60000
+  )
   const sessionProgress = Math.min(currentMs / durationMs, 1)
   const remainingSeconds = Math.max(Math.floor((durationMs - currentMs) / 1000), 0)
 
@@ -490,21 +503,22 @@ export function RitualArtifactClient({
   }, [])
 
   const handleStageLensChange = useCallback((lens: RitualStageLens) => {
-    setStageLens(lens)
+    ritualExperience.setStageLens(lens)
     if (lens === "body") {
       setRailTab("body")
       setRailOpen(true)
       setShowChrome(true)
     }
-  }, [])
+  }, [ritualExperience])
 
   const handlePlayerComplete = useCallback(() => {
+    ritualExperience.recordSessionEvent({ type: "ritual_completed" })
     if (!artifact.captureBodyResponse && !artifact.completionEndpoint) return
-    setStageLens("body")
+    ritualExperience.setStageLens("body")
     setRailTab("body")
     setRailOpen(true)
     setShowChrome(true)
-  }, [artifact.captureBodyResponse, artifact.completionEndpoint])
+  }, [artifact.captureBodyResponse, artifact.completionEndpoint, ritualExperience])
 
   const handleBodyDraftChange = useCallback((nextDraft: BodyStateDraft) => {
     setBodyDraft(nextDraft)
@@ -565,6 +579,7 @@ export function RitualArtifactClient({
         throw new Error(typeof payload.error === "string" ? payload.error : "body_state_save_failed")
       }
       setBodyCompletionStatus("saved")
+      ritualExperience.recordSessionEvent({ type: "body_response_captured" })
     } catch (error) {
       const message = error instanceof Error ? error.message : "body_state_save_failed"
       setBodyCompletionStatus("error")
@@ -578,7 +593,8 @@ export function RitualArtifactClient({
     currentMs,
     durationMs,
     sections,
-    stageLens
+    stageLens,
+    ritualExperience
   ])
 
   return (
@@ -732,6 +748,8 @@ export function RitualArtifactClient({
             bodyDraft={bodyDraft}
             bodyCompletionStatus={bodyCompletionStatus}
             bodySubmitError={bodySubmitError}
+            activeSection={ritualFrame.activeSection}
+            bodyPromptMode={ritualFrame.bodyPromptMode}
             onBodyDraftChange={handleBodyDraftChange}
             onComplete={handlePlayerComplete}
             onTimeUpdate={setCurrentMs}
@@ -767,7 +785,7 @@ export function RitualArtifactClient({
                     value={bodyDraft}
                     onChange={handleBodyDraftChange}
                     variant="rail"
-                    completionPrompt={artifact.completionPrompt}
+                    completionPrompt={ritualFrame.activeSection?.capturePrompt ?? artifact.completionPrompt}
                     completionStatus={bodyCompletionStatus}
                     submitError={bodySubmitError}
                     endpointAvailable={Boolean(artifact.completionEndpoint)}
