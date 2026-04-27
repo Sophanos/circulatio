@@ -551,9 +551,16 @@ Provider hardening remains renderer-side:
 - Whisper/captions may fail transiently.
 - Fallback captions from `voiceScript.segments` stay first-class.
 - Fallback captions must be valid timed cue files.
+- Cinema/video is an opt-in manifest surface on `/artifacts/{artifactId}`, not a separate
+  generated artifact route.
 - Music and video remain explicit beta/developer surfaces.
+- Chutes video requires external providers, the Chutes allowlist, explicit `cinema`/`video`
+  render surfaces, `videoAllowed`, `allowBetaVideo`, positive budget, token availability, a
+  plan-allowed cinema surface, and a sanitized storyboard prompt.
 - Raw material text never goes to external providers.
 - Video is never enabled by default.
+- WAN image-to-video failure degrades to the photo/audio/caption artifact. Completion remains
+  idempotent completion recording only; it must not trigger interpretation.
 
 ### Phase 3 acceptance criteria
 
@@ -739,6 +746,20 @@ input
 `requestedSurfaces.breath.request` asks for respiratory pacing. `requestedSurfaces.meditation.request` asks for a settling field or attention container. The host may render both in one ritual from the same tool response, but the tool call keeps them semantically separate so a meditation visual does not silently become a breathing instruction.
 
 Planning is read-only. It compiles a presentation plan from existing context and explicit source references.
+Generated cinema remains inside the same manifest-backed artifact route. Hosts render it as
+`surfaces.cinema` and keep the ordinary ritual completion endpoint.
+
+Chutes cinema rendering requires all of:
+- `renderPolicy.mode = render_static`
+- `renderPolicy.externalProvidersAllowed = true`
+- `renderPolicy.providerAllowlist` containing `chutes`
+- `renderPolicy.surfaces` containing `cinema` or `video`
+- `renderPolicy.videoAllowed = true`
+- `renderPolicy.allowBetaVideo = true`
+- positive budget and a configured Chutes token
+- `renderRequest.allowedSurfaces` containing `cinema`
+- `visualPromptPlan.cinema.providerPromptPolicy = sanitized_visual_only`
+- a non-empty sanitized storyboard prompt
 
 Completion sync uses a separate operation:
 

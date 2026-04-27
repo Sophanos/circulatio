@@ -601,12 +601,17 @@ class CirculatioCore:
         )
         warnings: list[str] = list(surface_warnings)
         blocked_surfaces: list[str] = []
+        cinema_requested = bool(requested.get("cinema", {}).get("enabled"))
         if grounding_only:
             warnings.append("presentation_grounding_only_safety_adjustment")
             blocked_surfaces.extend(["cinema", "intense_breath_holds"])
         video_allowed = bool(render_policy.get("videoAllowed", False))
         external_allowed = bool(render_policy.get("externalProvidersAllowed", False))
-        if requested.get("cinema", {}).get("enabled") and not video_allowed:
+        if cinema_requested and not external_allowed:
+            requested["cinema"] = {**requested.get("cinema", {}), "enabled": False}
+            blocked_surfaces.append("cinema")
+            warnings.append("cinema_disabled_without_external_providers")
+        if cinema_requested and not video_allowed:
             requested["cinema"] = {**requested.get("cinema", {}), "enabled": False}
             blocked_surfaces.append("cinema")
             warnings.append("cinema_disabled_without_video_allowed")
@@ -654,13 +659,11 @@ class CirculatioCore:
             source_digest=source_digest,
             source_ref_ids=source_ref_ids,
         )
-        cinema_plan = {
-            "enabled": bool(requested.get("cinema", {}).get("enabled")),
-            "storyboard": [],
-            "maxDurationSeconds": min(
-                int(requested.get("cinema", {}).get("maxDurationSeconds", 30) or 30), 30
-            ),
-        }
+        cinema_plan = self._presentation_cinema_plan(
+            requested=requested,
+            source_digest=source_digest,
+            source_ref_ids=source_ref_ids,
+        )
         render_mode = cast(str, render_policy.get("mode", "dry_run_manifest"))
         frontend_route = "/artifacts/{artifactId}"
         evidence_ids = [str(item) for item in source_digest.get("evidenceIds", []) if str(item)]
@@ -991,6 +994,63 @@ class CirculatioCore:
             "privacyNotes": ["no raw dream text", "derived user-facing summary only"],
             "sourceRefIds": source_ref_ids,
             "providerPromptPolicy": "sanitized_visual_only" if enabled else "none",
+        }
+
+    def _presentation_cinema_plan(
+        self,
+        *,
+        requested: RequestedRitualSurfaces,
+        source_digest: dict[str, object],
+        source_ref_ids: list[str],
+    ) -> dict[str, object]:
+        cinema = requested.get("cinema", {})
+        enabled = bool(cinema.get("enabled"))
+        max_duration = min(int(cinema.get("maxDurationSeconds", 30) or 30), 30)
+        if not enabled:
+            return {
+                "enabled": False,
+                "storyboard": [],
+                "maxDurationSeconds": max_duration,
+                "providerPromptPolicy": "none",
+            }
+
+        summary = str(source_digest.get("summary") or "held Circulatio material")
+        themes = [
+            str(item).strip()
+            for item in source_digest.get("activeThemes", [])
+            if str(item).strip()
+        ][:3]
+        symbols = [
+            str(item).strip()
+            for item in source_digest.get("recurringSymbols", [])
+            if str(item).strip()
+        ][:3]
+        visual_parts = [
+            "Slow non-literal movement through an abstract ritual field",
+            "derived from a user-facing summary",
+            self._presentation_compact_text(summary, limit=180),
+        ]
+        if themes:
+            visual_parts.append("themes: " + ", ".join(themes))
+        if symbols:
+            visual_parts.append("recurring images: " + ", ".join(symbols))
+        prompt = self._presentation_compact_text(
+            ". ".join(part for part in visual_parts if part).replace("..", "."),
+            limit=320,
+        )
+        return {
+            "enabled": True,
+            "storyboard": [
+                {
+                    "id": "shot_1",
+                    "prompt": prompt,
+                    "sourceRefIds": source_ref_ids,
+                    "durationMs": max_duration * 1000,
+                    "motion": "slow_drift",
+                }
+            ],
+            "maxDurationSeconds": max_duration,
+            "providerPromptPolicy": "sanitized_visual_only",
         }
 
     def _presentation_source_ref_ids(self, refs: list[PresentationSourceRef]) -> list[str]:

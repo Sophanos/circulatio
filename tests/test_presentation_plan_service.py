@@ -160,6 +160,60 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_plan_ritual_cinema_surface_builds_sanitized_storyboard_when_gated(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            await service.store_material(
+                {
+                    "userId": "user_1",
+                    "materialType": "reflection",
+                    "text": "PRIVATE RAW DREAM TEXT: a red door opened under the stairs.",
+                    "summary": "A threshold image kept returning.",
+                    "materialDate": "2026-04-15T08:00:00Z",
+                }
+            )
+
+            workflow = await service.plan_ritual(
+                {
+                    "userId": "user_1",
+                    "ritualIntent": "journey_broadcast",
+                    "narrativeMode": "hybrid",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "requestedSurfaces": {
+                        "audio": {"enabled": True},
+                        "captions": {"enabled": True},
+                        "image": {"enabled": True, "allowExternalGeneration": True},
+                        "cinema": {"enabled": True, "maxDurationSeconds": 8},
+                    },
+                    "renderPolicy": {
+                        "mode": "render_static",
+                        "externalProvidersAllowed": True,
+                        "videoAllowed": True,
+                        "providerAllowlist": ["mock", "chutes"],
+                        "maxCost": {"currency": "USD", "amount": 0.05},
+                    },
+                }
+            )
+
+            plan = workflow["plan"]
+            cinema = plan["visualPromptPlan"]["cinema"]
+            self.assertTrue(cinema["enabled"])
+            self.assertEqual(cinema["providerPromptPolicy"], "sanitized_visual_only")
+            self.assertEqual(cinema["maxDurationSeconds"], 8)
+            self.assertTrue(cinema["storyboard"])
+            prompt = cinema["storyboard"][0]["prompt"]
+            self.assertNotIn("PRIVATE RAW DREAM TEXT", prompt)
+            self.assertIn("cinema", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn(
+                "no_raw_material_to_external_provider",
+                plan["safetyBoundary"]["providerRestrictions"],
+            )
+            self.assertEqual(llm.interpret_calls, [])
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+
+        asyncio.run(run())
+
     def test_plan_ritual_high_activation_disables_holds_and_cinema(self) -> None:
         async def run() -> None:
             repository, service, llm = self._service()
@@ -235,6 +289,7 @@ class PresentationPlanServiceTests(unittest.TestCase):
             self.assertFalse(plan["visualPromptPlan"]["cinema"]["enabled"])
             self.assertIn("pending_source_ref_omitted", workflow["warnings"])
             self.assertIn("image_disabled_without_external_providers", workflow["warnings"])
+            self.assertIn("cinema_disabled_without_external_providers", workflow["warnings"])
             self.assertIn("cinema_disabled_without_video_allowed", workflow["warnings"])
 
         asyncio.run(run())

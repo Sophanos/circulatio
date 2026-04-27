@@ -10,7 +10,10 @@ import {
   TranscriptViewerWords
 } from "@/components/ui/transcript-viewer"
 import type { PresentationArtifact } from "@/lib/artifact-contract"
-import { createCharacterAlignment, makeSilentWavBlobUrl } from "@/lib/mock-media"
+import {
+  createCharacterAlignmentFromCaptions,
+  makeSilentWavBlobUrl
+} from "@/lib/mock-media"
 
 function audioTypeForSource(src: string) {
   if (src.endsWith(".mp3")) return "audio/mpeg"
@@ -22,11 +25,14 @@ function audioTypeForSource(src: string) {
 }
 
 export function TranscriptCard({ artifact }: { artifact: PresentationArtifact }) {
-  const transcript = artifact.transcript ?? artifact.summary
+  const captions = artifact.captions ?? []
+  const transcript = captions.length > 0
+    ? captions.map((caption) => caption.text).join("\n\n")
+    : artifact.transcript ?? artifact.summary
   const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
   const alignment = useMemo(
-    () => createCharacterAlignment(transcript, durationMs),
-    [durationMs, transcript]
+    () => createCharacterAlignmentFromCaptions(captions, transcript, durationMs),
+    [captions, durationMs, transcript]
   )
   const [audioUrl, setAudioUrl] = useState("")
 

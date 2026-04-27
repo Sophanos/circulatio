@@ -85,6 +85,7 @@ export function RitualRail({
             <motion.div key="transcript" {...TAB_CONTENT}>
               <RitualTranscript
                 artifact={artifact}
+                sections={sections}
                 currentMs={currentMs}
                 onSeek={onSeek}
               />

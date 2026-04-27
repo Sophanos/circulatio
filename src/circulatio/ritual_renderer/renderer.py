@@ -385,7 +385,7 @@ class RitualRenderer:
                 timeout_seconds=timeout,
             )
         except ChutesProviderError as exc:
-            warnings.append(f"chutes_audio_failed:{exc}")
+            warnings.append(self._provider_warning("chutes_audio_failed", exc))
             return
 
         assets["audio"] = {
@@ -406,7 +406,7 @@ class RitualRenderer:
                 timeout_seconds=timeout,
             )
         except ChutesProviderError as exc:
-            warnings.append(f"chutes_transcription_failed:{exc}")
+            warnings.append(self._provider_warning("chutes_transcription_failed", exc))
             return
 
         captions.extend(
@@ -445,7 +445,7 @@ class RitualRenderer:
                 "alt": "Generated non-literal ritual image.",
             }
         except ChutesProviderError as exc:
-            warnings.append(f"chutes_image_failed:{exc}")
+            warnings.append(self._provider_warning("chutes_image_failed", exc))
 
     def _try_render_chutes_music(
         self,
@@ -467,7 +467,7 @@ class RitualRenderer:
             )
             assets["music"] = self._asset_ref(asset, public_base=public_base)
         except ChutesProviderError as exc:
-            warnings.append(f"chutes_music_failed:{exc}")
+            warnings.append(self._provider_warning("chutes_music_failed", exc))
 
     def _try_render_chutes_video(
         self,
@@ -480,11 +480,16 @@ class RitualRenderer:
         assets: dict[str, dict[str, object]],
         warnings: list[str],
     ) -> None:
-        prompt = self._video_prompt(plan)
-        image = self._video_image_payload(output=output, assets=assets)
-        if not prompt:
-            warnings.append("chutes_video_skipped_no_prompt")
+        visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
+        cinema = cast(dict[str, object], visual.get("cinema") or {})
+        if cinema.get("providerPromptPolicy") != "sanitized_visual_only":
+            warnings.append("chutes_video_skipped_without_sanitized_prompt")
             return
+        prompt = self._video_prompt(plan)
+        if not prompt:
+            warnings.append("chutes_video_skipped_no_sanitized_storyboard")
+            return
+        image = self._video_image_payload(output=output, assets=assets)
         if not image:
             warnings.append("chutes_video_skipped_no_image_input")
             return
@@ -496,9 +501,15 @@ class RitualRenderer:
                 out_path=output / "cinema.mp4",
                 timeout_seconds=timeout,
             )
-            assets["cinema"] = self._asset_ref(asset, public_base=public_base)
+            assets["cinema"] = {
+                **self._asset_ref(asset, public_base=public_base),
+                "posterSrc": self._cinema_poster_src(assets),
+                "title": str(plan.get("title") or "Ritual artifact"),
+                "playbackMode": "transport_synced",
+                "presentation": "full_background",
+            }
         except ChutesProviderError as exc:
-            warnings.append(f"chutes_video_failed:{exc}")
+            warnings.append(self._provider_warning("chutes_video_failed", exc))
 
     def _selected_surfaces(self, profile: str) -> set[str]:
         raw = {item.lower() for item in self._options.get("surfaces", [])}
@@ -513,7 +524,7 @@ class RitualRenderer:
             "chutes_image": {"image"},
             "chutes_music": {"music"},
             "chutes_video": {"cinema"},
-            "chutes_all": {"audio", "captions", "image", "music", "cinema"},
+            "chutes_all": {"audio", "captions", "image"},
         }
         return defaults.get(profile, set())
 
@@ -569,8 +580,7 @@ class RitualRenderer:
         cinema = cast(dict[str, object], visual.get("cinema") or {})
         if not cinema.get("enabled"):
             return ""
-        image = cast(dict[str, object], visual.get("image") or {})
-        if image.get("providerPromptPolicy") != "sanitized_visual_only":
+        if cinema.get("providerPromptPolicy") != "sanitized_visual_only":
             return ""
         storyboard = cinema.get("storyboard")
         if isinstance(storyboard, list) and storyboard:
@@ -579,7 +589,7 @@ class RitualRenderer:
                 prompt = " ".join(str(first.get("prompt") or first.get("text") or "").split())
                 if prompt:
                     return prompt
-        return str(cast(dict[str, object], plan.get("text") or {}).get("summary") or "")
+        return ""
 
     def _video_image_payload(
         self,
@@ -600,6 +610,27 @@ class RitualRenderer:
             if image_path.exists():
                 return base64.b64encode(image_path.read_bytes()).decode("ascii")
         return ""
+
+    def _cinema_poster_src(self, assets: dict[str, dict[str, object]]) -> str | None:
+        image = assets.get("image")
+        if not image:
+            return None
+        src = image.get("src")
+        return str(src) if src else None
+
+    def _provider_warning(self, code: str, exc: ChutesProviderError) -> str:
+        detail = str(exc)
+        if "HTTP " in detail:
+            marker = detail.split("HTTP ", 1)[1][:3]
+            if marker.isdigit():
+                return f"{code}:http_{marker}"
+        if "asset payload" in detail or "downloadable URL" in detail:
+            return f"{code}:asset_payload_missing"
+        if "not a JSON object" in detail or "not JSON" in detail:
+            return f"{code}:response_invalid"
+        if "request failed" in detail.lower():
+            return f"{code}:request_failed"
+        return f"{code}:provider_error"
 
     def _file_sha256(self, path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()

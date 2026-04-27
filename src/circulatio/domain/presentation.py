@@ -265,10 +265,19 @@ class VisualPromptSurfacePlan(TypedDict, total=False):
     providerPromptPolicy: NotRequired[ProviderPromptPolicy]
 
 
+class VisualCinemaStoryboardShot(TypedDict, total=False):
+    id: Required[str]
+    prompt: Required[str]
+    sourceRefIds: Required[list[Id]]
+    durationMs: Required[int]
+    motion: NotRequired[Literal["slow_drift", "still_hold", "soft_reveal"]]
+
+
 class VisualCinemaPlan(TypedDict, total=False):
     enabled: Required[bool]
-    storyboard: Required[list[dict[str, object]]]
+    storyboard: Required[list[VisualCinemaStoryboardShot]]
     maxDurationSeconds: Required[int]
+    providerPromptPolicy: NotRequired[ProviderPromptPolicy]
 
 
 class VisualPromptPlan(TypedDict):

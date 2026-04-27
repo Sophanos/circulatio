@@ -44,7 +44,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
             handoff, plan = self._handoff(temp)
             response = self._response(plan)
             artifact_id = artifact_id_for_plan(plan)
-            policy = self._chutes_policy()
+            policy = self._chutes_policy(surfaces=["audio", "captions", "image"])
 
             with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
                 with patch(
@@ -71,8 +71,93 @@ class HermesRitualHandoffTests(unittest.TestCase):
             self.assertEqual(artifact["providers"], ["mock", "chutes"])
             self.assertEqual(
                 artifact["surfaces"],
-                {"audio": True, "captions": True, "image": True},
+                {"audio": True, "captions": True, "image": True, "cinema": False},
             )
+
+    def test_handoff_passes_provider_backed_cinema_flags_when_all_gates_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp, cinema_enabled=True)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            video_image = str(temp / "seed.png")
+            (temp / "seed.png").write_bytes(b"image")
+            policy = self._chutes_policy(
+                profile="chutes_video",
+                surfaces=["cinema"],
+                video_allowed=True,
+                allow_beta_video=True,
+                video_image=video_image,
+            )
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                        provider="chutes",
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[argv.index("--provider-profile") + 1], "chutes_video")
+            self.assertEqual(argv[argv.index("--surfaces") + 1], "cinema")
+            self.assertIn("--allow-beta-video", argv)
+            self.assertEqual(argv[argv.index("--video-image") + 1], video_image)
+            self.assertTrue(result["artifact"]["surfaces"]["cinema"])
+
+    def test_chutes_all_without_explicit_cinema_surface_does_not_enable_video(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp, cinema_enabled=True)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(surfaces=None, allow_beta_video=True, video_allowed=True)
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                        provider="chutes",
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[argv.index("--surfaces") + 1], "audio,captions,image")
+            self.assertNotIn("--allow-beta-video", argv)
+            self.assertFalse(result["artifact"]["surfaces"]["cinema"])
+
+    def test_cinema_request_without_beta_gate_falls_back_with_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp, cinema_enabled=True)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(
+                profile="chutes_video",
+                surfaces=["cinema"],
+                video_allowed=True,
+                allow_beta_video=False,
+            )
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertIn("--mock-providers", argv)
+            self.assertIn("ritual_handoff_cinema_skipped_without_beta_gate", result["warnings"])
 
     def test_existing_mock_manifest_does_not_block_provider_rerender(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -100,7 +185,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 ) as run:
                     result = handoff.render_from_bridge_response(
                         response,
-                        render_policy=self._chutes_policy(),
+                        render_policy=self._chutes_policy(surfaces=["audio", "captions", "image"]),
                     )
 
             self.assertTrue(run.called)
@@ -126,14 +211,16 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 ) as run:
                     result = handoff.render_from_bridge_response(
                         response,
-                        render_policy=self._chutes_policy(),
+                        render_policy=self._chutes_policy(surfaces=["audio", "captions", "image"]),
                     )
 
             argv = run.call_args.args[0]
             self.assertIn("--mock-providers", argv)
             self.assertIn("ritual_handoff_chutes_skipped_missing_api_token", result["warnings"])
 
-    def _handoff(self, temp: Path) -> tuple[HermesRitualArtifactHandoff, dict[str, object]]:
+    def _handoff(
+        self, temp: Path, *, cinema_enabled: bool = False
+    ) -> tuple[HermesRitualArtifactHandoff, dict[str, object]]:
         script = temp / "render_ritual_artifact.py"
         script.write_text("", encoding="utf-8")
         config = HermesRitualHandoffConfig(
@@ -146,7 +233,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
             open_local_default=False,
             renderer_timeout_seconds=60,
         )
-        return HermesRitualArtifactHandoff(config), self._plan()
+        return HermesRitualArtifactHandoff(config), self._plan(cinema_enabled=cinema_enabled)
 
     def _response(self, plan: dict[str, object]) -> dict[str, object]:
         return {
@@ -161,23 +248,44 @@ class HermesRitualHandoffTests(unittest.TestCase):
             },
         }
 
-    def _chutes_policy(self) -> dict[str, object]:
-        return {
+    def _chutes_policy(
+        self,
+        *,
+        profile: str = "chutes_all",
+        surfaces: list[str] | None = None,
+        video_allowed: bool = False,
+        allow_beta_video: bool = False,
+        video_image: str = "",
+    ) -> dict[str, object]:
+        policy: dict[str, object] = {
             "mode": "render_static",
             "externalProvidersAllowed": True,
             "providerAllowlist": ["mock", "chutes"],
-            "providerProfile": "chutes_all",
-            "surfaces": ["audio", "captions", "image", "cinema"],
+            "providerProfile": profile,
             "transcribeCaptions": True,
             "requestTimeoutSeconds": 180,
             "maxCost": {"currency": "USD", "amount": 0.05},
+            "videoAllowed": video_allowed,
+            "allowBetaVideo": allow_beta_video,
         }
+        if surfaces is not None:
+            policy["surfaces"] = surfaces
+        if video_image:
+            policy["videoImage"] = video_image
+        return policy
 
     def _fake_renderer(self, *, artifact_id: str, plan_id: str, provider: str = "mock"):
         def run(argv: list[str], **_: object) -> object:
             out_dir = Path(argv[argv.index("--out") + 1])
+            surfaces = ""
+            if "--surfaces" in argv:
+                surfaces = str(argv[argv.index("--surfaces") + 1])
             self._write_manifest(
-                out_dir, artifact_id=artifact_id, plan_id=plan_id, provider=provider
+                out_dir,
+                artifact_id=artifact_id,
+                plan_id=plan_id,
+                provider=provider,
+                cinema="cinema" in surfaces.split(","),
             )
             return object()
 
@@ -190,6 +298,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
         artifact_id: str,
         plan_id: str,
         provider: str,
+        cinema: bool = False,
     ) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         audio = {
@@ -201,6 +310,14 @@ class HermesRitualHandoffTests(unittest.TestCase):
             "checksum": None,
         }
         image = {"enabled": False, "src": None, "provider": None}
+        cinema_surface = {
+            "enabled": False,
+            "src": None,
+            "posterSrc": None,
+            "mimeType": None,
+            "durationMs": None,
+            "provider": None,
+        }
         providers = ["mock"]
         if provider == "chutes":
             providers.append("chutes")
@@ -219,6 +336,17 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 "mimeType": "image/png",
                 "checksum": "image-checksum",
             }
+            if cinema:
+                cinema_surface = {
+                    "enabled": True,
+                    "src": f"/artifacts/{artifact_id}/cinema.mp4",
+                    "posterSrc": f"/artifacts/{artifact_id}/image.png",
+                    "provider": "chutes",
+                    "model": "chutes-wan-2-2-i2v-14b-fast",
+                    "mimeType": "video/mp4",
+                    "durationMs": None,
+                    "checksum": "video-checksum",
+                }
         manifest = {
             "schemaVersion": "hermes_ritual_artifact.v1",
             "artifactId": artifact_id,
@@ -242,6 +370,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
                     ],
                 },
                 "image": image,
+                "cinema": cinema_surface,
             },
             "render": {
                 "rendererVersion": "ritual-renderer.v1",
@@ -253,7 +382,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
         (out_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         (out_dir / "captions.vtt").write_text("WEBVTT\n", encoding="utf-8")
 
-    def _plan(self) -> dict[str, object]:
+    def _plan(self, *, cinema_enabled: bool = False) -> dict[str, object]:
         return {
             "id": "ritual_plan_fixture",
             "title": "Fixture podcast ritual",
@@ -275,7 +404,22 @@ class HermesRitualHandoffTests(unittest.TestCase):
                     "prompt": "A symbolic non literal threshold image.",
                     "providerPromptPolicy": "sanitized_visual_only",
                 },
-                "cinema": {"enabled": False},
+                "cinema": {
+                    "enabled": cinema_enabled,
+                    "providerPromptPolicy": "sanitized_visual_only" if cinema_enabled else "none",
+                    "storyboard": (
+                        [
+                            {
+                                "id": "shot_1",
+                                "prompt": "Slow non-literal symbolic motion.",
+                                "sourceRefIds": ["weekly_fixture"],
+                                "durationMs": 8000,
+                            }
+                        ]
+                        if cinema_enabled
+                        else []
+                    ),
+                },
             },
             "safetyBoundary": {
                 "providerRestrictions": ["no_raw_material_to_external_provider"],

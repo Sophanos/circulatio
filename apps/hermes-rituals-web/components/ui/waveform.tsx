@@ -171,6 +171,7 @@ export type ScrollingWaveformProps = Omit<
   speed?: number
   barCount?: number
   data?: number[]
+  progress?: number
 }
 
 export const ScrollingWaveform = ({
@@ -185,6 +186,7 @@ export const ScrollingWaveform = ({
   fadeWidth = 24,
   height = 128,
   data,
+  progress,
   className,
   ...props
 }: ScrollingWaveformProps) => {
@@ -260,66 +262,102 @@ export const ScrollingWaveform = ({
         "#000"
 
       const step = barWidth + barGap
-      for (let i = 0; i < barsRef.current.length; i++) {
-        barsRef.current[i].x -= speed * deltaTime
-      }
-
-      barsRef.current = barsRef.current.filter(
-        (bar) => bar.x + barWidth > -step
-      )
-
-      while (
-        barsRef.current.length === 0 ||
-        barsRef.current[barsRef.current.length - 1].x < rect.width
-      ) {
-        const lastBar = barsRef.current[barsRef.current.length - 1]
-        const nextX = lastBar ? lastBar.x + step : rect.width
-
-        let newHeight: number
-        if (data && data.length > 0) {
-          newHeight = data[dataIndexRef.current % data.length] || 0.1
-          dataIndexRef.current = (dataIndexRef.current + 1) % data.length
-        } else {
-          const time = Date.now() / 1000
-          const uniqueIndex = barsRef.current.length + time * 0.01
-          const seededRandom = (index: number) => {
-            const x = Math.sin(seedRef.current * 10000 + index * 137.5) * 10000
-            return x - Math.floor(x)
-          }
-          const wave1 = Math.sin(uniqueIndex * 0.1) * 0.2
-          const wave2 = Math.cos(uniqueIndex * 0.05) * 0.15
-          const randomComponent = seededRandom(uniqueIndex) * 0.4
-          newHeight = Math.max(
-            0.1,
-            Math.min(0.9, 0.3 + wave1 + wave2 + randomComponent)
-          )
-        }
-
-        barsRef.current.push({
-          x: nextX,
-          height: newHeight,
-        })
-        if (barsRef.current.length > barCount * 2) break
-      }
-
       const centerY = rect.height / 2
-      for (const bar of barsRef.current) {
-        if (bar.x < rect.width && bar.x + barWidth > 0) {
-          const barHeight = Math.max(
-            baseBarHeight,
-            bar.height * rect.height * 0.6
+      const syncedProgress =
+        typeof progress === "number" && Number.isFinite(progress)
+          ? Math.min(Math.max(progress, 0), 1)
+          : null
+
+      if (syncedProgress !== null && data && data.length > 0) {
+        const visibleBars = Math.max(1, Math.floor(rect.width / step))
+        const renderedWidth = visibleBars * step - barGap
+        const startX = (rect.width - renderedWidth) / 2
+        const sourceSpan = Math.max(visibleBars, Math.floor(data.length * 0.2))
+        const sourceStart = syncedProgress * Math.max(data.length - sourceSpan, 0)
+
+        for (let index = 0; index < visibleBars; index += 1) {
+          const sourceProgress = visibleBars <= 1 ? 0 : index / (visibleBars - 1)
+          const sourceIndex = Math.min(
+            data.length - 1,
+            Math.max(0, Math.floor(sourceStart + sourceProgress * sourceSpan))
           )
+          const value = data[sourceIndex] || 0.1
+          const barHeight = Math.max(baseBarHeight, value * rect.height * 0.6)
+          const x = startX + index * step
           const y = centerY - barHeight / 2
 
           ctx.fillStyle = computedBarColor
-          ctx.globalAlpha = 0.3 + bar.height * 0.7
+          ctx.globalAlpha = 0.3 + value * 0.7
 
           if (barRadius > 0) {
             ctx.beginPath()
-            ctx.roundRect(bar.x, y, barWidth, barHeight, barRadius)
+            ctx.roundRect(x, y, barWidth, barHeight, barRadius)
             ctx.fill()
           } else {
-            ctx.fillRect(bar.x, y, barWidth, barHeight)
+            ctx.fillRect(x, y, barWidth, barHeight)
+          }
+        }
+      } else {
+        for (let i = 0; i < barsRef.current.length; i++) {
+          barsRef.current[i].x -= speed * deltaTime
+        }
+
+        barsRef.current = barsRef.current.filter(
+          (bar) => bar.x + barWidth > -step
+        )
+
+        while (
+          barsRef.current.length === 0 ||
+          barsRef.current[barsRef.current.length - 1].x < rect.width
+        ) {
+          const lastBar = barsRef.current[barsRef.current.length - 1]
+          const nextX = lastBar ? lastBar.x + step : rect.width
+
+          let newHeight: number
+          if (data && data.length > 0) {
+            newHeight = data[dataIndexRef.current % data.length] || 0.1
+            dataIndexRef.current = (dataIndexRef.current + 1) % data.length
+          } else {
+            const time = Date.now() / 1000
+            const uniqueIndex = barsRef.current.length + time * 0.01
+            const seededRandom = (index: number) => {
+              const x = Math.sin(seedRef.current * 10000 + index * 137.5) * 10000
+              return x - Math.floor(x)
+            }
+            const wave1 = Math.sin(uniqueIndex * 0.1) * 0.2
+            const wave2 = Math.cos(uniqueIndex * 0.05) * 0.15
+            const randomComponent = seededRandom(uniqueIndex) * 0.4
+            newHeight = Math.max(
+              0.1,
+              Math.min(0.9, 0.3 + wave1 + wave2 + randomComponent)
+            )
+          }
+
+          barsRef.current.push({
+            x: nextX,
+            height: newHeight,
+          })
+          if (barsRef.current.length > barCount * 2) break
+        }
+
+        for (const bar of barsRef.current) {
+          if (bar.x < rect.width && bar.x + barWidth > 0) {
+            const barHeight = Math.max(
+              baseBarHeight,
+              bar.height * rect.height * 0.6
+            )
+            const y = centerY - barHeight / 2
+
+            ctx.fillStyle = computedBarColor
+            ctx.globalAlpha = 0.3 + bar.height * 0.7
+
+            if (barRadius > 0) {
+              ctx.beginPath()
+              ctx.roundRect(bar.x, y, barWidth, barHeight, barRadius)
+              ctx.fill()
+            } else {
+              ctx.fillRect(bar.x, y, barWidth, barHeight)
+            }
           }
         }
       }
@@ -362,6 +400,7 @@ export const ScrollingWaveform = ({
     fadeEdges,
     fadeWidth,
     data,
+    progress,
   ])
 
   return (

@@ -1,5 +1,7 @@
 import type { CharacterAlignmentResponseModel } from "@elevenlabs/elevenlabs-js/api/types/CharacterAlignmentResponseModel"
 
+import type { CaptionCue } from "@/lib/artifact-contract"
+
 export function createCharacterAlignment(
   text: string,
   durationMs: number
@@ -13,6 +15,37 @@ export function createCharacterAlignment(
     characterStartTimesSeconds: characters.map((_, index) => index * charDuration),
     characterEndTimesSeconds: characters.map((_, index) => (index + 1) * charDuration)
   }
+}
+
+export function createCharacterAlignmentFromCaptions(
+  captions: CaptionCue[],
+  fallbackText: string,
+  durationMs: number
+): CharacterAlignmentResponseModel {
+  if (captions.length === 0) return createCharacterAlignment(fallbackText, durationMs)
+
+  const characters: string[] = []
+  const characterStartTimesSeconds: number[] = []
+  const characterEndTimesSeconds: number[] = []
+
+  captions.forEach((caption, captionIndex) => {
+    if (captionIndex > 0) {
+      characters.push("\n", "\n")
+      characterStartTimesSeconds.push(caption.startMs / 1000, caption.startMs / 1000)
+      characterEndTimesSeconds.push(caption.startMs / 1000, caption.startMs / 1000)
+    }
+
+    const cueCharacters = Array.from(caption.text)
+    const cueDurationSeconds = Math.max((caption.endMs - caption.startMs) / 1000, 0.1)
+    const charDuration = cueDurationSeconds / Math.max(cueCharacters.length, 1)
+    cueCharacters.forEach((character, index) => {
+      characters.push(character)
+      characterStartTimesSeconds.push(caption.startMs / 1000 + index * charDuration)
+      characterEndTimesSeconds.push(caption.startMs / 1000 + (index + 1) * charDuration)
+    })
+  })
+
+  return { characters, characterStartTimesSeconds, characterEndTimesSeconds }
 }
 
 export function buildWaveformData(text: string, bars = 72) {

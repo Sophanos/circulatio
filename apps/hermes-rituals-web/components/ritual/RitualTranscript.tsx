@@ -7,20 +7,22 @@ import type { PresentationArtifact, RitualSection } from "@/lib/artifact-contrac
 
 export function RitualTranscript({
   artifact,
+  sections,
   currentMs,
   onSeek
 }: {
   artifact: PresentationArtifact
+  sections?: RitualSection[]
   currentMs: number
   onSeek?: (ms: number) => void
 }) {
-  const sections = artifact.ritualSections ?? []
+  const activeSections = sections ?? artifact.ritualSections ?? []
   const captions = artifact.captions ?? []
 
   const grouped = useMemo(() => {
     const map = new Map<string, { section: RitualSection; cues: typeof captions }>()
     for (const cue of captions) {
-      const section = getSectionForCaption(sections, cue)
+      const section = getSectionForCaption(activeSections, cue)
       if (!section) continue
       const entry = map.get(section.id)
       if (entry) {
@@ -30,7 +32,7 @@ export function RitualTranscript({
       }
     }
     return Array.from(map.values())
-  }, [sections, captions])
+  }, [activeSections, captions])
 
   return (
     <div className="flex flex-col gap-8 py-2">

@@ -8,6 +8,8 @@ export type RitualSection = {
   startMs: number
   endMs: number
   kind: RitualSectionKind
+  transcript?: string
+  captionCount?: number
   muted?: boolean
   skippable?: boolean
   channels?: {
@@ -246,6 +248,7 @@ export type RitualArtifactManifest = {
       durationMs?: number | null
       provider?: PresentationVideoProvider | string | null
       model?: string | null
+      checksum?: string | null
       title?: string | null
       playbackMode?: PresentationVideoPlaybackMode | string | null
       presentation?: PresentationVideoPresentation | string | null
@@ -313,6 +316,52 @@ function manifestVideoPresentation(value?: string | null): PresentationVideoPres
 
 function manifestSections(manifest: RitualArtifactManifest): RitualSection[] {
   const durationMs = manifest.durationMs || 60000
+  const captions = manifest.surfaces.captions?.segments ?? []
+  if (captions.length > 0) {
+    return captions.map((caption, index) => {
+      const isFirst = index === 0
+      const isLast = index === captions.length - 1
+      const isBreath = index === 1
+      const isImageReturn = Boolean(manifest.surfaces.image?.enabled) && index === 2
+      const kind: RitualSectionKind = isFirst
+        ? "arrival"
+        : isBreath
+          ? "breath"
+          : isLast
+            ? "closing"
+            : isImageReturn
+              ? "image"
+              : "reflection"
+      const title = isFirst
+        ? "Arrival"
+        : isBreath
+          ? "Breath"
+          : isLast
+            ? "Closing"
+            : isImageReturn
+              ? "Image return"
+              : "Stillness"
+
+      return {
+        id: `section-${caption.id || index + 1}`,
+        title,
+        startMs: caption.startMs,
+        endMs: caption.endMs,
+        kind,
+        transcript: caption.text,
+        captionCount: 1,
+        skippable: !isFirst && !isLast,
+        channels: {
+          voice: true,
+          ambient: kind !== "breath",
+          breath: kind === "breath" || kind === "closing",
+          pulse: kind === "breath",
+          music: false
+        }
+      }
+    })
+  }
+
   const arrivalEnd = Math.min(18000, durationMs)
   const breathEnd = Math.min(durationMs, 90000)
   const meditationStart = Math.min(durationMs, Math.max(breathEnd, durationMs - 180000))

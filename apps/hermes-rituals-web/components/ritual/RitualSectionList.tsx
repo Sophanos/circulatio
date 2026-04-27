@@ -93,6 +93,11 @@ function SectionRow({
         <span className="text-xs text-silver-500">
           {formatTime(section.startMs)} — {formatTime(section.endMs)} · {durationSec}s
         </span>
+        {section.transcript && (
+          <span className="mt-1 line-clamp-2 text-xs leading-snug text-silver-400">
+            {section.transcript}
+          </span>
+        )}
       </button>
 
       {/* Mute toggle */}

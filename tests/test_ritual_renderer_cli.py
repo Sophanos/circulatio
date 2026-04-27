@@ -10,6 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
+from circulatio.ritual_renderer.providers.chutes import ChutesProviderError
 from circulatio.ritual_renderer.renderer import artifact_id_for_plan, render_plan_file
 
 
@@ -174,6 +175,170 @@ class RitualRendererCliTests(unittest.TestCase):
             manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
             self.assertIn("chutes_provider_missing_api_token", manifest["render"]["warnings"])
             self.assertEqual(manifest["surfaces"]["audio"]["provider"], "mock")
+
+    def test_chutes_cinema_path_requires_beta_and_uses_generated_image(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["visualPromptPlan"]["image"] = {
+                "enabled": True,
+                "prompt": "A symbolic non literal threshold image.",
+                "providerPromptPolicy": "sanitized_visual_only",
+                "privacyNotes": ["no raw dream text"],
+                "sourceRefIds": ["weekly_fixture"],
+            }
+            plan["visualPromptPlan"]["cinema"] = {
+                "enabled": True,
+                "providerPromptPolicy": "sanitized_visual_only",
+                "maxDurationSeconds": 8,
+                "storyboard": [
+                    {
+                        "id": "shot_1",
+                        "prompt": "Slow non-literal movement through an abstract threshold field.",
+                        "sourceRefIds": ["weekly_fixture"],
+                        "durationMs": 8000,
+                    }
+                ],
+            }
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            def generate_picture(*, out_path: Path, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"image")
+                return {
+                    "path": out_path,
+                    "mimeType": "image/png",
+                    "provider": "chutes",
+                    "model": "chutes-z-image-turbo",
+                }
+
+            video_inputs: list[str] = []
+
+            def generate_movie(*, image: str, out_path: Path, **_: object) -> dict[str, object]:
+                video_inputs.append(image)
+                out_path.write_bytes(b"video")
+                return {
+                    "path": out_path,
+                    "mimeType": "video/mp4",
+                    "provider": "chutes",
+                    "model": "chutes-wan-2-2-i2v-14b-fast",
+                }
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.generate_image",
+                    side_effect=generate_picture,
+                ):
+                    with patch(
+                        "circulatio.ritual_renderer.renderer.generate_video",
+                        side_effect=generate_movie,
+                    ):
+                        manifest = render_plan_file(
+                            plan_path=plan_path,
+                            out_dir=out_dir,
+                            options={
+                                "providerProfile": "chutes_all",
+                                "surfaces": ["image", "cinema"],
+                                "maxCostUsd": 0.05,
+                                "requestTimeoutSeconds": 5,
+                                "allowBetaVideo": True,
+                                "publicBasePath": "/artifacts/test",
+                            },
+                        )
+
+            self.assertTrue(video_inputs)
+            self.assertEqual(manifest["surfaces"]["image"]["provider"], "chutes")
+            cinema = manifest["surfaces"]["cinema"]
+            self.assertTrue(cinema["enabled"])
+            self.assertEqual(cinema["provider"], "chutes")
+            self.assertEqual(cinema["model"], "chutes-wan-2-2-i2v-14b-fast")
+            self.assertEqual(cinema["posterSrc"], "/artifacts/test/image.png")
+            self.assertEqual(cinema["playbackMode"], "transport_synced")
+            self.assertEqual(cinema["presentation"], "full_background")
+            self.assertTrue(cinema["checksum"])
+
+    def test_chutes_cinema_skips_missing_sanitized_storyboard_without_prompt_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["text"]["summary"] = "Do not use this broad summary as a video prompt."
+            plan["visualPromptPlan"]["cinema"] = {
+                "enabled": True,
+                "providerPromptPolicy": "sanitized_visual_only",
+                "maxDurationSeconds": 8,
+                "storyboard": [],
+            }
+            video_image = temp / "seed.png"
+            video_image.write_bytes(b"image")
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch("circulatio.ritual_renderer.renderer.generate_video") as video:
+                    manifest = render_plan_file(
+                        plan_path=plan_path,
+                        out_dir=out_dir,
+                        options={
+                            "providerProfile": "chutes_video",
+                            "surfaces": ["cinema"],
+                            "maxCostUsd": 0.05,
+                            "allowBetaVideo": True,
+                            "videoImage": str(video_image),
+                        },
+                    )
+
+            video.assert_not_called()
+            self.assertFalse(manifest["surfaces"]["cinema"]["enabled"])
+            self.assertIn(
+                "chutes_video_skipped_no_sanitized_storyboard",
+                manifest["render"]["warnings"],
+            )
+
+    def test_chutes_video_warning_is_sanitized(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["visualPromptPlan"]["cinema"] = {
+                "enabled": True,
+                "providerPromptPolicy": "sanitized_visual_only",
+                "maxDurationSeconds": 8,
+                "storyboard": [
+                    {
+                        "id": "shot_1",
+                        "prompt": "PRIVATE PROMPT TEXT",
+                        "sourceRefIds": ["weekly_fixture"],
+                        "durationMs": 8000,
+                    }
+                ],
+            }
+            video_image = temp / "seed.png"
+            video_image.write_bytes(b"image")
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.generate_video",
+                    side_effect=ChutesProviderError("Chutes HTTP 500: PRIVATE PROMPT TEXT"),
+                ):
+                    manifest = render_plan_file(
+                        plan_path=plan_path,
+                        out_dir=out_dir,
+                        options={
+                            "providerProfile": "chutes_video",
+                            "surfaces": ["cinema"],
+                            "maxCostUsd": 0.05,
+                            "allowBetaVideo": True,
+                            "videoImage": str(video_image),
+                        },
+                    )
+
+            warnings = manifest["render"]["warnings"]
+            self.assertIn("chutes_video_failed:http_500", warnings)
+            self.assertFalse(any("PRIVATE PROMPT TEXT" in warning for warning in warnings))
 
     def _fixture_plan(self) -> dict[str, object]:
         return {

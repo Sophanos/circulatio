@@ -18,7 +18,8 @@ from circulatio.ritual_renderer.renderer import (
     artifact_id_for_plan,
 )
 
-_PROVIDER_SURFACES = {"audio", "captions", "image"}
+_PROVIDER_SURFACES = {"audio", "captions", "image", "cinema"}
+_VIDEO_PROVIDER_PROFILES = {"chutes_video", "chutes_all"}
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,8 @@ class HermesHandoffRenderOptions:
     transcribe_captions: bool
     request_timeout_seconds: int
     chutes_token_env: str
+    allow_beta_video: bool
+    video_image: str
     provider_backed: bool
     warnings: list[str]
 
@@ -270,6 +273,10 @@ class HermesRitualArtifactHandoff:
             )
             if options.transcribe_captions:
                 argv.append("--transcribe-captions")
+            if options.allow_beta_video and "cinema" in options.surfaces:
+                argv.append("--allow-beta-video")
+            if options.video_image and "cinema" in options.surfaces:
+                argv.extend(["--video-image", options.video_image])
             timeout = max(timeout, 300, options.request_timeout_seconds * 3 + 30)
         else:
             argv.extend(["--mock-providers", "--dry-run"])
@@ -305,25 +312,44 @@ class HermesRitualArtifactHandoff:
         token_env = (
             str(policy.get("chutesTokenEnv") or "CHUTES_API_TOKEN").strip() or "CHUTES_API_TOKEN"
         )
+        allow_beta_video = bool(policy.get("allowBetaVideo"))
+        video_image = str(policy.get("videoImage") or "").strip()
         transcribe = bool(policy.get("transcribeCaptions")) or "captions" in selected
         provider_backed = False
         chutes_requested = profile.startswith("chutes_")
+        blocking_warnings: list[str] = []
         if chutes_requested:
             if mode != "render_static":
-                warnings.append("ritual_handoff_chutes_skipped_by_render_mode")
+                blocking_warnings.append("ritual_handoff_chutes_skipped_by_render_mode")
             if not bool(policy.get("externalProvidersAllowed")):
-                warnings.append("ritual_handoff_chutes_skipped_external_providers_disabled")
+                blocking_warnings.append(
+                    "ritual_handoff_chutes_skipped_external_providers_disabled"
+                )
             if "chutes" not in self._provider_allowlist(policy.get("providerAllowlist")):
-                warnings.append("ritual_handoff_chutes_skipped_provider_not_allowed")
+                blocking_warnings.append("ritual_handoff_chutes_skipped_provider_not_allowed")
             if max_cost <= 0:
-                warnings.append("ritual_handoff_chutes_skipped_zero_budget")
+                blocking_warnings.append("ritual_handoff_chutes_skipped_zero_budget")
             if not os.environ.get(token_env):
-                warnings.append("ritual_handoff_chutes_skipped_missing_api_token")
-            if not selected:
-                warnings.append("ritual_handoff_chutes_skipped_no_allowed_surfaces")
+                blocking_warnings.append("ritual_handoff_chutes_skipped_missing_api_token")
             if not self._plan_allows_external_providers(plan):
-                warnings.append("ritual_handoff_chutes_skipped_by_plan_policy")
-            provider_backed = not warnings
+                blocking_warnings.append("ritual_handoff_chutes_skipped_by_plan_policy")
+            if "cinema" in requested:
+                if "cinema" not in allowed or not self._plan_allows_cinema(plan):
+                    warnings.append("ritual_handoff_chutes_skipped_by_plan_policy")
+                    selected = [surface for surface in selected if surface != "cinema"]
+                if not bool(policy.get("videoAllowed")):
+                    warnings.append("ritual_handoff_cinema_skipped_without_video_allowed")
+                    selected = [surface for surface in selected if surface != "cinema"]
+                if not allow_beta_video:
+                    warnings.append("ritual_handoff_cinema_skipped_without_beta_gate")
+                    selected = [surface for surface in selected if surface != "cinema"]
+                if profile not in _VIDEO_PROVIDER_PROFILES:
+                    warnings.append("ritual_handoff_cinema_skipped_provider_profile")
+                    selected = [surface for surface in selected if surface != "cinema"]
+            if not selected:
+                blocking_warnings.append("ritual_handoff_chutes_skipped_no_allowed_surfaces")
+            warnings = list(dict.fromkeys([*blocking_warnings, *warnings]))
+            provider_backed = not blocking_warnings and bool(selected)
         return HermesHandoffRenderOptions(
             provider_profile=profile if chutes_requested else "mock",
             surfaces=selected,
@@ -331,6 +357,8 @@ class HermesRitualArtifactHandoff:
             transcribe_captions=transcribe,
             request_timeout_seconds=timeout,
             chutes_token_env=token_env,
+            allow_beta_video=allow_beta_video,
+            video_image=video_image,
             provider_backed=provider_backed,
             warnings=warnings,
         )
@@ -386,6 +414,15 @@ class HermesRitualArtifactHandoff:
             captions = surfaces.get("captions")
             segments = captions.get("segments") if isinstance(captions, dict) else None
             if not (bool(segments) or manifest_path.with_name("captions.vtt").exists()):
+                return False
+        if "cinema" in options.surfaces:
+            cinema = surfaces.get("cinema")
+            if not (
+                isinstance(cinema, dict)
+                and cinema.get("enabled") is True
+                and cinema.get("src")
+                and cinema.get("provider") == "chutes"
+            ):
                 return False
         return True
 
@@ -473,13 +510,19 @@ class HermesRitualArtifactHandoff:
         audio = surfaces.get("audio")
         captions = surfaces.get("captions")
         image = surfaces.get("image")
+        cinema = surfaces.get("cinema")
         caption_segments = captions.get("segments") if isinstance(captions, dict) else None
         caption_tracks = captions.get("tracks") if isinstance(captions, dict) else None
-        return {
+        summary = {
             "audio": bool(isinstance(audio, dict) and audio.get("src")),
             "captions": bool(caption_segments or caption_tracks),
             "image": bool(isinstance(image, dict) and image.get("enabled") and image.get("src")),
         }
+        if "cinema" in surfaces:
+            summary["cinema"] = bool(
+                isinstance(cinema, dict) and cinema.get("enabled") and cinema.get("src")
+            )
+        return summary
 
     def _requested_provider_surfaces(self, value: object) -> list[str]:
         if not isinstance(value, list):
@@ -539,3 +582,8 @@ class HermesRitualArtifactHandoff:
         if "external_providers_disabled" in restrictions:
             return False
         return "no_raw_material_to_external_provider" in restrictions
+
+    def _plan_allows_cinema(self, plan: dict[str, object]) -> bool:
+        visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
+        cinema = cast(dict[str, object], visual.get("cinema") or {})
+        return bool(cinema.get("enabled")) and self._plan_allows_external_providers(plan)
