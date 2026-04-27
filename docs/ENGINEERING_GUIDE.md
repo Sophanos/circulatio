@@ -32,7 +32,7 @@ Circulatio is a **symbolic/individuation backend for Hermes**. It is not a gener
 - **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling, ritual delivery messages, and ritual-invitation acceptance
 - **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile, typed ritual plans, scheduled ritual-invitation brief payloads, and idempotent ritual-completion events
 - **Renderer CLI owns:** local/static artifact manifest generation, mock provider output, provider/cache boundaries, fallback WebVTT captions, raw-prompt provider guards, and beta gates for music/video
-- **Hermes Rituals frontend owns:** playback of artifact manifests, breath pacers, meditation fields, captions, completion UI, idempotency-key generation, and completion POST validation
+- **Hermes Rituals frontend owns:** playback of artifact manifests, real-audio waveform decoding and scrub sync, photo-lens image rendering, breath pacers, meditation fields, caption-derived transcript sections, completion UI, idempotency-key generation, and completion POST validation
 
 ### Ritual Runtime Boundaries
 - Scheduled cron may create `ritual_invitation` rhythmic briefs only after `proactive_briefing` consent.
@@ -40,6 +40,8 @@ Circulatio is a **symbolic/individuation backend for Hermes**. It is not a gener
 - Manual acceptance is the boundary for planning: accept the brief, then call `circulatio_plan_ritual` with the safe `acceptancePayload`.
 - Completion sync is a separate persistence operation. It records playback state, optional literal reflection text, and explicit practice feedback only; it never triggers interpretation, review generation, proposal creation, or practice recommendation.
 - Provider-backed rendering stays opt-in, budget-gated, renderer-owned, and disabled for music/video unless beta flags are present.
+- Mock/dry-run artifacts must not be treated as proof of live media. Check manifest provider fields and concrete `audio.wav`, `image.png`, and `captions.vtt` sources before debugging frontend playback.
+- The current Hermes Rituals player chrome is product-sensitive. Improve media accuracy underneath it; do not redesign the visible waveform/scrub/caption controls without explicit UI approval.
 
 ### Storage Boundary
 - SQLite is the canonical local backend

@@ -1,7 +1,7 @@
 # Presentation Layer
 ## Embodied Presentation Contract
 
-> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields plus beta gates for music/video. Provider-backed Chutes rendering is renderer-owned and available through explicit manual renderer flags; Hermes-controlled photo + podcast handoff is now an initial local integration that still defaults to mock/dry-run unless strict provider gates pass. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
+> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields plus beta gates for music/video. Provider-backed Chutes rendering is renderer-owned and available through explicit manual renderer flags; Hermes-controlled photo + podcast handoff is now an initial local integration that still defaults to mock/dry-run unless strict provider gates pass. Hermes Rituals now keeps the existing player UI while using real audio duration, decoded waveform peaks, scrub-linked waveform progress, generated images, and caption-derived sections when the manifest provides them. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
 
 Circulatio should evolve from a text interpretation backend into a **symbolic backend that emits embodied, voice-aware, breath-aware, interaction-ready presentation plans**. Hosts render them; Circulatio does not own frontend code.
 
@@ -239,7 +239,7 @@ allowed = result.renderRequest.allowedSurfaces
 selected = requested intersection allowed intersection {"audio", "captions", "image"}
 ```
 
-Even with `providerProfile == "chutes_all"`, the handoff passes explicit `--surfaces audio,captions,image`. It must not rely on the renderer's `chutes_all` default because that default also includes music and cinema. The handoff never passes `--allow-beta-music` or `--allow-beta-video` for this flow.
+Even with `providerProfile == "chutes_all"`, the handoff passes explicit `--surfaces audio,captions,image`. It must not rely on profile defaults for product safety. The current safe `chutes_all` bundle is audio, captions, and image; music and cinema stay separate beta surfaces and require explicit beta flags. The handoff never passes `--allow-beta-music` or `--allow-beta-video` for this flow.
 
 Default renderer command remains:
 
@@ -328,8 +328,12 @@ Frontend playback rules:
 - `BroadcastDeck`, `TranscriptCard`, and `RitualPlayer` use `artifact.audioUrl` when present.
 - Silent WAV object URLs remain fallback-only for mock artifacts.
 - Generated blob URLs are revoked; public artifact URLs are not revoked.
-- Caption timing from Whisper drives captions where cue-based captions are supported.
-- `TranscriptCard` may keep synthetic character alignment until word-level alignment exists, but it should play the real audio source.
+- `RitualPlayer` preserves the existing dark/minimal player chrome while decoding real audio into waveform peaks underneath it.
+- The scrub bar, audio element, decoded waveform progress, captions, and section clock share the same media time.
+- Real audio metadata can arrive after first render; browser tests should wait for slider duration to switch from planned manifest duration to actual audio duration before asserting scrub behavior.
+- Image-backed artifacts enter the Photo lens by default unless a cinema video is present.
+- Caption timing from Whisper or fallback segments drives `CaptionStack`, section rows, transcript grouping, and ElevenLabs-style character alignment.
+- `TranscriptCard` uses caption-derived character timing where segments exist; exact word-level alignment remains a future provider surface.
 
 Script-duration follow-up: the current plan duration can target 120-180 seconds, but actual `voiceScript` text may be shorter. If exact podcast length becomes product-critical, add a podcast/broadcast profile in `CirculatioCore._presentation_voice_segments()` that accepts `target_seconds`, estimates a measured-pace word budget of roughly 240-280 words for two minutes or 330-390 words for three minutes, and emits structured segments such as opening, source thread, symbolic image, integration, and closing.
 

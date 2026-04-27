@@ -108,6 +108,8 @@ Create a plan through Hermes or a test fixture, then render it locally with mock
 
 The Hermes Rituals app can load the resulting manifest at `/artifacts/{artifactId}`. The built-in fixture is available at `/artifacts/weekly-ritual-dry-run`.
 
+Mock and dry-run artifacts are valid contract tests, but they are not proof of generated media. A dry-run manifest may have `surfaces.audio.provider == "mock"`, no `audio.src`, `image.enabled == false`, and only fallback captions. Provider-backed artifacts should include concrete public files such as `audio.wav`, `image.png`, `captions.vtt`, and `manifest.json` under `apps/hermes-rituals-web/public/artifacts/{artifactId}/`.
+
 Completion is explicit and idempotent. The frontend validates the artifact and idempotency key, Hermes forwards the completion event, and Circulatio stores a `RitualCompletionEvent`. Optional reflections are stored literally only when user-authored. Completion does not trigger interpretation.
 
 Chutes provider rendering is available from the renderer only. Keep the API token in your shell or an ignored local env file, then request the provider profile explicitly:
@@ -123,7 +125,9 @@ export CHUTES_API_TOKEN=...
   --max-cost-usd 0.05
 ```
 
-The renderer also has opt-in Chutes profiles for image, music, video, and all surfaces. Those calls require a plan that allows external providers plus an explicit positive budget flag. Raw Circulatio source text is not sent to providers. Music and video additionally require `--allow-beta-music` or `--allow-beta-video`.
+The renderer also has opt-in Chutes profiles for image, music, and video. `chutes_all` currently means the safe live bundle: audio, captions, and image. Music and video are separate beta surfaces and require `--allow-beta-music` or `--allow-beta-video`. All provider calls require a plan that allows external providers plus an explicit positive budget flag. Raw Circulatio source text is not sent to providers.
+
+Frontend playback is manifest-driven. `RitualPlayer` uses real `artifact.audioUrl` before any silent fallback, waits for audio metadata before replacing planned duration with actual media duration, decodes the audio file into waveform peaks, keeps scrub/progress aligned to the same clock, and opens image-backed artifacts on the Photo lens. Captions remain required even when Whisper fails; fallback segments still drive transcript sections and `captions.vtt`.
 
 For provider-backed multimedia, use a paid Chutes account. As of April 25, 2026, Chutes lists a Plus plan at `$10/month`; check [chutes.ai/pricing](https://chutes.ai/pricing) before relying on a specific price, quota, or model surface.
 
