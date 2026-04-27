@@ -116,7 +116,6 @@ function waveformFromAudioBuffer(audioBuffer: AudioBuffer, samples = WAVEFORM_SA
     return Math.min(0.95, Math.max(0.06, normalized * 0.9))
   })
 }
-
 function SectionMarkers({
   sections,
   durationSeconds
