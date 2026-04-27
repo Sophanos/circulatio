@@ -106,6 +106,60 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_plan_ritual_photo_podcast_surfaces_are_allowed_and_read_only(self) -> None:
+        async def run() -> None:
+            repository, service, llm = self._service()
+            workflow = await service.plan_ritual(
+                {
+                    "userId": "user_1",
+                    "ritualIntent": "journey_broadcast",
+                    "narrativeMode": "full_guided",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "requestedSurfaces": {
+                        "audio": {"enabled": True, "tone": "steady", "pace": "measured"},
+                        "captions": {"enabled": True, "format": "webvtt"},
+                        "image": {
+                            "enabled": True,
+                            "styleIntent": "symbolic_non_literal",
+                            "allowExternalGeneration": True,
+                        },
+                        "cinema": {"enabled": False},
+                    },
+                    "renderPolicy": {
+                        "mode": "render_static",
+                        "defaultDurationSeconds": 150,
+                        "maxDurationSeconds": 180,
+                        "externalProvidersAllowed": True,
+                        "videoAllowed": False,
+                        "providerAllowlist": ["mock", "chutes"],
+                        "maxCost": {"currency": "USD", "amount": 0.05},
+                    },
+                }
+            )
+
+            plan = workflow["plan"]
+            self.assertEqual(plan["duration"]["targetSeconds"], 150)
+            self.assertIn("audio", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn("captions", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn("image", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertNotIn("cinema", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertTrue(plan["visualPromptPlan"]["image"]["enabled"])
+            self.assertEqual(
+                plan["visualPromptPlan"]["image"]["providerPromptPolicy"],
+                "sanitized_visual_only",
+            )
+            self.assertIn(
+                "no_raw_material_to_external_provider",
+                plan["safetyBoundary"]["providerRestrictions"],
+            )
+            self.assertEqual(llm.interpret_calls, [])
+            self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
+            self.assertEqual(await repository.list_weekly_reviews("user_1"), [])
+            self.assertEqual(await repository.list_practice_sessions("user_1"), [])
+
+        asyncio.run(run())
+
     def test_plan_ritual_high_activation_disables_holds_and_cinema(self) -> None:
         async def run() -> None:
             repository, service, llm = self._service()

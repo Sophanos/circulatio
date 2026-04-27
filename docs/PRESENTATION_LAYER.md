@@ -1,7 +1,7 @@
 # Presentation Layer
 ## Embodied Presentation Contract
 
-> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the renderer now emits completion manifest fields plus beta gates for music/video. Provider-backed rendering remains opt-in, budget-gated, and renderer-owned. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
+> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields plus beta gates for music/video. Provider-backed Chutes rendering is renderer-owned and available through explicit manual renderer flags; Hermes-controlled photo + podcast handoff is now an initial local integration that still defaults to mock/dry-run unless strict provider gates pass. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
 
 Circulatio should evolve from a text interpretation backend into a **symbolic backend that emits embodied, voice-aware, breath-aware, interaction-ready presentation plans**. Hosts render them; Circulatio does not own frontend code.
 
@@ -132,14 +132,217 @@ Phase 1 enabled surfaces are text, `voiceScript`-as-plan, captions, breath, and 
 
 Circulatio still emits plans only. It does not call Chutes, does not store media blobs, and does not manage artifact cache.
 
-### Phase 1 stabilization gate
+### Stabilization notes
 
-Before Phase 2 starts, stabilize these leftovers:
+These constraints remain active across the local artifact flow:
 
-1. Completion UI and routes must not imply Circulatio sync until Phase 3 lands.
+1. Completion UI and routes record only explicit completion, body-state, reflection, or practice-feedback payloads; they must not imply interpretation.
 2. Fallback captions must remain first-class artifact output.
 3. Music and video must remain behind stricter product gates.
-4. Planned/deferred statuses in this document and linked docs must stay current.
+4. Implementation statuses in this document and linked docs must stay current.
+
+### Hermes-Controlled Photo + Podcast Artifact Flow
+
+Status: initial local handoff implementation on top of the existing Phase 1 artifact flow. This is a targeted integration, not a Circulatio provider refactor. Circulatio still emits a read-only `PresentationRitualPlan`; Hermes/plugin carries provider intent and local handoff policy; the renderer owns Chutes calls; Hermes Rituals loads the resulting manifest at `/artifacts/{artifactId}`.
+
+Target behavior:
+
+```text
+Hermes user intent
+-> circulatio_plan_ritual
+-> plan with audio + captions + symbolic image surfaces
+-> handoff persists plan
+-> handoff invokes renderer with Chutes flags only when strict gates pass
+-> renderer calls Kokoro speech, Whisper captions, and Z-Image
+-> renderer writes manifest.json, captions.vtt, audio, and image assets
+-> handoff returns artifactUrl + artifact metadata + warnings
+-> Hermes Rituals plays generated audio and displays image/captions
+```
+
+The first pass stays on `/artifacts/{artifactId}`. The `/broadcasts/{artifactId}` route remains mock-artifact based and should not be used for local manifest playback until it learns to load manifests.
+
+Hermes request shape for this flow:
+
+```ts
+{
+  ritualIntent: "journey_broadcast" | "weekly_integration",
+  narrativeMode: "full_guided" | "sparse_guided",
+  requestedSurfaces: {
+    audio: { enabled: true, tone: "steady", pace: "measured" },
+    captions: { enabled: true, format: "webvtt" },
+    image: {
+      enabled: true,
+      styleIntent: "symbolic_non_literal",
+      allowExternalGeneration: true
+    },
+    breath: { enabled: false },
+    meditation: { enabled: false },
+    cinema: { enabled: false }
+  },
+  renderPolicy: {
+    mode: "render_static",
+    defaultDurationSeconds: 150,
+    maxDurationSeconds: 180,
+    externalProvidersAllowed: true,
+    videoAllowed: false,
+    providerAllowlist: ["mock", "chutes"],
+    maxCost: { currency: "USD", amount: 0.05 },
+
+    // Handoff-only plugin policy for this phase.
+    providerProfile: "chutes_all",
+    surfaces: ["audio", "captions", "image"],
+    transcribeCaptions: true,
+    requestTimeoutSeconds: 180,
+
+    sourceDataPolicy: {
+      allowRawMaterialTextInPlan: false,
+      allowRawMaterialTextToProviders: false,
+      providerPromptPolicy: "derived_user_facing_only"
+    }
+  }
+}
+```
+
+`providerProfile`, `surfaces`, `transcribeCaptions`, `requestTimeoutSeconds`, and `chutesTokenEnv` are handoff-only plugin fields, not formal Circulatio domain fields. `circulatio_plan_ritual` passes the original `renderPolicy` into `HermesRitualArtifactHandoff`; Circulatio core remains provider-agnostic.
+
+Internal handoff extraction uses this shape:
+
+```text
+HermesHandoffRenderOptions
+- providerProfile
+- surfaces
+- maxCostUsd
+- transcribeCaptions
+- requestTimeoutSeconds
+- chutesTokenEnv
+- providerBacked
+- warnings
+```
+
+Provider-backed rendering is allowed only when all gates pass:
+
+1. `renderPolicy.mode == "render_static"`.
+2. `externalProvidersAllowed == true`.
+3. `providerAllowlist` includes `chutes`.
+4. `providerProfile` starts with `chutes_`.
+5. `maxCostUsd` or `maxCost.amount` is greater than zero.
+6. `CHUTES_API_TOKEN`, or the configured token env var, exists before renderer launch.
+7. Requested surfaces intersect `result.renderRequest.allowedSurfaces`.
+8. Selected surfaces are limited to `audio`, `captions`, and `image`.
+9. The plan allows external providers and includes `no_raw_material_to_external_provider`.
+
+Safe surface selection:
+
+```text
+requested = renderPolicy.surfaces if present else ["audio", "captions", "image"]
+allowed = result.renderRequest.allowedSurfaces
+selected = requested intersection allowed intersection {"audio", "captions", "image"}
+```
+
+Even with `providerProfile == "chutes_all"`, the handoff passes explicit `--surfaces audio,captions,image`. It must not rely on the renderer's `chutes_all` default because that default also includes music and cinema. The handoff never passes `--allow-beta-music` or `--allow-beta-video` for this flow.
+
+Default renderer command remains:
+
+```text
+scripts/render_ritual_artifact.py \
+  --plan {planPath} \
+  --out {stagingDir} \
+  --mock-providers \
+  --dry-run \
+  --public-base /artifacts/{artifactId}
+```
+
+Provider-backed command becomes:
+
+```text
+scripts/render_ritual_artifact.py \
+  --plan {planPath} \
+  --out {stagingDir} \
+  --provider-profile chutes_all \
+  --surfaces audio,captions,image \
+  --transcribe-captions \
+  --max-cost-usd {positiveBudget} \
+  --request-timeout-seconds {timeout} \
+  --public-base /artifacts/{artifactId}
+```
+
+Provider safety and privacy rules:
+
+- Kokoro receives only derived `voiceScript` text.
+- Z-Image receives only `visualPromptPlan.image.prompt` when `providerPromptPolicy == "sanitized_visual_only"`.
+- Source refs, raw material text, graph records, dream bodies, and chat history must never be sent to Chutes.
+- `externalProvidersAllowed=false` blocks Chutes.
+- Missing `no_raw_material_to_external_provider` blocks Chutes.
+- Video and music remain disabled for this flow.
+- Provider warnings are returned to Hermes in `artifact.renderWarnings` and merged into response warnings.
+
+For a successful Chutes-backed photo + podcast artifact, `manifest.json` should contain Chutes audio, WebVTT caption tracks plus timed segments, and a generated image:
+
+```ts
+{
+  schemaVersion: "hermes_ritual_artifact.v1",
+  artifactId: "ritual_artifact_...",
+  planId: "ritual_plan_...",
+  durationMs: 120000 | 150000 | 180000,
+  surfaces: {
+    text: { body: string },
+    audio: {
+      src: "/artifacts/{artifactId}/audio.wav" | "/artifacts/{artifactId}/audio.mp3",
+      mimeType: "audio/wav" | "audio/mpeg",
+      durationMs: null,
+      provider: "chutes",
+      model: "chutes-kokoro",
+      voiceId: "chutes-kokoro",
+      checksum: string
+    },
+    captions: {
+      tracks: [{ src: "/artifacts/{artifactId}/captions.vtt", format: "webvtt" }],
+      segments: [{ id: string, startMs: number, endMs: number, text: string }]
+    },
+    image: {
+      enabled: true,
+      src: "/artifacts/{artifactId}/image.png",
+      mimeType: "image/png",
+      provider: "chutes",
+      model: "chutes-z-image-turbo",
+      checksum: string
+    }
+  },
+  render: {
+    rendererVersion: "ritual-renderer.v1",
+    mode: "render_static",
+    providers: ["mock", "chutes"],
+    warnings: []
+  }
+}
+```
+
+Degraded states remain valid when the manifest and captions are valid: Whisper failure keeps fallback captions; audio failure can leave placeholder audio plus warnings; image failure can leave image disabled plus warnings; missing token, zero budget, or disabled providers fall back to mock/dry-run-compatible output.
+
+Existing manifests are checked for suitability before reuse. A mock manifest can satisfy a mock request, but it cannot satisfy a Chutes audio request unless `surfaces.audio.src` exists and `provider == "chutes"`; it cannot satisfy a Chutes image request unless image is enabled with a Chutes `src`; captions may be provider or fallback captions as long as segments or `captions.vtt` exist.
+
+Provider-backed subprocess timeout is larger than mock rendering: at least 300 seconds and otherwise `max(config.renderer_timeout_seconds, requestTimeoutSeconds * 3 + 30)`. Staging directories are cleaned up on timeout, renderer error, or manifest validation failure, and the final artifact directory is replaced only after the staging manifest validates.
+
+Frontend playback rules:
+
+- `BroadcastDeck`, `TranscriptCard`, and `RitualPlayer` use `artifact.audioUrl` when present.
+- Silent WAV object URLs remain fallback-only for mock artifacts.
+- Generated blob URLs are revoked; public artifact URLs are not revoked.
+- Caption timing from Whisper drives captions where cue-based captions are supported.
+- `TranscriptCard` may keep synthetic character alignment until word-level alignment exists, but it should play the real audio source.
+
+Script-duration follow-up: the current plan duration can target 120-180 seconds, but actual `voiceScript` text may be shorter. If exact podcast length becomes product-critical, add a podcast/broadcast profile in `CirculatioCore._presentation_voice_segments()` that accepts `target_seconds`, estimates a measured-pace word budget of roughly 240-280 words for two minutes or 330-390 words for three minutes, and emits structured segments such as opening, source thread, symbolic image, integration, and closing.
+
+Tests for this flow should cover:
+
+- Planning with audio/captions/image allows those render surfaces and keeps image prompts sanitized.
+- Handoff defaults to mock/dry-run.
+- Handoff builds Chutes argv only when mode, external provider, allowlist, profile, budget, token, plan policy, and surface gates pass.
+- Handoff always passes explicit `--surfaces audio,captions,image` for this flow.
+- Existing mock manifests do not block Chutes rerender when Chutes is actually requested.
+- Renderer fallback captions survive Whisper failure.
+- Explicit `--surfaces audio,captions,image` with `chutes_all` does not render music or cinema.
+- Frontend components play `artifact.audioUrl` before silent fallback.
 
 ---
 
@@ -244,15 +447,16 @@ The draft is not a plan. It is a typed suggestion for a later accepted plan requ
 
 ## Phase 3 Completion Sync And Provider Hardening
 
-Phase 3 adds **idempotent completion sync** and hardens provider rendering. Completion is an explicit user action or playback event. It is not interpretation. The local backend/plugin route and frontend POST handler shape are implemented; production Hermes delivery/forwarding remains host configuration.
+Phase 3 adds **idempotent completion sync** and hardens provider rendering. Completion is an explicit user action or playback event. It is not interpretation. The local backend/plugin route and frontend POST handler shape are implemented. Local development needs no external completion endpoint; production Hermes or another host may still override forwarding with `HERMES_RITUAL_COMPLETION_URL`.
 
 ### Completion flow
 
 ```text
 Frontend POST /api/artifacts/{artifactId}/complete
 -> validates manifest + idempotency key
--> forwards normalized payload to Hermes
--> Hermes dispatches circulatio.presentation.record_ritual_completion
+-> if HERMES_RITUAL_COMPLETION_URL is set, POSTs normalized payload to that host
+-> otherwise spawns scripts/record_ritual_completion.py in the repo-local Python environment
+-> plugin dispatches circulatio_record_ritual_completion
 -> Circulatio stores event idempotently
 -> optional literal reflection material
 -> optional explicit practice feedback
@@ -308,6 +512,20 @@ RecordRitualCompletionInput
 - practiceFeedback?
 - clientMetadata?
 ```
+
+### Local completion adapter
+
+The Hermes Rituals web app should work out of the box for local artifacts. If `HERMES_RITUAL_COMPLETION_URL` is unset, `apps/hermes-rituals-web/lib/hermes-completion-adapter.ts` invokes `scripts/record_ritual_completion.py` through local Python. That bridge calls only the plugin completion tool and must not call interpretation.
+
+Operators and host agents can change the handoff with environment variables:
+- `HERMES_RITUAL_COMPLETION_URL` - external POST receiver for Hermes or another host-owned adapter
+- `CIRCULATIO_REPO_ROOT` - repo root used by the local web adapter
+- `CIRCULATIO_PYTHON` - Python executable for the local bridge
+- `CIRCULATIO_RITUAL_COMPLETION_SCRIPT` - alternate completion bridge script
+- `CIRCULATIO_RITUAL_COMPLETION_TIMEOUT_MS` - local bridge timeout
+- `CIRCULATIO_PROFILE` or `HERMES_PROFILE` - profile used for local completion storage
+
+Users should not need any of these for the default local Hermes Rituals flow.
 
 ### Idempotency contract
 
@@ -593,9 +811,9 @@ The completion route should validate:
 - route `artifactId` matches manifest artifact ID
 - request has `Idempotency-Key` or `completionId`
 - payload matches the manifest's completion contract
-- Hermes adapter is configured before forwarding
+- local completion adapter can be resolved, or `HERMES_RITUAL_COMPLETION_URL` is set for external host forwarding
 
-Next.js App Router Route Handlers are the intended shape for `app/api/.../route.ts` POST handling. The route should normalize payload before forwarding to Hermes so Circulatio receives stable idempotency semantics.
+Next.js App Router Route Handlers are the intended shape for `app/api/.../route.ts` POST handling. The route should normalize payload before forwarding to the configured adapter so Circulatio receives stable idempotency semantics.
 
 ---
 

@@ -18,6 +18,8 @@ from circulatio.ritual_renderer.renderer import (
     artifact_id_for_plan,
 )
 
+_PROVIDER_SURFACES = {"audio", "captions", "image"}
+
 
 @dataclass(frozen=True)
 class HermesRitualHandoffConfig:
@@ -33,8 +35,7 @@ class HermesRitualHandoffConfig:
     @classmethod
     def from_env(cls) -> HermesRitualHandoffConfig:
         repo_root = Path(
-            os.environ.get("CIRCULATIO_REPO_ROOT")
-            or Path(__file__).resolve().parents[2]
+            os.environ.get("CIRCULATIO_REPO_ROOT") or Path(__file__).resolve().parents[2]
         ).resolve()
         renderer_script = Path(
             os.environ.get("CIRCULATIO_RENDERER_SCRIPT")
@@ -61,11 +62,25 @@ class HermesRitualHandoffConfig:
             renderer_script=renderer_script,
             plan_store_root=plan_store_root,
             artifact_public_root=artifact_public_root,
-            base_url=os.environ.get("CIRCULATIO_RITUALS_BASE_URL", "http://localhost:3000").rstrip("/"),
+            base_url=os.environ.get("CIRCULATIO_RITUALS_BASE_URL", "http://localhost:3000").rstrip(
+                "/"
+            ),
             mode=mode,
             open_local_default=os.environ.get("CIRCULATIO_RITUAL_OPEN") == "1",
             renderer_timeout_seconds=timeout,
         )
+
+
+@dataclass(frozen=True)
+class HermesHandoffRenderOptions:
+    provider_profile: str
+    surfaces: list[str]
+    max_cost_usd: float
+    transcribe_captions: bool
+    request_timeout_seconds: int
+    chutes_token_env: str
+    provider_backed: bool
+    warnings: list[str]
 
 
 class HermesRitualArtifactHandoff:
@@ -77,6 +92,7 @@ class HermesRitualArtifactHandoff:
         response: BridgeResponseEnvelope,
         *,
         open_local: bool = False,
+        render_policy: dict[str, object] | None = None,
     ) -> dict[str, object]:
         if self._config.mode == "plan_only":
             return {"status": "skipped", "warnings": []}
@@ -93,6 +109,7 @@ class HermesRitualArtifactHandoff:
                 result=result,
                 plan=cast(dict[str, object], plan),
                 open_local=open_local or self._config.open_local_default,
+                render_policy=render_policy,
             )
         except subprocess.TimeoutExpired:
             return self._failure(retryable=True)
@@ -108,6 +125,7 @@ class HermesRitualArtifactHandoff:
         result: dict[str, object],
         plan: dict[str, object],
         open_local: bool,
+        render_policy: dict[str, object] | None,
     ) -> dict[str, object]:
         plan_id = str(plan.get("id") or result.get("planId") or "").strip()
         if not plan_id:
@@ -117,9 +135,18 @@ class HermesRitualArtifactHandoff:
         route = f"/artifacts/{artifact_id}"
         url = f"{self._config.base_url}{route}"
         plan_path = self._persist_plan(response=response, result=result, plan=plan, plan_id=plan_id)
+        render_options = self._render_options(
+            render_policy=render_policy,
+            result=result,
+            plan=plan,
+        )
         final_dir = self._config.artifact_public_root / artifact_id
         final_manifest = final_dir / "manifest.json"
-        if final_manifest.exists() and self._manifest_valid(final_manifest, artifact_id, plan_id):
+        if (
+            final_manifest.exists()
+            and self._manifest_valid(final_manifest, artifact_id, plan_id)
+            and self._manifest_satisfies_render_request(final_manifest, render_options)
+        ):
             return self._success(
                 artifact_id=artifact_id,
                 url=url,
@@ -128,26 +155,38 @@ class HermesRitualArtifactHandoff:
                 plan_path=plan_path,
                 manifest_path=final_manifest,
                 opened=self._open_if_requested(url, open_local),
+                handoff_warnings=render_options.warnings,
             )
 
         request_short = str(response.get("requestId") or "request")[-12:].replace(os.sep, "_")
         staging_dir = self._config.artifact_public_root / f".tmp-{artifact_id}-{request_short}"
         shutil.rmtree(staging_dir, ignore_errors=True)
         staging_dir.parent.mkdir(parents=True, exist_ok=True)
-        self._run_renderer(plan_path=plan_path, out_dir=staging_dir, public_base=public_base)
-        staging_manifest = staging_dir / "manifest.json"
-        if not self._manifest_valid(staging_manifest, artifact_id, plan_id):
+        try:
+            self._run_renderer(
+                plan_path=plan_path,
+                out_dir=staging_dir,
+                public_base=public_base,
+                options=render_options,
+            )
+            staging_manifest = staging_dir / "manifest.json"
+            if not self._manifest_valid(staging_manifest, artifact_id, plan_id):
+                raise ValueError("Rendered ritual artifact manifest failed validation.")
+            if (
+                final_manifest.exists()
+                and self._manifest_valid(final_manifest, artifact_id, plan_id)
+                and self._manifest_satisfies_render_request(final_manifest, render_options)
+            ):
+                shutil.rmtree(staging_dir, ignore_errors=True)
+            else:
+                if final_dir.exists():
+                    backup = final_dir.with_name(f"{final_dir.name}.bak-{request_short}")
+                    shutil.rmtree(backup, ignore_errors=True)
+                    final_dir.replace(backup)
+                staging_dir.replace(final_dir)
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, ValueError):
             shutil.rmtree(staging_dir, ignore_errors=True)
-            raise ValueError("Rendered ritual artifact manifest failed validation.")
-
-        if final_manifest.exists() and self._manifest_valid(final_manifest, artifact_id, plan_id):
-            shutil.rmtree(staging_dir, ignore_errors=True)
-        else:
-            if final_dir.exists():
-                backup = final_dir.with_name(f"{final_dir.name}.bak-{request_short}")
-                shutil.rmtree(backup, ignore_errors=True)
-                final_dir.replace(backup)
-            staging_dir.replace(final_dir)
+            raise
 
         return self._success(
             artifact_id=artifact_id,
@@ -157,6 +196,7 @@ class HermesRitualArtifactHandoff:
             plan_path=plan_path,
             manifest_path=final_manifest,
             opened=self._open_if_requested(url, open_local),
+            handoff_warnings=render_options.warnings,
         )
 
     def _persist_plan(
@@ -191,28 +231,108 @@ class HermesRitualArtifactHandoff:
         tmp_path.replace(plan_path)
         return plan_path
 
-    def _run_renderer(self, *, plan_path: Path, out_dir: Path, public_base: str) -> None:
+    def _run_renderer(
+        self,
+        *,
+        plan_path: Path,
+        out_dir: Path,
+        public_base: str,
+        options: HermesHandoffRenderOptions,
+    ) -> None:
         if not self._config.renderer_script.exists():
             renderer_path = self._display_path(self._config.renderer_script)
             raise OSError(f"Renderer script not found: {renderer_path}")
+        argv = [
+            sys.executable,
+            str(self._config.renderer_script),
+            "--plan",
+            str(plan_path),
+            "--out",
+            str(out_dir),
+            "--public-base",
+            public_base,
+        ]
+        timeout = self._config.renderer_timeout_seconds
+        if options.provider_backed:
+            argv.extend(
+                [
+                    "--provider-profile",
+                    options.provider_profile,
+                    "--surfaces",
+                    ",".join(options.surfaces),
+                    "--max-cost-usd",
+                    str(options.max_cost_usd),
+                    "--request-timeout-seconds",
+                    str(options.request_timeout_seconds),
+                    "--chutes-token-env",
+                    options.chutes_token_env,
+                ]
+            )
+            if options.transcribe_captions:
+                argv.append("--transcribe-captions")
+            timeout = max(timeout, 300, options.request_timeout_seconds * 3 + 30)
+        else:
+            argv.extend(["--mock-providers", "--dry-run"])
         subprocess.run(
-            [
-                sys.executable,
-                str(self._config.renderer_script),
-                "--plan",
-                str(plan_path),
-                "--out",
-                str(out_dir),
-                "--mock-providers",
-                "--dry-run",
-                "--public-base",
-                public_base,
-            ],
+            argv,
             cwd=self._config.repo_root,
             check=True,
             capture_output=True,
             text=True,
-            timeout=self._config.renderer_timeout_seconds,
+            timeout=timeout,
+        )
+
+    def _render_options(
+        self,
+        *,
+        render_policy: dict[str, object] | None,
+        result: dict[str, object],
+        plan: dict[str, object],
+    ) -> HermesHandoffRenderOptions:
+        policy = render_policy or {}
+        warnings: list[str] = []
+        profile = str(policy.get("providerProfile") or "mock").strip()
+        mode = str(policy.get("mode") or "dry_run_manifest").strip()
+        requested = self._requested_provider_surfaces(policy.get("surfaces"))
+        if not requested:
+            requested = ["audio", "captions", "image"]
+        allowed = set(self._result_allowed_surfaces(result))
+        selected = [
+            surface for surface in requested if surface in allowed and surface in _PROVIDER_SURFACES
+        ]
+        max_cost = self._max_cost_usd(policy)
+        timeout = self._positive_int(policy.get("requestTimeoutSeconds"), default=180)
+        token_env = (
+            str(policy.get("chutesTokenEnv") or "CHUTES_API_TOKEN").strip() or "CHUTES_API_TOKEN"
+        )
+        transcribe = bool(policy.get("transcribeCaptions")) or "captions" in selected
+        provider_backed = False
+        chutes_requested = profile.startswith("chutes_")
+        if chutes_requested:
+            if mode != "render_static":
+                warnings.append("ritual_handoff_chutes_skipped_by_render_mode")
+            if not bool(policy.get("externalProvidersAllowed")):
+                warnings.append("ritual_handoff_chutes_skipped_external_providers_disabled")
+            if "chutes" not in self._provider_allowlist(policy.get("providerAllowlist")):
+                warnings.append("ritual_handoff_chutes_skipped_provider_not_allowed")
+            if max_cost <= 0:
+                warnings.append("ritual_handoff_chutes_skipped_zero_budget")
+            if not os.environ.get(token_env):
+                warnings.append("ritual_handoff_chutes_skipped_missing_api_token")
+            if not selected:
+                warnings.append("ritual_handoff_chutes_skipped_no_allowed_surfaces")
+            if not self._plan_allows_external_providers(plan):
+                warnings.append("ritual_handoff_chutes_skipped_by_plan_policy")
+            provider_backed = not warnings
+        return HermesHandoffRenderOptions(
+            provider_profile=profile if chutes_requested else "mock",
+            surfaces=selected,
+            max_cost_usd=max_cost,
+            transcribe_captions=transcribe,
+            request_timeout_seconds=timeout,
+            chutes_token_env=token_env,
+            provider_backed=provider_backed,
+            warnings=warnings,
         )
 
     def _manifest_valid(self, manifest_path: Path, artifact_id: str, plan_id: str) -> bool:
@@ -233,6 +353,42 @@ class HermesRitualArtifactHandoff:
             and (bool(caption_segments) or captions_file.exists())
         )
 
+    def _manifest_satisfies_render_request(
+        self,
+        manifest_path: Path,
+        options: HermesHandoffRenderOptions,
+    ) -> bool:
+        if not options.provider_backed:
+            return True
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        surfaces = manifest.get("surfaces") if isinstance(manifest, dict) else None
+        if not isinstance(surfaces, dict):
+            return False
+        if "audio" in options.surfaces:
+            audio = surfaces.get("audio")
+            if not (
+                isinstance(audio, dict) and audio.get("src") and audio.get("provider") == "chutes"
+            ):
+                return False
+        if "image" in options.surfaces:
+            image = surfaces.get("image")
+            if not (
+                isinstance(image, dict)
+                and image.get("enabled") is True
+                and image.get("src")
+                and image.get("provider") == "chutes"
+            ):
+                return False
+        if "captions" in options.surfaces:
+            captions = surfaces.get("captions")
+            segments = captions.get("segments") if isinstance(captions, dict) else None
+            if not (bool(segments) or manifest_path.with_name("captions.vtt").exists()):
+                return False
+        return True
+
     def _success(
         self,
         *,
@@ -243,8 +399,19 @@ class HermesRitualArtifactHandoff:
         plan_path: Path,
         manifest_path: Path,
         opened: tuple[bool, list[str]],
+        handoff_warnings: list[str] | None = None,
     ) -> dict[str, object]:
-        did_open, warnings = opened
+        did_open, open_warnings = opened
+        manifest = self._read_manifest(manifest_path)
+        render = cast(dict[str, object], manifest.get("render") or {})
+        surfaces = cast(dict[str, object], manifest.get("surfaces") or {})
+        raw_warnings = render.get("warnings")
+        render_warnings = (
+            [str(item) for item in raw_warnings] if isinstance(raw_warnings, list) else []
+        )
+        warnings = list(
+            dict.fromkeys([*(handoff_warnings or []), *render_warnings, *open_warnings])
+        )
         return {
             "status": "ok",
             "warnings": warnings,
@@ -256,9 +423,11 @@ class HermesRitualArtifactHandoff:
                 "publicBasePath": public_base,
                 "planPath": self._display_path(plan_path),
                 "manifestPath": self._display_path(manifest_path),
-                "rendererVersion": RENDERER_VERSION,
-                "mode": "dry_run_manifest",
-                "providers": ["mock"],
+                "rendererVersion": str(render.get("rendererVersion") or RENDERER_VERSION),
+                "mode": str(render.get("mode") or "dry_run_manifest"),
+                "providers": self._manifest_providers(render.get("providers")),
+                "surfaces": self._surface_summary(surfaces),
+                "renderWarnings": render_warnings,
                 "opened": did_open,
             },
         }
@@ -286,3 +455,87 @@ class HermesRitualArtifactHandoff:
 
     def _display_path(self, path: Path) -> str:
         return os.path.relpath(path, self._config.repo_root)
+
+    def _read_manifest(self, path: Path) -> dict[str, object]:
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return manifest if isinstance(manifest, dict) else {}
+
+    def _manifest_providers(self, value: object) -> list[str]:
+        if not isinstance(value, list):
+            return ["mock"]
+        providers = [str(item) for item in value if str(item)]
+        return providers or ["mock"]
+
+    def _surface_summary(self, surfaces: dict[str, object]) -> dict[str, bool]:
+        audio = surfaces.get("audio")
+        captions = surfaces.get("captions")
+        image = surfaces.get("image")
+        caption_segments = captions.get("segments") if isinstance(captions, dict) else None
+        caption_tracks = captions.get("tracks") if isinstance(captions, dict) else None
+        return {
+            "audio": bool(isinstance(audio, dict) and audio.get("src")),
+            "captions": bool(caption_segments or caption_tracks),
+            "image": bool(isinstance(image, dict) and image.get("enabled") and image.get("src")),
+        }
+
+    def _requested_provider_surfaces(self, value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        surfaces: list[str] = []
+        for item in value:
+            surface = str(item).strip().lower()
+            if surface in {"speech", "voice"}:
+                surface = "audio"
+            elif surface in {"cc", "transcript"}:
+                surface = "captions"
+            elif surface in {"video", "movie"}:
+                surface = "cinema"
+            if surface in _PROVIDER_SURFACES and surface not in surfaces:
+                surfaces.append(surface)
+        return surfaces
+
+    def _result_allowed_surfaces(self, result: dict[str, object]) -> list[str]:
+        render_request = result.get("renderRequest")
+        if not isinstance(render_request, dict):
+            return []
+        allowed = render_request.get("allowedSurfaces")
+        if not isinstance(allowed, list):
+            return []
+        return [str(item).strip().lower() for item in allowed]
+
+    def _provider_allowlist(self, value: object) -> set[str]:
+        if not isinstance(value, list):
+            return set()
+        return {str(item).strip().lower() for item in value if str(item).strip()}
+
+    def _max_cost_usd(self, policy: dict[str, object]) -> float:
+        raw = policy.get("maxCostUsd")
+        if raw is None:
+            max_cost = policy.get("maxCost")
+            raw = max_cost.get("amount") if isinstance(max_cost, dict) else None
+        try:
+            return float(cast(str | float | int, raw or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _positive_int(self, value: object, *, default: int) -> int:
+        try:
+            parsed = int(cast(str | float | int, value or default))
+        except (TypeError, ValueError):
+            return default
+        return max(parsed, 1)
+
+    def _plan_allows_external_providers(self, plan: dict[str, object]) -> bool:
+        safety = cast(dict[str, object], plan.get("safetyBoundary") or {})
+        raw_restrictions = safety.get("providerRestrictions")
+        restrictions = (
+            {str(item) for item in raw_restrictions}
+            if isinstance(raw_restrictions, list)
+            else set()
+        )
+        if "external_providers_disabled" in restrictions:
+            return False
+        return "no_raw_material_to_external_provider" in restrictions

@@ -409,6 +409,9 @@ async def analysis_packet_tool(arguments: dict[str, object] | None = None, **kwa
 async def plan_ritual_tool(arguments: dict[str, object] | None = None, **kwargs: object) -> str:
     payload = _tool_payload(arguments, kwargs)
     open_local = bool(payload.pop("openLocal", False))
+    handoff_render_policy = payload.get("renderPolicy")
+    if not isinstance(handoff_render_policy, dict):
+        handoff_render_policy = None
     surface_warnings: list[str] = []
     if "requestedSurfaces" in payload:
         requested_surfaces, surface_warnings = normalize_requested_ritual_surfaces(
@@ -425,6 +428,7 @@ async def plan_ritual_tool(arguments: dict[str, object] | None = None, **kwargs:
     handoff = HermesRitualArtifactHandoff().render_from_bridge_response(
         response,
         open_local=open_local,
+        render_policy=handoff_render_policy,
     )
     _merge_response_warnings(response, handoff.get("warnings", []))
     if handoff.get("status") == "ok":
@@ -433,8 +437,7 @@ async def plan_ritual_tool(arguments: dict[str, object] | None = None, **kwargs:
             result["artifactUrl"] = handoff["artifactUrl"]
             result["artifact"] = handoff["artifact"]
         response["message"] = (
-            "Prepared and rendered a local Hermes Rituals artifact: "
-            f"{handoff['artifactUrl']}"
+            f"Prepared and rendered a local Hermes Rituals artifact: {handoff['artifactUrl']}"
         )
     elif handoff.get("status") == "render_failed":
         result = response.setdefault("result", {})

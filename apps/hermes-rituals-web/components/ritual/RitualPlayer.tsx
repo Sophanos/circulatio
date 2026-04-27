@@ -507,10 +507,14 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   }))
 
   useEffect(() => {
+    if (artifact.audioUrl) {
+      setAudioUrl(artifact.audioUrl)
+      return
+    }
     const url = makeSilentWavBlobUrl(durationMs)
     setAudioUrl(url)
     return () => URL.revokeObjectURL(url)
-  }, [durationMs])
+  }, [artifact.audioUrl, durationMs])
 
   useLayoutEffect(() => {
     if (stageLens === "breath") {

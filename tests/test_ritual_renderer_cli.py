@@ -6,9 +6,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
+from unittest.mock import patch
 
-from circulatio.ritual_renderer.renderer import artifact_id_for_plan
+from circulatio.ritual_renderer.renderer import artifact_id_for_plan, render_plan_file
 
 
 class RitualRendererCliTests(unittest.TestCase):
@@ -64,6 +66,78 @@ class RitualRendererCliTests(unittest.TestCase):
             artifact_id_for_plan(self._fixture_plan()),
             "ritual_artifact_abcdef1234567890",
         )
+
+    def test_chutes_all_with_explicit_photo_podcast_surfaces_skips_music_and_cinema(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            visual = plan["visualPromptPlan"]
+            visual["image"] = {
+                "enabled": True,
+                "prompt": "A symbolic non literal threshold image.",
+                "providerPromptPolicy": "sanitized_visual_only",
+                "privacyNotes": ["no raw dream text"],
+                "sourceRefIds": ["weekly_fixture"],
+            }
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            def synthesize(*, out_path: Path, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"audio")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-kokoro",
+                }
+
+            def generate_picture(*, out_path: Path, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"image")
+                return {
+                    "path": out_path,
+                    "mimeType": "image/png",
+                    "provider": "chutes",
+                    "model": "chutes-z-image-turbo",
+                }
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.synthesize_speech", side_effect=synthesize
+                ):
+                    with patch(
+                        "circulatio.ritual_renderer.renderer.transcribe_audio",
+                        return_value={"segments": [{"start": 0, "end": 1.5, "text": "Hello."}]},
+                    ):
+                        with patch(
+                            "circulatio.ritual_renderer.renderer.generate_image",
+                            side_effect=generate_picture,
+                        ):
+                            with patch(
+                                "circulatio.ritual_renderer.renderer.generate_music"
+                            ) as music:
+                                with patch(
+                                    "circulatio.ritual_renderer.renderer.generate_video"
+                                ) as video:
+                                    manifest = render_plan_file(
+                                        plan_path=plan_path,
+                                        out_dir=out_dir,
+                                        options={
+                                            "providerProfile": "chutes_all",
+                                            "surfaces": ["audio", "captions", "image"],
+                                            "transcribeCaptions": True,
+                                            "maxCostUsd": 0.05,
+                                            "requestTimeoutSeconds": 5,
+                                            "publicBasePath": "/artifacts/test",
+                                        },
+                                    )
+
+            music.assert_not_called()
+            video.assert_not_called()
+            self.assertEqual(manifest["surfaces"]["audio"]["provider"], "chutes")
+            self.assertEqual(manifest["surfaces"]["image"]["provider"], "chutes")
+            self.assertNotIn("music", manifest["surfaces"])
+            self.assertFalse(manifest["surfaces"]["cinema"]["enabled"])
 
     def test_chutes_speech_profile_without_token_writes_warning_manifest(self) -> None:
         root = Path(__file__).resolve().parents[1]

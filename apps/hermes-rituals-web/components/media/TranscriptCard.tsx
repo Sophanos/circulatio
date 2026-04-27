@@ -12,6 +12,15 @@ import {
 import type { PresentationArtifact } from "@/lib/artifact-contract"
 import { createCharacterAlignment, makeSilentWavBlobUrl } from "@/lib/mock-media"
 
+function audioTypeForSource(src: string) {
+  if (src.endsWith(".mp3")) return "audio/mpeg"
+  if (src.endsWith(".ogg")) return "audio/ogg"
+  if (src.endsWith(".m4a")) return "audio/m4a"
+  if (src.endsWith(".aac")) return "audio/aac"
+  if (src.endsWith(".webm")) return "audio/webm"
+  return "audio/wav"
+}
+
 export function TranscriptCard({ artifact }: { artifact: PresentationArtifact }) {
   const transcript = artifact.transcript ?? artifact.summary
   const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
@@ -22,10 +31,14 @@ export function TranscriptCard({ artifact }: { artifact: PresentationArtifact })
   const [audioUrl, setAudioUrl] = useState("")
 
   useEffect(() => {
+    if (artifact.audioUrl) {
+      setAudioUrl(artifact.audioUrl)
+      return
+    }
     const url = makeSilentWavBlobUrl(durationMs)
     setAudioUrl(url)
     return () => URL.revokeObjectURL(url)
-  }, [durationMs])
+  }, [artifact.audioUrl, durationMs])
 
   if (!audioUrl) return null
 
@@ -44,7 +57,7 @@ export function TranscriptCard({ artifact }: { artifact: PresentationArtifact })
 
       <TranscriptViewerContainer
         audioSrc={audioUrl}
-        audioType="audio/wav"
+        audioType={audioTypeForSource(audioUrl)}
         alignment={alignment}
         className="rounded-[1.5rem] border border-graphite-950/8 bg-silver-100/75 p-6 md:p-8"
       >

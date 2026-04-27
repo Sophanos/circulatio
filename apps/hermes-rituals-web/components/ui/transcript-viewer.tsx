@@ -122,7 +122,7 @@ function TranscriptViewerContainer({
       src: audioSrc,
       children: <source src={audioSrc} type={audioType} />,
     }),
-    [audioRef, audioSrc]
+    [audioRef, audioSrc, audioType]
   )
 
   const contextValue = useMemo(

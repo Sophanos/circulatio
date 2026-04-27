@@ -38,10 +38,14 @@ export function BroadcastDeck({ artifact }: { artifact: PresentationArtifact }) 
   )
 
   useEffect(() => {
+    if (artifact.audioUrl) {
+      setAudioUrl(artifact.audioUrl)
+      return
+    }
     const url = makeSilentWavBlobUrl(durationMs)
     setAudioUrl(url)
     return () => URL.revokeObjectURL(url)
-  }, [durationMs])
+  }, [artifact.audioUrl, durationMs])
 
   if (!audioUrl) return null
 
