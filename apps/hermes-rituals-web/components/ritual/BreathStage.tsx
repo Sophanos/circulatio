@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "motion/react"
-
+import { RitualStageShell } from "@/components/ritual/RitualStageShell"
 import { BreathPacer } from "@/components/ritual/BreathPacer"
 import {
   DEFAULT_BREATH_CYCLE,
@@ -10,7 +10,6 @@ import {
 } from "@/components/ritual/BreathRing"
 import type { BreathCycle, BreathVisualForm } from "@/lib/artifact-contract"
 
-const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
 const PREPARATION_MS = 5000
 
 function titleCase(value: string) {
@@ -176,7 +175,7 @@ function BreathHorizon({
               y: offset * 24,
               opacity: offset === 0 ? 0.8 : 0.18 + shimmer * 0.18
             }}
-            transition={SPRING}
+            transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.8 }}
           />
         )
       })}
@@ -186,7 +185,7 @@ function BreathHorizon({
           scale: 0.8 + intensity * 0.01,
           opacity: 0.35 + shimmer * 0.35
         }}
-        transition={SPRING}
+        transition={{ type: "spring", stiffness: 300, damping: 30, mass: 0.8 }}
       />
     </div>
   )
@@ -262,116 +261,76 @@ export function BreathStage({
   const isPreparing = phase.label === "Get ready"
   const isResting = phase.label === "Rest"
 
-  if (immersive) {
-    return (
-      <motion.div
-        className="relative flex h-full w-full flex-col items-center justify-center"
-        layout
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={SPRING}
-      >
-        <div className="flex flex-1 items-center justify-center">
-          <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
-        </div>
+  const header = (
+    <>
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
+          Breath Container
+        </span>
+        <span className="text-sm font-medium text-silver-100">{techniqueName}</span>
+        <span className="text-[11px] text-silver-500">
+          {patternLabel} {breathCycle.cycles ? `· ${breathCycle.cycles} cycles` : ""}
+        </span>
+      </div>
 
-        <motion.div
-          className={[
-            "flex flex-col items-center pb-8 text-center",
-            isPreparing ? "gap-4" : isResting ? "gap-0" : "gap-1"
-          ].join(" ")}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: isPlaying ? 1 : 0.72, y: 0 }}
-          transition={{ delay: 0.3, ...SPRING }}
-        >
-          {isPreparing ? (
-            <>
-              <span className="text-2xl font-semibold tracking-tight text-silver-100 md:text-3xl">
-                Get comfortable
-              </span>
-              <span className="max-w-xs text-sm font-medium leading-snug text-silver-500 md:text-base">
-                Sit or lie down in a position to breathe comfortably
-              </span>
-            </>
-          ) : isResting ? (
-            <div className="h-[4.25rem]" aria-hidden="true" />
-          ) : (
-            <>
-              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
-                {phase.label}
-              </span>
-              <span className="text-3xl font-light tabular-nums tracking-tight text-silver-100">
-                {formatDuration(remainingMs)}
-              </span>
-            </>
-          )}
-        </motion.div>
-      </motion.div>
-    )
-  }
+      <div className="rounded-full bg-black/20 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-300 backdrop-blur-xl">
+        {visualForm}
+      </div>
+    </>
+  )
+
+  const immersiveFooter = isPreparing ? (
+    <div className="flex flex-col items-center gap-4">
+      <span className="text-2xl font-semibold tracking-tight text-silver-100 md:text-3xl">
+        Get comfortable
+      </span>
+      <span className="max-w-xs text-sm font-medium leading-snug text-silver-500 md:text-base">
+        Sit or lie down in a position to breathe comfortably
+      </span>
+    </div>
+  ) : isResting ? (
+    <div className="h-[4.25rem]" aria-hidden="true" />
+  ) : (
+    <>
+      <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-silver-500">
+        {phase.label}
+      </span>
+      <span className="text-3xl font-light tabular-nums tracking-tight text-silver-100">
+        {formatDuration(remainingMs)}
+      </span>
+    </>
+  )
+
+  const cardFooter = isPreparing ? (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-base font-semibold tracking-tight text-silver-100 md:text-lg">
+        Get comfortable
+      </span>
+      <span className="max-w-xs text-xs font-medium leading-snug text-silver-500 md:text-sm">
+        Sit or lie down in a position to breathe comfortably
+      </span>
+    </div>
+  ) : isResting ? (
+    <div className="h-[3.5rem]" aria-hidden="true" />
+  ) : (
+    <>
+      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
+        {phase.label}
+      </span>
+      <span className="text-2xl font-semibold tabular-nums tracking-tight text-silver-50">
+        {formatDuration(remainingMs)}
+      </span>
+    </>
+  )
 
   return (
-    <motion.div
-      className="relative flex h-full w-full overflow-hidden rounded-3xl bg-white/[0.03]"
-      layout
-      initial={{ opacity: 0, scale: 0.985 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 1.01 }}
-      transition={SPRING}
+    <RitualStageShell
+      immersive={immersive}
+      isPlaying={isPlaying}
+      header={immersive ? undefined : header}
+      footer={immersive ? immersiveFooter : cardFooter}
     >
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.62)_100%)]" />
-
-      <div className="relative z-10 flex h-full w-full flex-col justify-between p-4 md:p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
-              Breath Container
-            </span>
-            <span className="text-sm font-medium text-silver-100">{techniqueName}</span>
-            <span className="text-[11px] text-silver-500">
-              {patternLabel} {breathCycle.cycles ? `· ${breathCycle.cycles} cycles` : ""}
-            </span>
-          </div>
-
-          <div className="rounded-full bg-black/20 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-silver-300 backdrop-blur-xl">
-            {visualForm}
-          </div>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center px-4 py-4">
-          <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
-        </div>
-
-        <div
-          className={[
-            "flex flex-col items-center text-center",
-            isPreparing ? "gap-2" : isResting ? "gap-0" : "gap-1"
-          ].join(" ")}
-        >
-          {isPreparing ? (
-            <>
-              <span className="text-base font-semibold tracking-tight text-silver-100 md:text-lg">
-                Get comfortable
-              </span>
-              <span className="max-w-xs text-xs font-medium leading-snug text-silver-500 md:text-sm">
-                Sit or lie down in a position to breathe comfortably
-              </span>
-            </>
-          ) : isResting ? (
-            <div className="h-[3.5rem]" aria-hidden="true" />
-          ) : (
-            <>
-              <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-400">
-                {phase.label}
-              </span>
-              <span className="text-2xl font-semibold tabular-nums tracking-tight text-silver-50">
-                {formatDuration(remainingMs)}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-    </motion.div>
+      <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
+    </RitualStageShell>
   )
 }

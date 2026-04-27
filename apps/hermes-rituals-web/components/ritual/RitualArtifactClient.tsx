@@ -323,7 +323,9 @@ export function RitualArtifactClient({
   const [stageLens, setStageLens] = useState<RitualStageLens>(() =>
     artifact.stageVideo || (artifact.videoUrl && !artifact.videoUrl.startsWith("mock://"))
       ? "cinema"
-      : "breath"
+      : artifact.coverImageUrl
+        ? "photo"
+        : "breath"
   )
   const [masterVolume, setMasterVolume] = useState(0.75)
   const [sections, setSections] = useState<RitualSection[]>(
@@ -341,9 +343,9 @@ export function RitualArtifactClient({
   const [bodySubmitError, setBodySubmitError] = useState<string | null>(null)
   const completionIdRef = useRef<string | null>(null)
 
-  // Immersive breath state
+  // Immersive ritual state (breath or meditation)
   const [isPlaying, setIsPlaying] = useState(false)
-  const breathImmersive = isPlaying && stageLens === "breath"
+  const breathImmersive = isPlaying && (stageLens === "breath" || stageLens === "meditation")
   const cinemaImmersive =
     stageLens === "cinema" && artifact.stageVideo?.presentation === "full_background"
   const cinemaPlaybackImmersive = cinemaImmersive
@@ -551,7 +553,9 @@ export function RitualArtifactClient({
           bodyState,
           clientMetadata: {
             surface: "hermes-rituals-web",
-            bodyPickerVersion: "v1",
+            bodyPickerVersion: "v2_symbolic_body_map",
+            bodyMapMode:
+              stageLens === "body" ? "stage_full2d_rail_summary" : "rail_compact2d",
             currentMs: Math.round(currentMs)
           }
         })
@@ -566,7 +570,16 @@ export function RitualArtifactClient({
       setBodyCompletionStatus("error")
       setBodySubmitError(message.replaceAll("_", " "))
     }
-  }, [artifact.completionEndpoint, artifact.id, artifact.privacyClass, bodyDraft, currentMs, durationMs, sections])
+  }, [
+    artifact.completionEndpoint,
+    artifact.id,
+    artifact.privacyClass,
+    bodyDraft,
+    currentMs,
+    durationMs,
+    sections,
+    stageLens
+  ])
 
   return (
     <div
@@ -575,7 +588,7 @@ export function RitualArtifactClient({
         cinemaImmersive ? "" : "page-shell"
       ].join(" ")}
     >
-      {/* Full-bleed artwork background — fades to black in immersive breath */}
+      {/* Full-bleed artwork background — fades to black in immersive ritual */}
       <AnimatePresence>
         {!immersive && !cinemaImmersive && backgroundImageUrl && (
           <motion.div
@@ -607,7 +620,7 @@ export function RitualArtifactClient({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,19,23,0.4),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(16,19,23,0.5),transparent_50%)]" />
       )}
 
-      {/* Top chrome — fades out in immersive breath */}
+      {/* Top chrome — fades out in immersive ritual */}
       <motion.header
         className={[
           "flex items-start justify-between gap-4 px-4 py-3 md:px-6",
@@ -701,7 +714,7 @@ export function RitualArtifactClient({
       >
         {/* Left stage — flex-1, shrinks as panel expands */}
         <motion.section
-          className="relative z-10 flex min-h-0 flex-1 flex-col"
+          className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col"
           layout
         >
           <RitualPlayer
@@ -717,6 +730,8 @@ export function RitualArtifactClient({
             immersive={immersive}
             chromeVisible={chromeVisible}
             bodyDraft={bodyDraft}
+            bodyCompletionStatus={bodyCompletionStatus}
+            bodySubmitError={bodySubmitError}
             onBodyDraftChange={handleBodyDraftChange}
             onComplete={handlePlayerComplete}
             onTimeUpdate={setCurrentMs}
@@ -756,6 +771,7 @@ export function RitualArtifactClient({
                     completionStatus={bodyCompletionStatus}
                     submitError={bodySubmitError}
                     endpointAvailable={Boolean(artifact.completionEndpoint)}
+                    mapMode={stageLens === "body" ? "summary" : "compact2d"}
                     disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
                     onSubmit={handleSubmitBodyState}
                   />
@@ -777,9 +793,15 @@ export function RitualArtifactClient({
           y: chromeHidden ? 12 : 0
         }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
-        style={{ pointerEvents: chromeHidden ? "none" : "auto" }}
+        style={{ pointerEvents: "none" }}
       >
-        <div ref={toggleRef} className="pointer-events-auto flex items-center gap-2 rounded-full bg-black/40 p-1.5 backdrop-blur-xl">
+        <div
+          ref={toggleRef}
+          className={[
+            "flex items-center gap-2 rounded-full bg-black/40 p-1.5 backdrop-blur-xl",
+            chromeHidden ? "pointer-events-none" : "pointer-events-auto"
+          ].join(" ")}
+        >
           <button
             type="button"
             onClick={() => setRailOpen(!railOpen)}

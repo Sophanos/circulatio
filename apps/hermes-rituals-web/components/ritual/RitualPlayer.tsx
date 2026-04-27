@@ -1,10 +1,23 @@
 "use client"
 
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, forwardRef } from "react"
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef
+} from "react"
 import { Pause, Play } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 
-import { BodyPicker, type BodyStateDraft } from "@/components/ritual/BodyPicker"
+import {
+  BodyPicker,
+  type BodyCompletionStatus,
+  type BodyStateDraft
+} from "@/components/ritual/BodyPicker"
 import { BreathStage } from "@/components/ritual/BreathStage"
 import { MeditationStage } from "@/components/ritual/MeditationStage"
 import { CaptionStack } from "@/components/ritual/CaptionStack"
@@ -40,6 +53,107 @@ function formatTimestamp(value: number) {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
+function resolveDurationMs(artifact: PresentationArtifact) {
+  const artifactDuration = artifact.durationMs ?? 0
+  const captionDuration = artifact.captions?.at(-1)?.endMs ?? 0
+  const duration = Math.max(artifactDuration, captionDuration)
+
+  return duration > 0 ? duration : 60000
+}
+
+const WAVEFORM_SAMPLE_COUNT = 720
+
+function captionWaveformData(captions: CaptionCue[], durationMs: number, samples = WAVEFORM_SAMPLE_COUNT) {
+  const timelineDurationMs = Math.max(durationMs, captions.at(-1)?.endMs ?? 0, 1)
+  const transcript = captions.map((caption) => caption.text).join(" ").trim()
+  if (!transcript) return Array.from({ length: samples }, () => 0.16)
+
+  return Array.from({ length: samples }, (_, index) => {
+    const centerMs = ((index + 0.5) / samples) * timelineDurationMs
+    const caption = captions.find(
+      (cue) => centerMs >= cue.startMs && centerMs < cue.endMs
+    )
+    if (!caption) return 0.07
+
+    const text = caption.text || transcript
+    const code = text.charCodeAt(index % Math.max(text.length, 1)) || 73
+    const seeded = Math.abs(Math.sin((code + 17) * (index + 1) * 0.031))
+    const cueProgress =
+      (centerMs - caption.startMs) / Math.max(caption.endMs - caption.startMs, 1)
+    const phraseShape = 0.72 + Math.sin(cueProgress * Math.PI) * 0.24
+    return Math.min(0.92, 0.24 + seeded * 0.56 * phraseShape)
+  })
+}
+
+function waveformFromAudioBuffer(audioBuffer: AudioBuffer, samples = WAVEFORM_SAMPLE_COUNT) {
+  const sampleCount = Math.max(1, samples)
+  const channelCount = Math.min(audioBuffer.numberOfChannels, 2)
+  const peaks = Array.from({ length: sampleCount }, (_, index) => {
+    const start = Math.floor((index / sampleCount) * audioBuffer.length)
+    const end = Math.max(start + 1, Math.floor(((index + 1) / sampleCount) * audioBuffer.length))
+    let total = 0
+    let count = 0
+
+    for (let sample = start; sample < end; sample += 1) {
+      let channelTotal = 0
+      for (let channel = 0; channel < channelCount; channel += 1) {
+        channelTotal += Math.abs(audioBuffer.getChannelData(channel)[sample] ?? 0)
+      }
+      total += channelTotal / Math.max(channelCount, 1)
+      count += 1
+    }
+
+    return total / Math.max(count, 1)
+  })
+
+  const max = Math.max(...peaks)
+  if (max <= 0.0001) return []
+
+  return peaks.map((value) => {
+    const normalized = Math.pow(value / max, 0.65)
+    return Math.min(0.95, Math.max(0.06, normalized * 0.9))
+  })
+}
+
+function SectionMarkers({
+  sections,
+  durationSeconds
+}: {
+  sections: RitualSection[]
+  durationSeconds: number
+}) {
+  if (durationSeconds <= 0 || sections.length === 0) return null
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+      {sections.map((section) => {
+        const startSeconds = Math.min(Math.max(section.startMs / 1000, 0), durationSeconds)
+        const endSeconds = Math.min(Math.max(section.endMs / 1000, startSeconds), durationSeconds)
+        const width = ((endSeconds - startSeconds) / durationSeconds) * 100
+
+        if (width <= 0) return null
+
+        const left = (startSeconds / durationSeconds) * 100
+
+        return (
+          <div
+            key={section.id}
+            className="absolute bottom-0 top-0"
+            style={{ left: `${left}%`, width: `${width}%` }}
+          >
+            <div
+              className={[
+                "h-full w-full rounded-full transition-opacity",
+                section.muted ? "bg-white/5" : "bg-white/15"
+              ].join(" ")}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 function resolveStageVideo(artifact: PresentationArtifact): PresentationVideoSource | undefined {
@@ -154,6 +268,8 @@ function VisualStage({
   stageLens,
   immersive,
   bodyDraft,
+  bodyCompletionStatus = "idle",
+  bodySubmitError,
   onBodyDraftChange
 }: {
   artifact: PresentationArtifact
@@ -162,6 +278,8 @@ function VisualStage({
   stageLens: RitualStageLens
   immersive?: boolean
   bodyDraft: BodyStateDraft
+  bodyCompletionStatus?: BodyCompletionStatus
+  bodySubmitError?: string | null
   onBodyDraftChange: (value: BodyStateDraft) => void
 }) {
   const scenes = artifact.scenes ?? []
@@ -174,7 +292,7 @@ function VisualStage({
   const directVideoSource = videoSource?.provider === "direct" ? videoSource : undefined
   const directPlaybackMode = directVideoSource?.playbackMode
   const directVideoRef = useRef<HTMLVideoElement>(null)
-  const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
+  const durationMs = resolveDurationMs(artifact)
 
   useEffect(() => {
     const video = directVideoRef.current
@@ -216,6 +334,8 @@ function VisualStage({
         cycle={artifact.breathCycle}
         currentMs={currentMs}
         durationMs={durationMs}
+        immersive={immersive}
+        isPlaying={isPlaying}
       />
     )
   }
@@ -238,6 +358,11 @@ function VisualStage({
             onChange={onBodyDraftChange}
             variant="stage"
             completionPrompt={artifact.completionPrompt}
+            completionStatus={bodyCompletionStatus}
+            submitError={bodySubmitError}
+            disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
+            mapMode="full2d"
+            showVoiceNote={false}
           />
         </div>
       </motion.div>
@@ -456,6 +581,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   immersive?: boolean
   chromeVisible?: boolean
   bodyDraft: BodyStateDraft
+  bodyCompletionStatus?: BodyCompletionStatus
+  bodySubmitError?: string | null
   onBodyDraftChange: (value: BodyStateDraft) => void
   onComplete?: () => void
   onTimeUpdate?: (ms: number) => void
@@ -468,6 +595,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   immersive,
   chromeVisible = true,
   bodyDraft,
+  bodyCompletionStatus = "idle",
+  bodySubmitError,
   onBodyDraftChange,
   onComplete,
   onTimeUpdate,
@@ -476,9 +605,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const audioRef = useRef<HTMLAudioElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
-  const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
-  const durationSeconds = durationMs / 1000
+  const plannedDurationMs = resolveDurationMs(artifact)
   const [audioUrl, setAudioUrl] = useState("")
+  const [mediaDurationSeconds, setMediaDurationSeconds] = useState(0)
+  const [audioWaveformData, setAudioWaveformData] = useState<number[]>([])
+  const durationMs = mediaDurationSeconds > 0 ? mediaDurationSeconds * 1000 : plannedDurationMs
+  const durationSeconds = durationMs / 1000
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [breathClockOffsetMs, setBreathClockOffsetMs] = useState(0)
@@ -488,6 +620,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const stageVideoSource = resolveStageVideo(artifact)
   const fullStageVideo = isFullStageVideo(stageLens, stageVideoSource)
   const fullStageChromeVisible = !fullStageVideo || chromeVisible
+  const fallbackWaveformData = useMemo(
+    () => captionWaveformData(artifact.captions ?? [], durationMs),
+    [artifact.captions, durationMs]
+  )
+  const waveformData = audioWaveformData.length > 0 ? audioWaveformData : fallbackWaveformData
+  const waveformProgress = durationSeconds > 0 ? currentTime / durationSeconds : 0
 
   useImperativeHandle(ref, () => ({
     seek: (ms: number) => {
@@ -511,10 +649,57 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       setAudioUrl(artifact.audioUrl)
       return
     }
-    const url = makeSilentWavBlobUrl(durationMs)
+    const url = makeSilentWavBlobUrl(plannedDurationMs)
     setAudioUrl(url)
     return () => URL.revokeObjectURL(url)
-  }, [artifact.audioUrl, durationMs])
+  }, [artifact.audioUrl, plannedDurationMs])
+
+  useEffect(() => {
+    setAudioWaveformData([])
+    setMediaDurationSeconds(0)
+
+    if (!artifact.audioUrl || !audioUrl) return
+
+    let cancelled = false
+    async function decodeWaveform() {
+      try {
+        const response = await fetch(audioUrl)
+        if (!response.ok) throw new Error("audio_fetch_failed")
+        const buffer = await response.arrayBuffer()
+        const AudioContextClass =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (!AudioContextClass) return
+        const audioContext = new AudioContextClass()
+        const audioBuffer = await audioContext.decodeAudioData(buffer.slice(0))
+        const peaks = waveformFromAudioBuffer(audioBuffer)
+        await audioContext.close().catch(() => {})
+        if (!cancelled) {
+          setAudioWaveformData(peaks)
+          if (Number.isFinite(audioBuffer.duration) && audioBuffer.duration > 0) {
+            setMediaDurationSeconds(audioBuffer.duration)
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setAudioWaveformData([])
+        }
+      }
+    }
+
+    void decodeWaveform()
+    return () => {
+      cancelled = true
+    }
+  }, [artifact.audioUrl, audioUrl])
+
+  const handleLoadedMetadata = useCallback(() => {
+    if (!artifact.audioUrl) return
+    const seconds = audioRef.current?.duration
+    if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
+      setMediaDurationSeconds(seconds)
+    }
+  }, [artifact.audioUrl])
 
   useLayoutEffect(() => {
     if (stageLens === "breath") {
@@ -658,7 +843,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         fullStageVideo ? "overflow-hidden px-0 py-0" : "px-5 py-5 md:px-8 md:py-6"
       ].join(" ")}
     >
-      <audio ref={audioRef} src={audioUrl || undefined} preload="metadata" />
+      <audio
+        ref={audioRef}
+        src={audioUrl || undefined}
+        preload="metadata"
+        onLoadedMetadata={handleLoadedMetadata}
+      />
 
       {/* Scene / Video Stage */}
       <motion.div
@@ -679,6 +869,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
             stageLens={stageLens}
             immersive={immersive}
             bodyDraft={bodyDraft}
+            bodyCompletionStatus={bodyCompletionStatus}
+            bodySubmitError={bodySubmitError}
             onBodyDraftChange={onBodyDraftChange}
           />
         </AnimatePresence>
@@ -720,6 +912,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
           exit={{ opacity: 0 }}
         >
           <ScrollingWaveform
+            data={waveformData}
+            progress={waveformProgress}
             height={28}
             barCount={60}
             barWidth={2}
@@ -804,25 +998,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                       />
                       <div className="relative min-w-0 flex-1">
                         <ScrubBarTrack className="h-1.5 bg-white/20 md:h-2">
-                          {sections.map((section) => {
-                            const left = (section.startMs / 1000 / durationSeconds) * 100
-                            const width =
-                              ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
-                            return (
-                              <div
-                                key={section.id}
-                                className="absolute top-0 bottom-0"
-                                style={{ left: `${left}%`, width: `${width}%` }}
-                              >
-                                <div
-                                  className={[
-                                    "h-full w-full rounded-full transition-opacity",
-                                    section.muted ? "bg-white/5" : "bg-white/15"
-                                  ].join(" ")}
-                                />
-                              </div>
-                            )
-                          })}
+                          <SectionMarkers sections={sections} durationSeconds={durationSeconds} />
                           <ScrubBarProgress className="[&>div]:bg-white" />
                           <ScrubBarThumb className="size-4 bg-white shadow-lg md:size-5" />
                         </ScrubBarTrack>
@@ -845,26 +1021,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                     <div className="flex w-full flex-col gap-1.5">
                       <div className="relative">
                         <ScrubBarTrack className="h-1.5 bg-white/10">
-                          {/* Section boundary markers */}
-                          {sections.map((section) => {
-                            const left = (section.startMs / 1000 / durationSeconds) * 100
-                            const width =
-                              ((section.endMs - section.startMs) / 1000 / durationSeconds) * 100
-                            return (
-                              <div
-                                key={section.id}
-                                className="absolute top-0 bottom-0"
-                                style={{ left: `${left}%`, width: `${width}%` }}
-                              >
-                                <div
-                                  className={[
-                                    "h-full w-full rounded-full transition-opacity",
-                                    section.muted ? "bg-white/5" : "bg-white/15"
-                                  ].join(" ")}
-                                />
-                              </div>
-                            )
-                          })}
+                          <SectionMarkers sections={sections} durationSeconds={durationSeconds} />
                           <ScrubBarProgress className="[&>div]:bg-white" />
                           <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
                         </ScrubBarTrack>
