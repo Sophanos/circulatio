@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import type { BreathPhase } from "@/components/ritual/BreathRing"
 
@@ -399,8 +399,9 @@ export function BreathConvergence({
     () => createConvergenceTarget({ currentMs, sessionProgress, phase }),
     [currentMs, phase, sessionProgress]
   )
+  const [initialAnimatedState] = useState(() => createInitialState(target))
   const targetRef = useRef(target)
-  const animatedRef = useRef<AnimatedConvergenceState>(createInitialState(target))
+  const animatedRef = useRef<AnimatedConvergenceState>(initialAnimatedState)
   const traceRefs = useRef<Array<SVGPathElement | null>>([])
   const traceRefCallbacks = useMemo(
     () =>
@@ -411,12 +412,10 @@ export function BreathConvergence({
       ),
     []
   )
-  const initialRenderRef = useRef<ConvergenceRender | null>(null)
-  const initialRender = initialRenderRef.current ?? buildRenderState(animatedRef.current)
-
-  if (initialRenderRef.current === null) {
-    initialRenderRef.current = initialRender
-  }
+  const initialRender = useMemo(
+    () => buildRenderState(initialAnimatedState),
+    [initialAnimatedState]
+  )
 
   useEffect(() => {
     targetRef.current = target

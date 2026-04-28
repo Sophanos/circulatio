@@ -1,7 +1,7 @@
 # Presentation Layer
 ## Embodied Presentation Contract
 
-> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields plus beta gates for music/video. Provider-backed Chutes rendering is renderer-owned and available through explicit manual renderer flags; Hermes-controlled photo + podcast handoff is now an initial local integration that still defaults to mock/dry-run unless strict provider gates pass. Hermes Rituals now keeps the existing player UI while using real audio duration, decoded waveform peaks, scrub-linked waveform progress, generated images, and caption-derived sections when the manifest provides them. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
+> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields, typed top-level ritual `sections`, and beta gates for music/video. Provider-backed Chutes rendering is renderer-owned and available through explicit manual renderer flags; Hermes-controlled photo + podcast handoff is now an initial local integration that still defaults to mock/dry-run unless strict provider gates pass. Hermes Rituals now keeps the existing player UI while using real audio duration, decoded waveform peaks, scrub-linked waveform progress, generated images, typed sections, recommended lenses, explicit body capture, and no-op session events for future Hermes subscription. Captions are cue data, not canonical ritual structure. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
 
 Circulatio should evolve from a text interpretation backend into a **symbolic backend that emits embodied, voice-aware, breath-aware, interaction-ready presentation plans**. Hosts render them; Circulatio does not own frontend code.
 
@@ -22,12 +22,14 @@ For live camera/body-reading guidance, see `EMBODIED_GUIDANCE_SURFACE.md`. That 
 
 Embodied presentation should become the stable base that live body guidance can attach to later.
 
-Do now in the presentation layer:
-- make artifact playback timeline-aware through sections, captions, current time, and completion state;
-- derive the recommended lens from the current section rather than hardcoding one static view;
-- keep body-response capture available at closing/completion as an explicit user action;
-- emit host-side session events as a no-op contract for future Hermes subscription;
-- keep artifact completion idempotent and separate from practice, active imagination, and camera telemetry.
+Implemented now in the presentation layer:
+- artifact playback is timeline-aware through typed manifest sections, captions, current time, and completion state;
+- `deriveRitualExperienceFrame` derives phase, active section, recommended lens, effective lens, available tracks, body prompt mode, and allowed explicit writes;
+- manual lens switching remains available while section `preferredLens` supplies the default foreground surface;
+- captions attach to sections by time overlap but no longer define canonical structure when sections are present;
+- body-response capture is available at closing/completion as an explicit user action through the Body lens or rail;
+- host-side ritual session events exist as a local no-op contract for future Hermes subscription;
+- artifact completion remains idempotent and separate from practice, active imagination, and camera telemetry.
 
 Do later in the embodied guidance surface:
 - add camera/body signals as a sensor track;
@@ -47,6 +49,8 @@ PresentationArtifact
 ```
 
 The ritual planner must not know about webcam frames, pose landmarks, live coaching, or training loops. It should only produce stable presentation sections and safe artifact metadata that a host can later use as context.
+
+Current gap: the connected playback model is implemented in the Hermes Rituals web app and renderer manifest path, but production host orchestration for Hermes-agent subscription is not wired yet. The event contract is intentionally local/no-op until the guidance layer has a consentful `guidanceSessionId` and explicit write tools.
 
 ---
 

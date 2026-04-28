@@ -11,6 +11,13 @@ import {
 
 import { cn } from "@/lib/utils"
 
+const SCROLLING_WAVEFORM_SEED = 0.61803398875
+
+function seededUnitValue(seed: number) {
+  const x = Math.sin(seed) * 10000
+  return x - Math.floor(x)
+}
+
 export type WaveformProps = HTMLAttributes<HTMLDivElement> & {
   data?: number[]
   barWidth?: number
@@ -195,7 +202,7 @@ export const ScrollingWaveform = ({
   const barsRef = useRef<Array<{ x: number; height: number }>>([])
   const animationRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
-  const seedRef = useRef(Math.random())
+  const seedRef = useRef(SCROLLING_WAVEFORM_SEED)
   const dataIndexRef = useRef(0)
   const heightStyle = typeof height === "number" ? `${height}px` : height
 
@@ -441,16 +448,18 @@ export const AudioScrubber = ({
   const [localProgress, setLocalProgress] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const waveformData =
-    data.length > 0
-      ? data
-      : Array.from({ length: 100 }, () => 0.2 + Math.random() * 0.6)
-
-  useEffect(() => {
-    if (!isDragging && duration > 0) {
-      setLocalProgress(currentTime / duration)
-    }
-  }, [currentTime, duration, isDragging])
+  const waveformData = useMemo(
+    () =>
+      data.length > 0
+        ? data
+        : Array.from(
+            { length: 100 },
+            (_, index) => 0.2 + seededUnitValue(index + 1) * 0.6
+          ),
+    [data]
+  )
+  const displayProgress =
+    isDragging || duration <= 0 ? localProgress : currentTime / duration
 
   const handleScrub = useCallback(
     (clientX: number) => {
@@ -522,18 +531,18 @@ export const AudioScrubber = ({
 
       <div
         className="bg-primary/20 pointer-events-none absolute inset-y-0 left-0"
-        style={{ width: `${localProgress * 100}%` }}
+        style={{ width: `${displayProgress * 100}%` }}
       />
 
       <div
         className="bg-primary pointer-events-none absolute top-0 bottom-0 w-0.5"
-        style={{ left: `${localProgress * 100}%` }}
+        style={{ left: `${displayProgress * 100}%` }}
       />
 
       {showHandle && (
         <div
           className="border-background bg-primary pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-lg transition-transform hover:scale-110"
-          style={{ left: `${localProgress * 100}%` }}
+          style={{ left: `${displayProgress * 100}%` }}
         />
       )}
     </div>
@@ -745,12 +754,10 @@ export const StaticWaveform = ({
   ...props
 }: StaticWaveformProps) => {
   const data = useMemo(() => {
-    const random = (seedValue: number) => {
-      const x = Math.sin(seedValue) * 10000
-      return x - Math.floor(x)
-    }
-
-    return Array.from({ length: bars }, (_, i) => 0.2 + random(seed + i) * 0.6)
+    return Array.from(
+      { length: bars },
+      (_, i) => 0.2 + seededUnitValue(seed + i) * 0.6
+    )
   }, [bars, seed])
 
   return <Waveform data={data} {...props} />
@@ -810,6 +817,7 @@ export const LiveMicrophoneWaveform = ({
   const [internalDragOffset, setInternalDragOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [playbackPosition, setPlaybackPosition] = useState<number | null>(null)
+  const [historyLength, setHistoryLength] = useState(0)
   const dragStartXRef = useRef<number>(0)
   const dragStartOffsetRef = useRef<number>(0)
   const playbackStartTimeRef = useRef<number>(0)
@@ -851,6 +859,20 @@ export const LiveMicrophoneWaveform = ({
     return () => resizeObserver.disconnect()
   }, [])
 
+  const processAudioBlob = useCallback(async (blob: Blob) => {
+    try {
+      const arrayBuffer = await blob.arrayBuffer()
+      if (audioContextRef.current) {
+        const audioBuffer =
+          await audioContextRef.current.decodeAudioData(arrayBuffer)
+        audioBufferRef.current = audioBuffer
+      }
+    } catch (error) {
+      console.error("Error processing audio:", error)
+    }
+  }, [])
+
+  /* eslint-disable react-hooks/immutability -- This component keeps audio capture buffers outside React state for the animation loop. */
   useEffect(() => {
     if (!active) {
       if (
@@ -872,11 +894,15 @@ export const LiveMicrophoneWaveform = ({
       return
     }
 
-    setDragOffset?.(0)
+    const resetTimeout = window.setTimeout(() => {
+      setDragOffset?.(0)
+      setPlaybackPosition(null)
+      setHistoryLength(0)
+    }, 0)
+
     historyRef.current = []
     audioChunksRef.current = []
     audioBufferRef.current = null
-    setPlaybackPosition(null)
 
     const setupMicrophone = async () => {
       try {
@@ -933,6 +959,7 @@ export const LiveMicrophoneWaveform = ({
       if (scrubSourceRef.current) {
         scrubSourceRef.current.stop()
       }
+      window.clearTimeout(resetTimeout)
     }
   }, [
     active,
@@ -942,20 +969,9 @@ export const LiveMicrophoneWaveform = ({
     setDragOffset,
     enableAudioPlayback,
     historyRef,
+    processAudioBlob,
   ])
-
-  const processAudioBlob = async (blob: Blob) => {
-    try {
-      const arrayBuffer = await blob.arrayBuffer()
-      if (audioContextRef.current) {
-        const audioBuffer =
-          await audioContextRef.current.decodeAudioData(arrayBuffer)
-        audioBufferRef.current = audioBuffer
-      }
-    } catch (error) {
-      console.error("Error processing audio:", error)
-    }
-  }
+  /* eslint-enable react-hooks/immutability */
 
   const playScrubSound = useCallback(
     (position: number, direction: number) => {
@@ -1127,6 +1143,7 @@ export const LiveMicrophoneWaveform = ({
           if (historyRef.current.length > historySize) {
             historyRef.current.shift()
           }
+          setHistoryLength(historyRef.current.length)
         }
       }
 
@@ -1335,33 +1352,23 @@ export const LiveMicrophoneWaveform = ({
     historyRef,
   ])
 
+  const canScrubHistory = !active && historyLength > 0
+
   return (
     <div
       className={cn(
         "relative flex items-center",
-        !active && historyRef.current.length > 0 && "cursor-pointer",
+        canScrubHistory && "cursor-pointer",
         className
       )}
       onMouseDown={handleMouseDown}
       ref={containerRef}
-      role={!active && historyRef.current.length > 0 ? "slider" : undefined}
-      aria-label={
-        !active && historyRef.current.length > 0
-          ? "Drag to scrub through recording"
-          : undefined
-      }
-      aria-valuenow={
-        !active && historyRef.current.length > 0
-          ? Math.abs(dragOffset)
-          : undefined
-      }
-      aria-valuemin={!active && historyRef.current.length > 0 ? 0 : undefined}
-      aria-valuemax={
-        !active && historyRef.current.length > 0
-          ? historyRef.current.length
-          : undefined
-      }
-      tabIndex={!active && historyRef.current.length > 0 ? 0 : undefined}
+      role={canScrubHistory ? "slider" : undefined}
+      aria-label={canScrubHistory ? "Drag to scrub through recording" : undefined}
+      aria-valuenow={canScrubHistory ? Math.abs(dragOffset) : undefined}
+      aria-valuemin={canScrubHistory ? 0 : undefined}
+      aria-valuemax={canScrubHistory ? historyLength : undefined}
+      tabIndex={canScrubHistory ? 0 : undefined}
       style={{ height: heightStyle }}
       {...props}
     >

@@ -594,9 +594,13 @@ export function useScribe(options: ScribeHookOptions = {}): UseScribeReturn {
 
   // Auto-connect if enabled
   useEffect(() => {
-    if (autoConnect) {
+    if (!autoConnect) return
+
+    const timeout = window.setTimeout(() => {
       void connect()
-    }
+    }, 0)
+
+    return () => window.clearTimeout(timeout)
   }, [autoConnect, connect])
 
   return {

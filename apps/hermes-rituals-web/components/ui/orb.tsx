@@ -7,6 +7,8 @@ import * as THREE from "three"
 
 export type AgentState = null | "thinking" | "listening" | "talking"
 
+const DEFAULT_ORB_SEED = 0x9e3779b9
+
 type OrbProps = {
   colors?: [string, string]
   colorsRef?: React.RefObject<[string, string]>
@@ -94,7 +96,6 @@ function Scene({
   const { gl } = useThree()
   const circleRef =
     useRef<THREE.Mesh<THREE.CircleGeometry, THREE.ShaderMaterial>>(null)
-  const initialColorsRef = useRef<[string, string]>(colors)
   const targetColor1Ref = useRef(new THREE.Color(colors[0]))
   const targetColor2Ref = useRef(new THREE.Color(colors[1]))
   const animSpeedRef = useRef(0.1)
@@ -129,10 +130,7 @@ function Scene({
     )
   }, [manualOutput, outputVolumeRef, getOutputVolume])
 
-  const random = useMemo(
-    () => splitmix32(seed ?? Math.floor(Math.random() * 2 ** 32)),
-    [seed]
-  )
+  const random = useMemo(() => splitmix32(seed ?? DEFAULT_ORB_SEED), [seed])
   const offsets = useMemo(
     () =>
       new Float32Array(Array.from({ length: 7 }, () => random() * Math.PI * 2)),
@@ -161,6 +159,7 @@ function Scene({
     return () => observer.disconnect()
   }, [])
 
+  /* eslint-disable react-hooks/immutability -- Three.js shader uniforms are mutable render-loop state. */
   useFrame((_, delta: number) => {
     const mat = circleRef.current?.material
     if (!mat) return
@@ -216,6 +215,7 @@ function Scene({
     u.uColor1.value.lerp(targetColor1Ref.current, 0.08)
     u.uColor2.value.lerp(targetColor2Ref.current, 0.08)
   })
+  /* eslint-enable react-hooks/immutability */
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -230,25 +230,30 @@ function Scene({
       canvas.removeEventListener("webglcontextlost", onContextLost, false)
   }, [gl])
 
+  const repeatNoiseTexture = useMemo(() => {
+    const texture = perlinNoiseTexture.clone()
+    texture.wrapS = THREE.RepeatWrapping
+    texture.wrapT = THREE.RepeatWrapping
+    texture.needsUpdate = true
+    return texture
+  }, [perlinNoiseTexture])
+
+  useEffect(() => () => repeatNoiseTexture.dispose(), [repeatNoiseTexture])
+
   const uniforms = useMemo(() => {
-    perlinNoiseTexture.wrapS = THREE.RepeatWrapping
-    perlinNoiseTexture.wrapT = THREE.RepeatWrapping
-    const isDark =
-      typeof document !== "undefined" &&
-      document.documentElement.classList.contains("dark")
     return {
-      uColor1: new THREE.Uniform(new THREE.Color(initialColorsRef.current[0])),
-      uColor2: new THREE.Uniform(new THREE.Color(initialColorsRef.current[1])),
+      uColor1: new THREE.Uniform(new THREE.Color(colors[0])),
+      uColor2: new THREE.Uniform(new THREE.Color(colors[1])),
       uOffsets: { value: offsets },
-      uPerlinTexture: new THREE.Uniform(perlinNoiseTexture),
+      uPerlinTexture: new THREE.Uniform(repeatNoiseTexture),
       uTime: new THREE.Uniform(0),
       uAnimation: new THREE.Uniform(0.1),
-      uInverted: new THREE.Uniform(isDark ? 1 : 0),
+      uInverted: new THREE.Uniform(0),
       uInputVolume: new THREE.Uniform(0),
       uOutputVolume: new THREE.Uniform(0),
       uOpacity: new THREE.Uniform(0),
     }
-  }, [perlinNoiseTexture, offsets])
+  }, [colors, repeatNoiseTexture, offsets])
 
   return (
     <mesh ref={circleRef}>

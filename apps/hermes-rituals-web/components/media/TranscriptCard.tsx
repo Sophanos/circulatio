@@ -25,10 +25,14 @@ function audioTypeForSource(src: string) {
 }
 
 export function TranscriptCard({ artifact }: { artifact: PresentationArtifact }) {
-  const captions = artifact.captions ?? []
-  const transcript = captions.length > 0
-    ? captions.map((caption) => caption.text).join("\n\n")
-    : artifact.transcript ?? artifact.summary
+  const captions = useMemo(() => artifact.captions ?? [], [artifact.captions])
+  const transcript = useMemo(
+    () =>
+      captions.length > 0
+        ? captions.map((caption) => caption.text).join("\n\n")
+        : artifact.transcript ?? artifact.summary,
+    [artifact.summary, artifact.transcript, captions]
+  )
   const durationMs = artifact.captions?.at(-1)?.endMs ?? 60000
   const alignment = useMemo(
     () => createCharacterAlignmentFromCaptions(captions, transcript, durationMs),
@@ -38,12 +42,18 @@ export function TranscriptCard({ artifact }: { artifact: PresentationArtifact })
 
   useEffect(() => {
     if (artifact.audioUrl) {
-      setAudioUrl(artifact.audioUrl)
-      return
+      const sourceUrl = artifact.audioUrl
+      const timeout = window.setTimeout(() => setAudioUrl(sourceUrl), 0)
+      return () => window.clearTimeout(timeout)
     }
+
     const url = makeSilentWavBlobUrl(durationMs)
-    setAudioUrl(url)
-    return () => URL.revokeObjectURL(url)
+    const timeout = window.setTimeout(() => setAudioUrl(url), 0)
+
+    return () => {
+      window.clearTimeout(timeout)
+      URL.revokeObjectURL(url)
+    }
   }, [artifact.audioUrl, durationMs])
 
   if (!audioUrl) return null

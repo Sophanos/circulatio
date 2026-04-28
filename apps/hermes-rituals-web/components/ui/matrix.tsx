@@ -113,10 +113,14 @@ function useAnimation(
   }, [frames, isPlaying, options.fps, options.loop, options.onFrame])
 
   useEffect(() => {
-    setFrameIndex(0)
-    setIsPlaying(options.autoplay)
-    lastTimeRef.current = 0
-    accumulatorRef.current = 0
+    const timeout = window.setTimeout(() => {
+      setFrameIndex(0)
+      setIsPlaying(options.autoplay)
+      lastTimeRef.current = 0
+      accumulatorRef.current = 0
+    }, 0)
+
+    return () => window.clearTimeout(timeout)
   }, [frames, options.autoplay])
 
   return { frameIndex, isPlaying }

@@ -618,18 +618,37 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const audioRef = useRef<HTMLAudioElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
+  const blobUrlRef = useRef<string | null>(null)
   const plannedDurationMs = resolveDurationMs(artifact)
-  const [audioUrl, setAudioUrl] = useState("")
-  const [mediaDurationSeconds, setMediaDurationSeconds] = useState(0)
-  const [audioWaveformData, setAudioWaveformData] = useState<number[]>([])
+  const audioStateKey = `${artifact.id}:${artifact.audioUrl ?? plannedDurationMs}`
+  const [audioState, setAudioState] = useState(() => ({
+    key: audioStateKey,
+    url: artifact.audioUrl ?? ""
+  }))
+  const audioUrl = audioState.key === audioStateKey ? audioState.url : artifact.audioUrl ?? ""
+  const [waveformState, setWaveformState] = useState<{
+    audioUrl: string
+    data: number[]
+    durationSeconds: number
+  }>({ audioUrl: "", data: [], durationSeconds: 0 })
+  const audioWaveformData = waveformState.audioUrl === audioUrl ? waveformState.data : []
+  const mediaDurationSeconds =
+    waveformState.audioUrl === audioUrl ? waveformState.durationSeconds : 0
   const durationMs = mediaDurationSeconds > 0 ? mediaDurationSeconds * 1000 : plannedDurationMs
   const durationSeconds = durationMs / 1000
+  const durationSecondsRef = useRef(durationSeconds)
+  useLayoutEffect(() => {
+    durationSecondsRef.current = durationSeconds
+  }, [durationSeconds])
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [breathClockOffsetMs, setBreathClockOffsetMs] = useState(0)
   const currentTimeMs = currentTime * 1000
   const currentTimeMsRef = useRef(0)
-  currentTimeMsRef.current = currentTimeMs
+
+  useLayoutEffect(() => {
+    currentTimeMsRef.current = currentTimeMs
+  }, [currentTimeMs])
   const stageVideoSource = resolveStageVideo(artifact)
   const fullStageVideo = isFullStageVideo(stageLens, stageVideoSource)
   const fullStageChromeVisible = !fullStageVideo || chromeVisible
@@ -658,19 +677,39 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   }))
 
   useEffect(() => {
-    if (artifact.audioUrl) {
-      setAudioUrl(artifact.audioUrl)
-      return
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current)
+      blobUrlRef.current = null
     }
+
+    if (artifact.audioUrl) {
+      const timeout = window.setTimeout(() => {
+        setAudioState({ key: audioStateKey, url: artifact.audioUrl ?? "" })
+      }, 0)
+      return () => window.clearTimeout(timeout)
+    }
+
     const url = makeSilentWavBlobUrl(plannedDurationMs)
-    setAudioUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [artifact.audioUrl, plannedDurationMs])
+    blobUrlRef.current = url
+    const timeout = window.setTimeout(() => {
+      setAudioState({ key: audioStateKey, url })
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeout)
+    }
+  }, [artifact.audioUrl, audioStateKey, plannedDurationMs])
 
   useEffect(() => {
-    setAudioWaveformData([])
-    setMediaDurationSeconds(0)
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+        blobUrlRef.current = null
+      }
+    }
+  }, [])
 
+  useEffect(() => {
     if (!artifact.audioUrl || !audioUrl) return
 
     let cancelled = false
@@ -688,14 +727,22 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         const peaks = waveformFromAudioBuffer(audioBuffer)
         await audioContext.close().catch(() => {})
         if (!cancelled) {
-          setAudioWaveformData(peaks)
-          if (Number.isFinite(audioBuffer.duration) && audioBuffer.duration > 0) {
-            setMediaDurationSeconds(audioBuffer.duration)
-          }
+          setWaveformState({
+            audioUrl,
+            data: peaks,
+            durationSeconds:
+              Number.isFinite(audioBuffer.duration) && audioBuffer.duration > 0
+                ? audioBuffer.duration
+                : 0
+          })
         }
       } catch {
         if (!cancelled) {
-          setAudioWaveformData([])
+          setWaveformState((previous) => ({
+            audioUrl,
+            data: [],
+            durationSeconds: previous.audioUrl === audioUrl ? previous.durationSeconds : 0
+          }))
         }
       }
     }
@@ -710,9 +757,13 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     if (!artifact.audioUrl) return
     const seconds = audioRef.current?.duration
     if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
-      setMediaDurationSeconds(seconds)
+      setWaveformState((previous) => ({
+        audioUrl,
+        data: previous.audioUrl === audioUrl ? previous.data : [],
+        durationSeconds: seconds
+      }))
     }
-  }, [artifact.audioUrl])
+  }, [artifact.audioUrl, audioUrl])
 
   useLayoutEffect(() => {
     if (stageLens === "breath") {
@@ -733,12 +784,13 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     const readClockSeconds = () => {
       const audioSeconds = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
       const anchor = playbackAnchorRef.current
+      const limit = durationSecondsRef.current
       if (!anchor || audio.paused || audio.ended) {
-        return Math.min(Math.max(audioSeconds, 0), durationSeconds)
+        return Math.min(Math.max(audioSeconds, 0), limit)
       }
       const elapsedSeconds = (performance.now() - anchor.startedAtMs) / 1000
       const fallbackSeconds = anchor.audioSeconds + elapsedSeconds
-      return Math.min(Math.max(audioSeconds, fallbackSeconds, 0), durationSeconds)
+      return Math.min(Math.max(audioSeconds, fallbackSeconds, 0), limit)
     }
 
     const syncTime = () => {
@@ -760,7 +812,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
     const tick = () => {
       const nextSeconds = syncTime()
-      if (nextSeconds >= durationSeconds) {
+      if (nextSeconds >= durationSecondsRef.current) {
         audio.pause()
         audio.currentTime = 0
         finishPlayback()
@@ -811,7 +863,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("ended", handleEnded)
     }
-  }, [durationSeconds, onComplete, onPlayingChange, onTimeUpdate])
+  }, [onComplete, onPlayingChange, onTimeUpdate])
 
   const activeSection =
     frameActiveSection ??
@@ -857,6 +909,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       ].join(" ")}
     >
       <audio
+        key={audioStateKey}
         ref={audioRef}
         src={audioUrl || undefined}
         preload="metadata"

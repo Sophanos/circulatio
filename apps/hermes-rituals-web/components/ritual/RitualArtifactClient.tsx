@@ -44,6 +44,38 @@ const RITUAL_LENS_LABELS: Record<RitualStageLens, string> = {
   body: "body"
 }
 type ChannelName = (typeof CHANNEL_ORDER)[number]
+type BodyCaptureState = {
+  artifactKey: string
+  draft: BodyStateDraft
+  completionStatus: BodyCompletionStatus
+  submitError: string | null
+}
+
+function createInitialBodyDraft(privacyClass?: string): BodyStateDraft {
+  return {
+    ...EMPTY_BODY_STATE_DRAFT,
+    privacyClass
+  }
+}
+
+function createBodyCaptureState(artifactKey: string, privacyClass?: string): BodyCaptureState {
+  return {
+    artifactKey,
+    draft: createInitialBodyDraft(privacyClass),
+    completionStatus: "idle",
+    submitError: null
+  }
+}
+
+function currentBodyCaptureState(
+  state: BodyCaptureState,
+  artifactKey: string,
+  privacyClass?: string
+): BodyCaptureState {
+  return state.artifactKey === artifactKey
+    ? state
+    : createBodyCaptureState(artifactKey, privacyClass)
+}
 
 function formatTimestamp(value: number) {
   if (!Number.isFinite(value) || value < 0) return "0:00"
@@ -332,14 +364,26 @@ export function RitualArtifactClient({
   const [channels, setChannels] = useState<ArtifactChannels>(
     artifact.channels ?? {}
   )
-  const [bodyDraft, setBodyDraft] = useState<BodyStateDraft>(() => ({
-    ...EMPTY_BODY_STATE_DRAFT,
-    privacyClass: artifact.privacyClass
-  }))
-  const [bodyCompletionStatus, setBodyCompletionStatus] =
-    useState<BodyCompletionStatus>("idle")
-  const [bodySubmitError, setBodySubmitError] = useState<string | null>(null)
-  const completionIdRef = useRef<string | null>(null)
+  const bodyStateKey = `${artifact.id}:${artifact.privacyClass ?? ""}`
+  const [bodyCapture, setBodyCapture] = useState<BodyCaptureState>(() =>
+    createBodyCaptureState(bodyStateKey, artifact.privacyClass)
+  )
+  const currentBodyCapture = currentBodyCaptureState(
+    bodyCapture,
+    bodyStateKey,
+    artifact.privacyClass
+  )
+  const bodyDraft = currentBodyCapture.draft
+  const bodyCompletionStatus = currentBodyCapture.completionStatus
+  const bodySubmitError = currentBodyCapture.submitError
+  const completionIdRef = useRef<{ artifactId: string; completionId: string | null }>({
+    artifactId: artifact.id,
+    completionId: null
+  })
+  const currentMsRef = useRef(currentMs)
+  useEffect(() => {
+    currentMsRef.current = currentMs
+  }, [currentMs])
 
   const ritualExperience = useRitualExperience({
     artifact,
@@ -358,7 +402,7 @@ export function RitualArtifactClient({
     stageLens === "cinema" && artifact.stageVideo?.presentation === "full_background"
   const cinemaPlaybackImmersive = cinemaImmersive && isPlaying
   const autoHideChrome = breathImmersive || cinemaPlaybackImmersive
-  const immersive = breathImmersive
+  const ritualImmersive = breathImmersive
   const [showChrome, setShowChrome] = useState(true)
   const chromeHidden = autoHideChrome && !showChrome
   const chromeVisible = !chromeHidden
@@ -371,28 +415,21 @@ export function RitualArtifactClient({
     sections.at(-1)?.endMs ?? 0,
     60000
   )
+  const durationMsRef = useRef(durationMs)
+  useEffect(() => {
+    durationMsRef.current = durationMs
+  }, [durationMs])
   const sessionProgress = Math.min(currentMs / durationMs, 1)
   const remainingSeconds = Math.max(Math.floor((durationMs - currentMs) / 1000), 0)
 
-  useEffect(() => {
-    setBodyDraft({ ...EMPTY_BODY_STATE_DRAFT, privacyClass: artifact.privacyClass })
-    setBodyCompletionStatus("idle")
-    setBodySubmitError(null)
-    completionIdRef.current = null
-  }, [artifact.id, artifact.privacyClass])
-
   // Auto-hide chrome in immersive modes
   useEffect(() => {
-    if (!autoHideChrome) {
-      setShowChrome(true)
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current)
-        hideTimeoutRef.current = null
-      }
-      return
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current)
+      hideTimeoutRef.current = null
     }
+    if (!autoHideChrome) return
 
-    setShowChrome(true)
     hideTimeoutRef.current = setTimeout(() => {
       setShowChrome(false)
     }, cinemaPlaybackImmersive ? 1800 : 3500)
@@ -426,13 +463,6 @@ export function RitualArtifactClient({
       window.removeEventListener("touchstart", revealChrome)
     }
   }, [autoHideChrome, cinemaPlaybackImmersive])
-
-  // Close rail when entering immersive playback
-  useEffect(() => {
-    if (autoHideChrome) {
-      setRailOpen(false)
-    }
-  }, [autoHideChrome])
 
   useEffect(() => {
     if (!railOpen) return
@@ -504,10 +534,10 @@ export function RitualArtifactClient({
 
   const handleStageLensChange = useCallback((lens: RitualStageLens) => {
     ritualExperience.setStageLens(lens)
+    setShowChrome(true)
     if (lens === "body") {
       setRailTab("body")
       setRailOpen(true)
-      setShowChrome(true)
     }
   }, [ritualExperience])
 
@@ -520,36 +550,62 @@ export function RitualArtifactClient({
     setShowChrome(true)
   }, [artifact.captureBodyResponse, artifact.completionEndpoint, ritualExperience])
 
-  const handleBodyDraftChange = useCallback((nextDraft: BodyStateDraft) => {
-    setBodyDraft(nextDraft)
-    if (bodyCompletionStatus === "error") {
-      setBodyCompletionStatus("idle")
-      setBodySubmitError(null)
+  const handlePlayingChange = useCallback((playing: boolean) => {
+    setIsPlaying(playing)
+    if (playing && (stageLens === "breath" || stageLens === "meditation" || cinemaImmersive)) {
+      setRailOpen(false)
+      setShowChrome(true)
     }
-  }, [bodyCompletionStatus])
+  }, [cinemaImmersive, stageLens])
+
+  const setBodyCaptureStatus = useCallback(
+    (completionStatus: BodyCompletionStatus, submitError: string | null = null) => {
+      setBodyCapture((previous) => ({
+        ...currentBodyCaptureState(previous, bodyStateKey, artifact.privacyClass),
+        completionStatus,
+        submitError
+      }))
+    },
+    [artifact.privacyClass, bodyStateKey]
+  )
+
+  const handleBodyDraftChange = useCallback((nextDraft: BodyStateDraft) => {
+    setBodyCapture((previous) => {
+      const current = currentBodyCaptureState(previous, bodyStateKey, artifact.privacyClass)
+      return {
+        ...current,
+        draft: nextDraft,
+        completionStatus: current.completionStatus === "error" ? "idle" : current.completionStatus,
+        submitError: current.completionStatus === "error" ? null : current.submitError
+      }
+    })
+  }, [artifact.privacyClass, bodyStateKey])
 
   const handleSubmitBodyState = useCallback(async () => {
     const bodyState = buildBodyStatePayload(bodyDraft, artifact.privacyClass)
     if (!bodyState) {
-      setBodyCompletionStatus("error")
-      setBodySubmitError("Choose a sensation before holding this body note.")
+      setBodyCaptureStatus("error", "Choose a sensation before holding this body note.")
       return
     }
 
     if (!artifact.completionEndpoint) {
-      setBodyCompletionStatus("error")
-      setBodySubmitError("Completion sync is not available for this artifact.")
+      setBodyCaptureStatus("error", "Completion sync is not available for this artifact.")
       return
     }
 
-    setBodyCompletionStatus("submitting")
-    setBodySubmitError(null)
+    setBodyCaptureStatus("submitting")
 
-    if (!completionIdRef.current) {
-      completionIdRef.current = createCompletionId(artifact.id)
+    if (completionIdRef.current.artifactId !== artifact.id) {
+      completionIdRef.current = { artifactId: artifact.id, completionId: null }
     }
-    const completionId = completionIdRef.current
-    const playbackState = currentMs > 0 && currentMs < durationMs - 1000 ? "partial" : "completed"
+    if (!completionIdRef.current.completionId) {
+      completionIdRef.current.completionId = createCompletionId(artifact.id)
+    }
+    const completionId = completionIdRef.current.completionId
+    const playbackState =
+      currentMsRef.current > 0 && currentMsRef.current < durationMsRef.current - 1000
+        ? "partial"
+        : "completed"
 
     try {
       const response = await fetch(artifact.completionEndpoint, {
@@ -562,15 +618,19 @@ export function RitualArtifactClient({
           completionId,
           completedAt: new Date().toISOString(),
           playbackState,
-          durationMs,
-          completedSections: completedSectionIds(sections, currentMs, durationMs),
+          durationMs: durationMsRef.current,
+          completedSections: completedSectionIds(
+            sections,
+            currentMsRef.current,
+            durationMsRef.current
+          ),
           bodyState,
           clientMetadata: {
             surface: "hermes-rituals-web",
             bodyPickerVersion: "v2_symbolic_body_map",
             bodyMapMode:
               stageLens === "body" ? "stage_full2d_rail_summary" : "rail_compact2d",
-            currentMs: Math.round(currentMs)
+            currentMs: Math.round(currentMsRef.current)
           }
         })
       })
@@ -578,23 +638,21 @@ export function RitualArtifactClient({
       if (!response.ok) {
         throw new Error(typeof payload.error === "string" ? payload.error : "body_state_save_failed")
       }
-      setBodyCompletionStatus("saved")
+      setBodyCaptureStatus("saved")
       ritualExperience.recordSessionEvent({ type: "body_response_captured" })
     } catch (error) {
       const message = error instanceof Error ? error.message : "body_state_save_failed"
-      setBodyCompletionStatus("error")
-      setBodySubmitError(message.replaceAll("_", " "))
+      setBodyCaptureStatus("error", message.replaceAll("_", " "))
     }
   }, [
     artifact.completionEndpoint,
     artifact.id,
     artifact.privacyClass,
     bodyDraft,
-    currentMs,
-    durationMs,
     sections,
     stageLens,
-    ritualExperience
+    ritualExperience,
+    setBodyCaptureStatus
   ])
 
   return (
@@ -606,7 +664,7 @@ export function RitualArtifactClient({
     >
       {/* Full-bleed artwork background — fades to black in immersive ritual */}
       <AnimatePresence>
-        {!immersive && !cinemaImmersive && backgroundImageUrl && (
+        {!ritualImmersive && !cinemaImmersive && backgroundImageUrl && (
           <motion.div
             key="bg-image"
             className="pointer-events-none absolute inset-0"
@@ -628,7 +686,7 @@ export function RitualArtifactClient({
       <motion.div
         className="pointer-events-none absolute inset-0"
         animate={{
-          backgroundColor: immersive ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0)"
+          backgroundColor: ritualImmersive ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0)"
         }}
         transition={{ duration: 1.2, ease: "easeInOut" }}
       />
@@ -700,7 +758,7 @@ export function RitualArtifactClient({
       </motion.header>
 
       {/* Subtle top progress bar — always visible in immersive, very dim */}
-      {immersive && (
+      {ritualImmersive && (
         <motion.div
           className="absolute left-0 right-0 top-0 z-40"
           initial={{ opacity: 0 }}
@@ -743,7 +801,7 @@ export function RitualArtifactClient({
                 ? "minimal"
                 : "full"
             }
-            immersive={immersive}
+            immersive={ritualImmersive}
             chromeVisible={chromeVisible}
             bodyDraft={bodyDraft}
             bodyCompletionStatus={bodyCompletionStatus}
@@ -753,7 +811,7 @@ export function RitualArtifactClient({
             onBodyDraftChange={handleBodyDraftChange}
             onComplete={handlePlayerComplete}
             onTimeUpdate={setCurrentMs}
-            onPlayingChange={setIsPlaying}
+            onPlayingChange={handlePlayingChange}
           />
         </motion.section>
 

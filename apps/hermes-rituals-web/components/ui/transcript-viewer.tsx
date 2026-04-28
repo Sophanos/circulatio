@@ -32,7 +32,9 @@ import {
 type TranscriptGap = Extract<TranscriptSegment, { kind: "gap" }>
 
 type TranscriptViewerContextValue = UseTranscriptViewerResult & {
-  audioProps: Omit<ComponentPropsWithRef<"audio">, "children" | "src">
+  audioRef: ComponentPropsWithRef<"audio">["ref"]
+  audioSrc: string
+  audioType: AudioType
 }
 
 const TranscriptViewerContext =
@@ -114,23 +116,14 @@ function TranscriptViewerContainer({
 
   const { audioRef } = viewerState
 
-  const audioProps = useMemo(
-    () => ({
-      ref: audioRef,
-      controls: false,
-      preload: "metadata" as const,
-      src: audioSrc,
-      children: <source src={audioSrc} type={audioType} />,
-    }),
-    [audioRef, audioSrc, audioType]
-  )
-
   const contextValue = useMemo(
     () => ({
       ...viewerState,
-      audioProps,
+      audioRef,
+      audioSrc,
+      audioType,
     }),
-    [viewerState, audioProps]
+    [viewerState, audioRef, audioSrc, audioType]
   )
 
   return (
@@ -292,14 +285,18 @@ function TranscriptViewerWords({
 function TranscriptViewerAudio({
   ...props
 }: ComponentPropsWithoutRef<"audio">) {
-  const { audioProps } = useTranscriptViewerContext()
+  const { audioRef, audioSrc, audioType } = useTranscriptViewerContext()
   return (
     <audio
       data-slot="transcript-audio"
-      {...audioProps}
+      controls={false}
+      preload="metadata"
+      src={audioSrc}
       {...props}
-      ref={audioProps.ref}
-    />
+      ref={audioRef}
+    >
+      <source src={audioSrc} type={audioType} />
+    </audio>
   )
 }
 

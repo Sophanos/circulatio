@@ -1,7 +1,7 @@
 # Embodied Guidance Surface
 ## Live Body, Camera, Media, And Coach OS Contract
 
-> **Status:** Design contract. This is a future Hermes-owned live guidance surface after the embodied presentation layer. It is not a Circulatio router, not medical diagnosis, and not part of `circulatio.presentation.plan_ritual`.
+> **Status:** Design contract. This is a future Hermes-owned live guidance surface after the connected artifact presentation layer. The presentation layer now owns static timeline/media/lens/body-capture orchestration; this document starts where live sensors, reference movement, and Hermes-agent coaching begin. It is not a Circulatio router, not medical diagnosis, and not part of `circulatio.presentation.plan_ritual`.
 
 The embodied guidance surface connects reference media, camera/body signals, movement practice, active imagination, and Coach OS. It should feel like a personal mirror: consent-bound, sparse, adaptive, and useful for yoga, qi gong, breathwork, meditation, and symbolic body inquiry.
 
@@ -62,7 +62,9 @@ Why this is better:
 `PRESENTATION_LAYER.md` covers rendered artifacts:
 - plan ritual;
 - render audio, image, captions, or cinema;
-- play artifact;
+- play artifact through typed sections, recommended lenses, and available tracks;
+- capture explicit body response at closing/completion;
+- emit local no-op ritual session events;
 - record completion.
 
 This document covers live guidance:
@@ -72,7 +74,7 @@ This document covers live guidance:
 - optionally capture active imagination;
 - optionally record practice outcome, body state, or reflection.
 
-Do not put live camera reading into the ritual planner. A ritual artifact may launch a guidance session, but live body guidance is a host runtime surface.
+Do not put live camera reading into the ritual planner. A ritual artifact may launch a guidance session, but live body guidance is a host runtime surface. The handoff should be from `artifactId`/`ritualPlanId` into a fresh `guidanceSessionId`, not by overloading ritual completion events.
 
 ---
 
