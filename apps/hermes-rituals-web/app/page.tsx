@@ -17,13 +17,13 @@ export default function HomePage() {
           </h1>
           <p className="mt-8 max-w-3xl text-lg leading-8 tracking-[-0.03em] text-graphite-600">
             Built as a render layer on top of Circulatio and Hermes. The frontend stays artifact-first,
-            typed, and mocked-first while the symbolic intelligence remains in the backend.
+            typed, and manifest-backed while the symbolic intelligence remains in the backend.
           </p>
         </div>
         <div className="media-card p-8 sm:p-10">
           <p className="text-sm leading-7 text-graphite-600">
-            V1 focuses on capture, hold-first acknowledgement, ritual playback, myth-weather broadcast,
-            one cinema rendering path, and stable artifact resume by URL.
+            V1 keeps ritual, broadcast, cinema, breath, meditation, image, and body as lenses
+            inside one canonical artifact player, with legacy family routes preserved as redirects.
           </p>
         </div>
       </div>
@@ -32,7 +32,7 @@ export default function HomePage() {
         {artifacts.map((artifact) => (
           <Link
             key={artifact.id}
-            href={`/${artifact.mode}s/${artifact.id}`}
+            href={`/artifacts/${artifact.id}`}
             className="media-card gsap-hover-physics p-6 transition-transform duration-700 ease-out hover:scale-[1.015]"
           >
             <p className="text-xs font-medium tracking-[0.22em] uppercase text-graphite-500">

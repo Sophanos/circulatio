@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, ListMusic, MessageSquareText, Volume2, VolumeX } from "lucide-react"
 import * as SliderPrimitive from "@radix-ui/react-slider"
 
@@ -23,6 +23,11 @@ import {
   type BodyStateDraft
 } from "@/components/ritual/BodyPicker"
 import { RitualRail, type RailTab } from "@/components/ritual/RitualRail"
+import {
+  RitualTimelineProgress,
+  type RitualTimelineCompletionStatus
+} from "@/components/ritual/RitualTimelineProgress"
+import { MICRO_SPRING, PANEL_SPRING, RITUAL_FADE } from "@/components/ritual/motion"
 import type {
   ArtifactChannels,
   PresentationArtifact,
@@ -30,9 +35,7 @@ import type {
   RitualSection,
   SessionShell
 } from "@/lib/artifact-contract"
-
-const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
-const MORPH = { type: "spring" as const, stiffness: 450, damping: 28, mass: 0.5 }
+import type { RitualExperienceTrack } from "@/lib/ritual-experience"
 
 const CHANNEL_ORDER = ["voice", "ambient", "breath", "pulse", "music"] as const
 const RITUAL_LENS_OPTIONS: RitualStageLens[] = ["cinema", "photo", "breath", "meditation", "body"]
@@ -42,6 +45,13 @@ const RITUAL_LENS_LABELS: Record<RitualStageLens, string> = {
   breath: "breath",
   meditation: "med",
   body: "body"
+}
+const VISUAL_TRACK_TO_LENS: Partial<Record<RitualExperienceTrack, RitualStageLens>> = {
+  cinema: "cinema",
+  photo: "photo",
+  breath: "breath",
+  meditation: "meditation",
+  body_map: "body"
 }
 type ChannelName = (typeof CHANNEL_ORDER)[number]
 type BodyCaptureState = {
@@ -77,12 +87,44 @@ function currentBodyCaptureState(
     : createBodyCaptureState(artifactKey, privacyClass)
 }
 
-function formatTimestamp(value: number) {
-  if (!Number.isFinite(value) || value < 0) return "0:00"
-  const totalSeconds = Math.floor(value)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+function availableStageLenses(
+  availableTracks: RitualExperienceTrack[],
+  bodyCaptureAvailable: boolean
+): RitualStageLens[] {
+  const lenses = availableTracks.flatMap((track) => {
+    const lens = VISUAL_TRACK_TO_LENS[track]
+    if (!lens) return []
+    if (lens === "body" && !bodyCaptureAvailable) return []
+    return [lens]
+  })
+
+  return RITUAL_LENS_OPTIONS.filter((lens) => lenses.includes(lens))
+}
+
+function bodyCaptureAvailableInFrame({
+  activeSection,
+  completionStatus,
+  playbackCompleted
+}: {
+  activeSection?: RitualSection | null
+  completionStatus: BodyCompletionStatus
+  playbackCompleted: boolean
+}) {
+  return (
+    activeSection?.kind === "closing" ||
+    playbackCompleted ||
+    completionStatus === "submitting" ||
+    completionStatus === "saved" ||
+    completionStatus === "error"
+  )
+}
+
+function timelineCompletionStatus(
+  completionStatus: BodyCompletionStatus,
+  playbackCompleted: boolean
+): RitualTimelineCompletionStatus {
+  if (completionStatus !== "idle") return completionStatus
+  return playbackCompleted ? "completed" : "idle"
 }
 
 function createCompletionId(artifactId: string) {
@@ -153,7 +195,7 @@ function LiquidMixer({
         backgroundColor: glassy && hovered ? "rgba(0,0,0,0.38)" : "rgba(255,255,255,0.02)",
         borderColor: glassy && hovered ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0)"
       }}
-      transition={MORPH}
+      transition={MICRO_SPRING}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
         setHovered(false)
@@ -167,13 +209,16 @@ function LiquidMixer({
           hovered ? "h-9 gap-3 px-3 pt-3" : "h-9 justify-center"
         ].join(" ")}
       >
-        <button
+        <motion.button
           type="button"
           onClick={() => onMasterChange(isMuted ? 0.75 : 0)}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full text-silver-300 transition-colors hover:text-white"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full text-silver-300 hover:text-white"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+          transition={MICRO_SPRING}
         >
           {isMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-        </button>
+        </motion.button>
 
         <AnimatePresence>
           {hovered && (
@@ -182,7 +227,7 @@ function LiquidMixer({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.12, delay: 0.04 }}
+              transition={RITUAL_FADE}
             >
               <SliderPrimitive.Root
                 value={[masterVolume]}
@@ -210,7 +255,7 @@ function LiquidMixer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, delay: 0.06 }}
+            transition={RITUAL_FADE}
           >
             <div className="mb-2 h-px bg-white/10" />
             <div className="flex flex-col">
@@ -225,7 +270,7 @@ function LiquidMixer({
                   <div
                     key={name}
                     className={[
-                      "flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors",
+                      "flex items-center gap-3 rounded-lg px-2 py-1.5",
                       muted
                         ? "text-silver-500"
                         : "text-silver-100 hover:bg-white/[0.04]"
@@ -233,17 +278,20 @@ function LiquidMixer({
                     onMouseEnter={() => setHoveredChannel(name)}
                     onMouseLeave={() => setHoveredChannel((prev) => (prev === name ? null : prev))}
                   >
-                    <button
+                    <motion.button
                       type="button"
                       onClick={() => onChannelToggle(name)}
-                      className="flex size-6 shrink-0 items-center justify-center rounded-full transition-colors"
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full"
+                      whileHover={{ scale: 1.08 }}
+                      whileTap={{ scale: 0.94 }}
+                      transition={MICRO_SPRING}
                     >
                       {muted ? (
                         <VolumeX className="size-4" />
                       ) : (
                         <Volume2 className="size-4" />
                       )}
-                    </button>
+                    </motion.button>
 
                     <div className="flex min-w-0 flex-1 items-center">
                       <AnimatePresence mode="popLayout">
@@ -254,7 +302,7 @@ function LiquidMixer({
                             initial={{ opacity: 0, width: 0 }}
                             animate={{ opacity: 1, width: "auto" }}
                             exit={{ opacity: 0, width: 0 }}
-                            transition={{ duration: 0.15 }}
+                            transition={MICRO_SPRING}
                           >
                             <SliderPrimitive.Root
                               value={[gain]}
@@ -277,7 +325,7 @@ function LiquidMixer({
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.1 }}
+                            transition={RITUAL_FADE}
                           >
                             {name}
                           </motion.span>
@@ -297,17 +345,21 @@ function LiquidMixer({
 
 function RitualLensSwitch({
   activeLens,
+  availableLenses,
   onChange
 }: {
   activeLens: RitualStageLens
+  availableLenses: RitualStageLens[]
   onChange: (lens: RitualStageLens) => void
 }) {
+  if (availableLenses.length <= 1) return null
+
   return (
     <div
       className="flex items-center gap-1 rounded-full p-1"
       style={{ backgroundColor: "rgba(255,255,255,0.03)" }}
     >
-      {RITUAL_LENS_OPTIONS.map((lens) => {
+      {availableLenses.map((lens) => {
         const active = activeLens === lens
 
         return (
@@ -320,8 +372,8 @@ function RitualLensSwitch({
             {active && (
               <motion.div
                 layoutId="ritual-lens-pill"
-                className="absolute inset-0 rounded-full bg-white/[0.10]"
-                transition={SPRING}
+                className="pointer-events-none absolute inset-0 rounded-full bg-white/[0.10]"
+                transition={MICRO_SPRING}
               />
             )}
             <span
@@ -355,6 +407,15 @@ export function RitualArtifactClient({
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [currentMs, setCurrentMs] = useState(0)
+  const [playbackCompletion, setPlaybackCompletion] = useState({
+    artifactId: artifact.id,
+    completed: false
+  })
+  const playbackCompleted =
+    playbackCompletion.artifactId === artifact.id && playbackCompletion.completed
+  const setPlaybackCompleted = useCallback((completed: boolean) => {
+    setPlaybackCompletion({ artifactId: artifact.id, completed })
+  }, [artifact.id])
   const [railOpen, setRailOpen] = useState(false)
   const [railTab, setRailTab] = useState<RailTab>("sections")
   const [masterVolume, setMasterVolume] = useState(0.75)
@@ -393,7 +454,25 @@ export function RitualArtifactClient({
     onSessionEvent
   })
   const ritualFrame = ritualExperience.frame
-  const stageLens = ritualExperience.stageLens as RitualStageLens
+  const rawStageLens = ritualExperience.stageLens as RitualStageLens
+  const bodyCaptureAvailable = useMemo(
+    () =>
+      ritualFrame.availableTracks.includes("body_map") &&
+      bodyCaptureAvailableInFrame({
+        activeSection: ritualFrame.activeSection,
+        completionStatus: bodyCompletionStatus,
+        playbackCompleted
+      }),
+    [bodyCompletionStatus, playbackCompleted, ritualFrame.activeSection, ritualFrame.availableTracks]
+  )
+  const availableLenses = useMemo(
+    () => availableStageLenses(ritualFrame.availableTracks, bodyCaptureAvailable),
+    [bodyCaptureAvailable, ritualFrame.availableTracks]
+  )
+  const stageLens = availableLenses.includes(rawStageLens)
+    ? rawStageLens
+    : availableLenses[0] ?? rawStageLens
+  const timelineStatus = timelineCompletionStatus(bodyCompletionStatus, playbackCompleted)
 
   // Immersive ritual state (breath or meditation)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -419,8 +498,15 @@ export function RitualArtifactClient({
   useEffect(() => {
     durationMsRef.current = durationMs
   }, [durationMs])
-  const sessionProgress = Math.min(currentMs / durationMs, 1)
-  const remainingSeconds = Math.max(Math.floor((durationMs - currentMs) / 1000), 0)
+
+  const handleTimeUpdate = useCallback((ms: number) => {
+    setCurrentMs(ms)
+    if (ms < durationMsRef.current - 1000) {
+      setPlaybackCompleted(false)
+    }
+  }, [setPlaybackCompleted])
+
+  const visibleRailTab = railTab === "body" && !bodyCaptureAvailable ? "sections" : railTab
 
   // Auto-hide chrome in immersive modes
   useEffect(() => {
@@ -529,26 +615,30 @@ export function RitualArtifactClient({
   )
 
   const handleSeek = useCallback((ms: number) => {
+    setPlaybackCompleted(false)
+    setCurrentMs(ms)
     playerRef.current?.seek(ms)
-  }, [])
+  }, [setPlaybackCompleted])
 
   const handleStageLensChange = useCallback((lens: RitualStageLens) => {
+    if (lens === "body" && !bodyCaptureAvailable) return
     ritualExperience.setStageLens(lens)
     setShowChrome(true)
     if (lens === "body") {
       setRailTab("body")
       setRailOpen(true)
     }
-  }, [ritualExperience])
+  }, [bodyCaptureAvailable, ritualExperience])
 
   const handlePlayerComplete = useCallback(() => {
+    setPlaybackCompleted(true)
     ritualExperience.recordSessionEvent({ type: "ritual_completed" })
     if (!artifact.captureBodyResponse && !artifact.completionEndpoint) return
     ritualExperience.setStageLens("body")
     setRailTab("body")
     setRailOpen(true)
     setShowChrome(true)
-  }, [artifact.captureBodyResponse, artifact.completionEndpoint, ritualExperience])
+  }, [artifact.captureBodyResponse, artifact.completionEndpoint, ritualExperience, setPlaybackCompleted])
 
   const handlePlayingChange = useCallback((playing: boolean) => {
     setIsPlaying(playing)
@@ -670,7 +760,7 @@ export function RitualArtifactClient({
             className="pointer-events-none absolute inset-0"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1.2, ease: "easeInOut" }}
+            transition={PANEL_SPRING}
             style={{
               backgroundImage: `url(${backgroundImageUrl})`,
               backgroundSize: "cover",
@@ -688,7 +778,7 @@ export function RitualArtifactClient({
         animate={{
           backgroundColor: ritualImmersive ? "rgba(0,0,0,0.85)" : "rgba(0,0,0,0)"
         }}
-        transition={{ duration: 1.2, ease: "easeInOut" }}
+        transition={PANEL_SPRING}
       />
       {!cinemaImmersive && (
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,19,23,0.4),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(16,19,23,0.5),transparent_50%)]" />
@@ -698,15 +788,15 @@ export function RitualArtifactClient({
       <motion.header
         className={[
           "flex items-start justify-between gap-4 px-4 py-3 md:px-6",
-          cinemaImmersive ? "pointer-events-none absolute inset-x-0 top-0 z-20" : "relative z-10"
+          cinemaImmersive ? "pointer-events-none absolute inset-x-0 top-0 z-30" : "relative z-10"
         ].join(" ")}
         animate={{
           opacity: chromeHidden ? 0 : 1,
           y: chromeHidden ? -12 : 0
         }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
+        transition={PANEL_SPRING}
         style={{
-          pointerEvents: chromeHidden ? "none" : cinemaImmersive ? "none" : "auto"
+          pointerEvents: chromeHidden ? "none" : "auto"
         }}
       >
         <div
@@ -719,14 +809,17 @@ export function RitualArtifactClient({
                 : ""
           ].join(" ")}
         >
-          <button
+          <motion.button
             type="button"
             onClick={() => router.back()}
-            className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white/80 backdrop-blur-sm transition-colors hover:bg-white/20"
+            className="flex size-8 items-center justify-center rounded-full bg-white/10 text-white/80 backdrop-blur-sm"
             aria-label="Go back"
+            whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.20)" }}
+            whileTap={{ scale: 0.94 }}
+            transition={MICRO_SPRING}
           >
             <ArrowLeft className="size-4" />
-          </button>
+          </motion.button>
           <div className="flex flex-col gap-2 pt-0.5">
             <div className="flex flex-col">
               <span className="text-[10px] font-medium uppercase tracking-wider text-silver-400">
@@ -736,12 +829,18 @@ export function RitualArtifactClient({
                 {artifact.title}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-600">
-                Lens
-              </span>
-              <RitualLensSwitch activeLens={stageLens} onChange={handleStageLensChange} />
-            </div>
+            {availableLenses.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-silver-600">
+                  Lens
+                </span>
+                <RitualLensSwitch
+                  activeLens={stageLens}
+                  availableLenses={availableLenses}
+                  onChange={handleStageLensChange}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -757,29 +856,29 @@ export function RitualArtifactClient({
         </div>
       </motion.header>
 
-      {/* Subtle top progress bar — always visible in immersive, very dim */}
-      {ritualImmersive && (
-        <motion.div
-          className="absolute left-0 right-0 top-0 z-40"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: showChrome ? 0.6 : 0.25 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="h-[2px] w-full bg-white/5">
-            <motion.div
-              className="h-full bg-white/30"
-              style={{ width: `${sessionProgress * 100}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-          {/* Dimmed timer */}
-          <div className="flex justify-center pt-2">
-            <span className="text-[11px] font-medium tabular-nums tracking-wide text-silver-600">
-              {formatTimestamp(remainingSeconds)} left
-            </span>
-          </div>
-        </motion.div>
-      )}
+      <motion.div
+        className={[
+          cinemaImmersive
+            ? "pointer-events-auto absolute inset-x-4 top-36 z-20 md:inset-x-6 md:top-40"
+            : "relative z-10 px-4 pb-2 md:px-6",
+          chromeHidden ? "pointer-events-auto" : ""
+        ].join(" ")}
+        initial={false}
+        animate={{
+          opacity: chromeHidden ? 0.36 : 1,
+          y: chromeHidden ? -6 : 0
+        }}
+        transition={PANEL_SPRING}
+      >
+        <RitualTimelineProgress
+          currentMs={currentMs}
+          durationMs={durationMs}
+          sections={sections}
+          activeSection={ritualFrame.activeSection}
+          completionStatus={timelineStatus}
+          onSeek={handleSeek}
+        />
+      </motion.div>
 
       {/* Main layout — spring-driven shared flex space */}
       <motion.main
@@ -810,7 +909,7 @@ export function RitualArtifactClient({
             bodyPromptMode={ritualFrame.bodyPromptMode}
             onBodyDraftChange={handleBodyDraftChange}
             onComplete={handlePlayerComplete}
-            onTimeUpdate={setCurrentMs}
+            onTimeUpdate={handleTimeUpdate}
             onPlayingChange={handlePlayingChange}
           />
         </motion.section>
@@ -822,7 +921,7 @@ export function RitualArtifactClient({
           layout
           initial={false}
           animate={{ width: railOpen ? 420 : 0 }}
-          transition={SPRING}
+          transition={PANEL_SPRING}
         >
           <div className="flex h-full w-[min(100dvw,420px)] flex-col">
             {/* Rail content */}
@@ -832,25 +931,28 @@ export function RitualArtifactClient({
                 currentMs={currentMs}
                 sections={sections}
                 channels={channels}
-                activeTab={railTab}
+                activeTab={visibleRailTab}
                 onTabChange={setRailTab}
                 onToggleSectionMute={handleToggleSectionMute}
                 onToggleChannelMute={handleToggleChannelMute}
                 onChannelGainChange={handleQuickChannelGain}
                 onSeek={handleSeek}
+                showBodyTab={bodyCaptureAvailable}
                 bodyPanel={
-                  <BodyPicker
-                    value={bodyDraft}
-                    onChange={handleBodyDraftChange}
-                    variant="rail"
-                    completionPrompt={ritualFrame.activeSection?.capturePrompt ?? artifact.completionPrompt}
-                    completionStatus={bodyCompletionStatus}
-                    submitError={bodySubmitError}
-                    endpointAvailable={Boolean(artifact.completionEndpoint)}
-                    mapMode={stageLens === "body" ? "summary" : "compact2d"}
-                    disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
-                    onSubmit={handleSubmitBodyState}
-                  />
+                  bodyCaptureAvailable ? (
+                    <BodyPicker
+                      value={bodyDraft}
+                      onChange={handleBodyDraftChange}
+                      variant="rail"
+                      completionPrompt={ritualFrame.activeSection?.capturePrompt ?? artifact.completionPrompt}
+                      completionStatus={bodyCompletionStatus}
+                      submitError={bodySubmitError}
+                      endpointAvailable={Boolean(artifact.completionEndpoint)}
+                      mapMode={stageLens === "body" ? "summary" : "compact2d"}
+                      disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
+                      onSubmit={handleSubmitBodyState}
+                    />
+                  ) : undefined
                 }
               />
             </div>
@@ -868,7 +970,7 @@ export function RitualArtifactClient({
           opacity: chromeHidden ? 0 : 1,
           y: chromeHidden ? 12 : 0
         }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
+        transition={PANEL_SPRING}
         style={{ pointerEvents: "none" }}
       >
         <div
@@ -878,19 +980,22 @@ export function RitualArtifactClient({
             chromeHidden ? "pointer-events-none" : "pointer-events-auto"
           ].join(" ")}
         >
-          <button
+          <motion.button
             type="button"
             onClick={() => setRailOpen(!railOpen)}
             className={[
-              "flex size-10 items-center justify-center rounded-full transition-colors",
+              "flex size-10 items-center justify-center rounded-full",
               railOpen
                 ? "bg-white/20 text-white"
                 : "bg-transparent text-silver-400 hover:text-silver-100"
             ].join(" ")}
             aria-label="Toggle transcript and sections"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.94 }}
+            transition={MICRO_SPRING}
           >
             <MessageSquareText className="size-4.5" />
-          </button>
+          </motion.button>
           <div className="h-5 w-px bg-white/15" />
           <button
             type="button"

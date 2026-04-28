@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "hermes_ritual_artifact.v1",
+  "artifactId": "broadcast-myth-weather-0422",
+  "planId": "ritual_plan_fixture_myth_weather_0422",
+  "createdAt": "2026-04-24T09:20:00Z",
+  "title": "Myth weather for the week of returning corridors.",
+  "description": "A short audio letter gathering the motifs that feel most alive lately without overclaiming what they mean.",
+  "privacyClass": "private",
+  "locale": "en-US",
+  "sourceRefs": [
+    {
+      "sourceType": "weekly_review",
+      "recordId": "weekly_review_fixture_myth_weather",
+      "role": "primary",
+      "label": "Weekly myth-weather review",
+      "evidenceIds": []
+    }
+  ],
+  "durationMs": 48000,
+  "sections": [
+    {
+      "id": "section-arrival",
+      "title": "Arrival",
+      "startMs": 0,
+      "endMs": 6000,
+      "kind": "arrival",
+      "preferredLens": "photo",
+      "channels": { "voice": true, "ambient": true }
+    },
+    {
+      "id": "section-voice-letter",
+      "title": "Voice letter",
+      "startMs": 6000,
+      "endMs": 34000,
+      "kind": "reflection",
+      "preferredLens": "photo",
+      "skippable": true,
+      "channels": { "voice": true, "ambient": true }
+    },
+    {
+      "id": "section-closing",
+      "title": "Closing",
+      "startMs": 34000,
+      "endMs": 48000,
+      "kind": "closing",
+      "preferredLens": "photo",
+      "capturePrompt": "What atmosphere stayed with you?",
+      "channels": { "voice": true, "ambient": true }
+    }
+  ],
+  "surfaces": {
+    "text": {
+      "body": "This week feels corridor-shaped. Several images ask for patience rather than interpretation. The body reads tired, but not empty. A door recurs. So does weather pressure. The voice of the week is not revelation. It is atmosphere held long enough to become legible."
+    },
+    "audio": {
+      "src": null,
+      "mimeType": null,
+      "durationMs": null,
+      "provider": "mock"
+    },
+    "captions": {
+      "segments": [
+        { "id": "cap_1", "startMs": 0, "endMs": 6000, "text": "This week feels corridor-shaped." },
+        { "id": "cap_2", "startMs": 6000, "endMs": 15000, "text": "Several images ask for patience rather than interpretation." },
+        { "id": "cap_3", "startMs": 15000, "endMs": 23500, "text": "The body reads tired, but not empty." },
+        { "id": "cap_4", "startMs": 23500, "endMs": 34000, "text": "A door recurs. So does weather pressure." },
+        { "id": "cap_5", "startMs": 34000, "endMs": 48000, "text": "The voice of the week is not revelation. It is atmosphere held long enough to become legible." }
+      ]
+    },
+    "breath": {
+      "enabled": false,
+      "pattern": "steadying",
+      "inhaleSeconds": 4,
+      "holdSeconds": 0,
+      "exhaleSeconds": 4,
+      "restSeconds": 0
+    },
+    "meditation": {
+      "enabled": false,
+      "fieldType": "attention_anchor",
+      "durationMs": 0,
+      "macroProgressPolicy": "session_progress",
+      "microMotion": "still",
+      "instructionDensity": "none"
+    },
+    "image": {
+      "enabled": true,
+      "src": "https://picsum.photos/seed/myth-weather/1600/1200",
+      "alt": "A corridor-weather image held as a weekly broadcast cover.",
+      "provider": "fixture"
+    },
+    "cinema": {
+      "enabled": false,
+      "src": null,
+      "posterSrc": null,
+      "mimeType": null,
+      "durationMs": null,
+      "provider": null
+    }
+  },
+  "timeline": [
+    { "atMs": 0, "kind": "voice", "ref": "cap_1" },
+    { "atMs": 23500, "kind": "voice", "ref": "cap_4" }
+  ],
+  "interaction": {
+    "finishPrompt": "What atmosphere stayed with you?",
+    "captureBodyResponse": false,
+    "returnCommand": "/circulation ritual complete broadcast-myth-weather-0422"
+  },
+  "safety": {
+    "stopInstruction": "Stop if this increases activation; orient to the room.",
+    "contraindications": [],
+    "blockedSurfaces": []
+  },
+  "render": {
+    "rendererVersion": "ritual-renderer.v1",
+    "mode": "fixture_manifest",
+    "providers": ["mock"],
+    "cacheKeys": [],
+    "budget": { "currency": "USD", "estimated": 0, "actual": 0 },
+    "warnings": ["fixture_manifest_from_legacy_mock", "broadcast_category_rendered_as_player_lens"]
+  }
+}

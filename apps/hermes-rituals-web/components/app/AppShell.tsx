@@ -7,8 +7,8 @@ import { TopNav } from "@/components/app/TopNav"
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname()
-  const hideTopNav = ["/rituals/", "/broadcasts/", "/cinema/", "/live/"].some((prefix) =>
-    pathname?.startsWith(prefix)
+  const hideTopNav = ["/artifacts/", "/rituals/", "/broadcasts/", "/cinema/", "/live/"].some(
+    (prefix) => pathname?.startsWith(prefix)
   )
 
   return (

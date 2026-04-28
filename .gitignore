@@ -21,6 +21,12 @@ apps/hermes-rituals-web/public/artifacts/*
 !apps/hermes-rituals-web/public/artifacts/weekly-ritual-dry-run/
 !apps/hermes-rituals-web/public/artifacts/weekly-ritual-dry-run/manifest.json
 !apps/hermes-rituals-web/public/artifacts/weekly-ritual-dry-run/captions.vtt
+!apps/hermes-rituals-web/public/artifacts/ritual-river-gate/
+!apps/hermes-rituals-web/public/artifacts/ritual-river-gate/manifest.json
+!apps/hermes-rituals-web/public/artifacts/broadcast-myth-weather-0422/
+!apps/hermes-rituals-web/public/artifacts/broadcast-myth-weather-0422/manifest.json
+!apps/hermes-rituals-web/public/artifacts/cinema-river-gate/
+!apps/hermes-rituals-web/public/artifacts/cinema-river-gate/manifest.json
 
 # Databases (user data)
 *.db

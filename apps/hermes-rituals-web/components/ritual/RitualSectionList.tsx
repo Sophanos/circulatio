@@ -2,7 +2,9 @@
 
 import { useMemo } from "react"
 import { Volume2, VolumeX } from "lucide-react"
+import { motion } from "motion/react"
 
+import { MICRO_SPRING } from "@/components/ritual/motion"
 import type { RitualSection, CaptionCue } from "@/lib/artifact-contract"
 
 export type SectionMuteHandler = (sectionId: string, muted: boolean) => void
@@ -54,22 +56,28 @@ function SectionRow({
   const muted = section.muted ?? false
 
   return (
-    <div
-      className={[
-        "group relative flex items-center gap-3 rounded-2xl px-3 py-3 transition-all duration-300",
-        isActive
-          ? "bg-white/15"
-          : "bg-transparent hover:bg-white/10",
-        muted ? "opacity-30" : "opacity-100"
-      ].join(" ")}
+    <motion.div
+      className="group relative flex items-center gap-3 rounded-2xl px-3 py-3"
+      layout
+      initial={false}
+      animate={{
+        opacity: muted ? 0.3 : 1,
+        backgroundColor: isActive ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0)"
+      }}
+      whileHover={isActive ? undefined : { backgroundColor: "rgba(255,255,255,0.10)" }}
+      transition={MICRO_SPRING}
     >
       {/* Progress indicator */}
       <div className="flex w-5 shrink-0 justify-center">
         {isActive && (
-          <span className={[
-            "block size-1.5 rounded-full",
-            muted ? "bg-silver-500" : "bg-silver-100"
-          ].join(" ")} />
+          <motion.span
+            className={[
+              "block size-1.5 rounded-full",
+              muted ? "bg-silver-500" : "bg-silver-100"
+            ].join(" ")}
+            layoutId="ritual-section-active-dot"
+            transition={MICRO_SPRING}
+          />
         )}
       </div>
 
@@ -101,20 +109,23 @@ function SectionRow({
       </button>
 
       {/* Mute toggle */}
-      <button
+      <motion.button
         type="button"
         onClick={() => onToggleMute?.(section.id, !muted)}
         className={[
-          "flex size-8 items-center justify-center rounded-full transition-colors",
+          "flex size-8 items-center justify-center rounded-full",
           muted
             ? "bg-white/5 text-silver-500 hover:bg-white/10 hover:text-silver-300"
             : "bg-white/10 text-silver-200 hover:bg-white/20 hover:text-white"
         ].join(" ")}
         aria-label={muted ? `Unmute ${section.title}` : `Mute ${section.title}`}
+        whileHover={{ scale: 1.06 }}
+        whileTap={{ scale: 0.94 }}
+        transition={MICRO_SPRING}
       >
         {muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   )
 }
 

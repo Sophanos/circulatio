@@ -27,7 +27,6 @@ import {
   ScrubBarContainer,
   ScrubBarProgress,
   ScrubBarThumb,
-  ScrubBarTimeLabel,
   ScrubBarTrack
 } from "@/components/ui/scrub-bar"
 import type {
@@ -37,6 +36,7 @@ import type {
   RitualSection
 } from "@/lib/artifact-contract"
 import type { RitualBodyPromptMode } from "@/lib/ritual-experience"
+import { MICRO_SPRING, PANEL_SPRING, RITUAL_FADE } from "@/components/ritual/motion"
 import { makeSilentWavBlobUrl } from "@/lib/mock-media"
 
 export type RitualPlayerHandle = {
@@ -45,16 +45,6 @@ export type RitualPlayerHandle = {
 
 export type RitualStageLens = "cinema" | "photo" | "breath" | "meditation" | "body"
 export type PlayerMode = "full" | "minimal"
-
-const SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.8 }
-
-function formatTimestamp(value: number) {
-  if (!Number.isFinite(value) || value < 0) return "0:00"
-  const totalSeconds = Math.floor(value)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`
-}
 
 function resolveDurationMs(artifact: PresentationArtifact) {
   const artifactDuration = artifact.durationMs ?? 0
@@ -117,45 +107,6 @@ function waveformFromAudioBuffer(audioBuffer: AudioBuffer, samples = WAVEFORM_SA
     return Math.min(0.95, Math.max(0.06, normalized * 0.9))
   })
 }
-function SectionMarkers({
-  sections,
-  durationSeconds
-}: {
-  sections: RitualSection[]
-  durationSeconds: number
-}) {
-  if (durationSeconds <= 0 || sections.length === 0) return null
-
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
-      {sections.map((section) => {
-        const startSeconds = Math.min(Math.max(section.startMs / 1000, 0), durationSeconds)
-        const endSeconds = Math.min(Math.max(section.endMs / 1000, startSeconds), durationSeconds)
-        const width = ((endSeconds - startSeconds) / durationSeconds) * 100
-
-        if (width <= 0) return null
-
-        const left = (startSeconds / durationSeconds) * 100
-
-        return (
-          <div
-            key={section.id}
-            className="absolute bottom-0 top-0"
-            style={{ left: `${left}%`, width: `${width}%` }}
-          >
-            <div
-              className={[
-                "h-full w-full rounded-full transition-opacity",
-                section.muted ? "bg-white/5" : "bg-white/15"
-              ].join(" ")}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function resolveStageVideo(artifact: PresentationArtifact): PresentationVideoSource | undefined {
   if (artifact.stageVideo) {
     return artifact.stageVideo
@@ -243,7 +194,7 @@ function MinimalLensPlayAffordance({
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      transition={SPRING}
+      transition={PANEL_SPRING}
     >
       <motion.button
         type="button"
@@ -252,7 +203,7 @@ function MinimalLensPlayAffordance({
         className="pointer-events-auto flex size-16 items-center justify-center rounded-full border border-white/25 bg-black/35 text-white shadow-2xl backdrop-blur-2xl md:size-18"
         whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.18)" }}
         whileTap={{ scale: 0.97 }}
-        transition={SPRING}
+        transition={MICRO_SPRING}
       >
         <Play className="ml-0.5 size-6 md:size-7" />
       </motion.button>
@@ -358,7 +309,7 @@ function VisualStage({
         initial={{ opacity: 0, scale: 0.985 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 1.01 }}
-        transition={SPRING}
+        transition={PANEL_SPRING}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.62)_100%)]" />
         <div className="relative z-10 h-full overflow-y-auto">
@@ -392,7 +343,7 @@ function VisualStage({
         initial={{ opacity: 0, scale: 0.985 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 1.01 }}
-        transition={SPRING}
+        transition={PANEL_SPRING}
       >
         {youtubeEmbedUrl ? (
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -422,7 +373,7 @@ function VisualStage({
         )}
         <div
           className={[
-            "absolute inset-0",
+            "pointer-events-none absolute inset-0",
             fullStageVideo
               ? "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.10),transparent_34%),linear-gradient(180deg,rgba(16,19,23,0.44)_0%,rgba(16,19,23,0.08)_28%,rgba(16,19,23,0.34)_62%,rgba(16,19,23,0.86)_100%)]"
               : "bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_32%),linear-gradient(180deg,rgba(16,19,23,0.06)_0%,rgba(16,19,23,0.34)_48%,rgba(16,19,23,0.82)_100%)]"
@@ -461,7 +412,7 @@ function VisualStage({
         initial={{ opacity: 0, scale: 0.985 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 1.01 }}
-        transition={SPRING}
+        transition={PANEL_SPRING}
       >
         {stageLens === "cinema" && <MatrixField currentMs={currentMs} />}
         {artifact.coverImageUrl && (
@@ -487,7 +438,7 @@ function VisualStage({
       initial={{ opacity: 0, scale: 0.985 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 1.01 }}
-      transition={SPRING}
+      transition={PANEL_SPRING}
     >
       {stageLens === "cinema" && <MatrixField currentMs={currentMs} />}
       {scenes.map((scene) => (
@@ -533,10 +484,10 @@ function MinimalCaption({
         {active ? (
           <motion.p
             key={`${active.startMs}-${active.endMs}`}
-            initial={{ opacity: 0, y: 3 }}
-            animate={{ opacity: muted ? 0.3 : 0.85, y: 0 }}
-            exit={{ opacity: 0, y: -3 }}
-            transition={{ duration: 0.25 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: muted ? 0.3 : 0.85 }}
+            exit={{ opacity: 0 }}
+            transition={RITUAL_FADE}
             className="max-w-md text-center text-sm font-medium leading-snug tracking-tight text-silver-200"
           >
             {active.text}
@@ -572,7 +523,7 @@ function CinemaCaptionOverlay({
             filter: "blur(0px)"
           }}
           exit={{ opacity: 0, y: -4, filter: "blur(2px)" }}
-          transition={SPRING}
+          transition={PANEL_SPRING}
           className="max-w-[min(76vw,640px)] text-balance text-center text-base font-medium leading-snug tracking-tight text-white md:text-lg [text-shadow:0_2px_18px_rgba(0,0,0,0.95)]"
         >
           {active.text}
@@ -617,6 +568,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const syntheticClockRef = useRef<number | null>(null)
   const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
   const blobUrlRef = useRef<string | null>(null)
   const plannedDurationMs = resolveDurationMs(artifact)
@@ -659,13 +611,107 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const waveformData = audioWaveformData.length > 0 ? audioWaveformData : fallbackWaveformData
   const waveformProgress = durationSeconds > 0 ? currentTime / durationSeconds : 0
 
+  const ensureAudioSource = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio) return ""
+
+    const activeSource = audio.currentSrc || audio.src
+    if (activeSource) return activeSource
+
+    const source =
+      audioUrl ||
+      artifact.audioUrl ||
+      blobUrlRef.current ||
+      makeSilentWavBlobUrl(plannedDurationMs)
+
+    if (!source) return ""
+
+    if (!artifact.audioUrl && !blobUrlRef.current) {
+      blobUrlRef.current = source
+    }
+
+    setAudioState((previous) =>
+      previous.key === audioStateKey && previous.url === source
+        ? previous
+        : { key: audioStateKey, url: source }
+    )
+    audio.src = source
+    audio.load()
+    return source
+  }, [artifact.audioUrl, audioStateKey, audioUrl, plannedDurationMs])
+
+  const stopSyntheticClock = useCallback(() => {
+    if (syntheticClockRef.current !== null) {
+      window.clearInterval(syntheticClockRef.current)
+      syntheticClockRef.current = null
+    }
+    playbackAnchorRef.current = null
+    setIsPlaying(false)
+    onPlayingChange?.(false)
+  }, [onPlayingChange])
+
+  const startSyntheticClock = useCallback(() => {
+    const startSeconds = Math.min(Math.max(currentTime, 0), durationSecondsRef.current)
+    playbackAnchorRef.current = {
+      audioSeconds: startSeconds,
+      startedAtMs: performance.now()
+    }
+
+    if (syntheticClockRef.current !== null) {
+      window.clearInterval(syntheticClockRef.current)
+    }
+
+    const tick = () => {
+      const anchor = playbackAnchorRef.current
+      if (!anchor) {
+        if (syntheticClockRef.current !== null) {
+          window.clearInterval(syntheticClockRef.current)
+          syntheticClockRef.current = null
+        }
+        return
+      }
+
+      const elapsedSeconds = (performance.now() - anchor.startedAtMs) / 1000
+      const nextSeconds = Math.min(
+        anchor.audioSeconds + elapsedSeconds,
+        durationSecondsRef.current
+      )
+      setCurrentTime(nextSeconds)
+      onTimeUpdate?.(nextSeconds * 1000)
+
+      if (nextSeconds >= durationSecondsRef.current) {
+        playbackAnchorRef.current = null
+        if (syntheticClockRef.current !== null) {
+          window.clearInterval(syntheticClockRef.current)
+          syntheticClockRef.current = null
+        }
+        setIsPlaying(false)
+        onPlayingChange?.(false)
+        setCurrentTime(0)
+        onTimeUpdate?.(0)
+        onComplete?.()
+        return
+      }
+
+    }
+
+    setIsPlaying(true)
+    onPlayingChange?.(true)
+    onTimeUpdate?.(startSeconds * 1000)
+    syntheticClockRef.current = window.setInterval(tick, 100)
+    tick()
+  }, [currentTime, onComplete, onPlayingChange, onTimeUpdate])
+
   useImperativeHandle(ref, () => ({
     seek: (ms: number) => {
-      const audio = audioRef.current
-      if (!audio) return
       const seconds = ms / 1000
-      audio.currentTime = seconds
-      if (!audio.paused && !audio.ended) {
+      const audio = audioRef.current
+      if (artifact.audioUrl && audio && ensureAudioSource()) {
+        try {
+          audio.currentTime = seconds
+        } catch {}
+      }
+      if (!artifact.audioUrl || (audio && !audio.paused && !audio.ended)) {
         playbackAnchorRef.current = { audioSeconds: seconds, startedAtMs: performance.now() }
       }
       if (stageLens === "breath") {
@@ -683,8 +729,9 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     }
 
     if (artifact.audioUrl) {
+      const sourceUrl = artifact.audioUrl
       const timeout = window.setTimeout(() => {
-        setAudioState({ key: audioStateKey, url: artifact.audioUrl ?? "" })
+        setAudioState({ key: audioStateKey, url: sourceUrl })
       }, 0)
       return () => window.clearTimeout(timeout)
     }
@@ -705,6 +752,10 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current)
         blobUrlRef.current = null
+      }
+      if (syntheticClockRef.current !== null) {
+        window.clearInterval(syntheticClockRef.current)
+        syntheticClockRef.current = null
       }
     }
   }, [])
@@ -871,17 +922,50 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   const sectionMuted = activeSection?.muted ?? false
 
   const handleTogglePlay = async () => {
-    if (!audioRef.current) return
-    if (audioRef.current.paused) {
-      await audioRef.current.play()
+    if (!artifact.audioUrl) {
+      if (isPlaying) {
+        stopSyntheticClock()
+      } else {
+        startSyntheticClock()
+      }
+      return
+    }
+
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (audio.paused) {
+      if (!ensureAudioSource()) return
+      try {
+        await audio.play()
+      } catch {
+        setIsPlaying(false)
+        onPlayingChange?.(false)
+      }
     } else {
-      audioRef.current.pause()
+      audio.pause()
     }
   }
 
   const handleScrub = (time: number) => {
+    if (!artifact.audioUrl) {
+      if (isPlaying) {
+        playbackAnchorRef.current = { audioSeconds: time, startedAtMs: performance.now() }
+      }
+      if (stageLens === "breath") {
+        setBreathClockOffsetMs(time * 1000)
+      }
+      setCurrentTime(time)
+      onTimeUpdate?.(time * 1000)
+      return
+    }
+
     if (audioRef.current) {
-      audioRef.current.currentTime = time
+      if (ensureAudioSource()) {
+        try {
+          audioRef.current.currentTime = time
+        } catch {}
+      }
       if (!audioRef.current.paused && !audioRef.current.ended) {
         playbackAnchorRef.current = { audioSeconds: time, startedAtMs: performance.now() }
       }
@@ -921,7 +1005,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         className={[
           "flex w-full flex-1 items-center justify-center",
           fullStageVideo
-            ? "absolute inset-0 z-0 min-h-0 max-w-none self-stretch"
+            ? "pointer-events-none absolute inset-0 z-0 min-h-0 max-w-none self-stretch"
             : "relative z-10 max-w-lg"
         ].join(" ")}
         layout
@@ -960,7 +1044,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
             opacity: sectionMuted ? 0.45 : 1,
             y: fullStageChromeVisible ? -8 : 0
           }}
-          transition={SPRING}
+          transition={PANEL_SPRING}
         >
           <CinemaCaptionOverlay
             captions={artifact.captions ?? []}
@@ -991,10 +1075,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
             fadeEdges={true}
             fadeWidth={32}
             speed={25}
-            className={[
-              "transition-opacity duration-700",
-              isPlaying ? "opacity-20" : "opacity-10"
-            ].join(" ")}
+            className={isPlaying ? "opacity-20" : "opacity-10"}
           />
         </motion.div>
       )}
@@ -1006,7 +1087,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         className={[
           "flex w-full flex-col items-center",
           fullStageVideo
-            ? "absolute inset-x-6 bottom-20 z-20 mx-auto max-w-[40rem] px-0 sm:max-w-[42rem] md:bottom-24 lg:max-w-[44rem] xl:max-w-[48rem]"
+            ? "pointer-events-auto absolute inset-x-6 bottom-20 z-20 mx-auto max-w-[40rem] px-0 sm:max-w-[42rem] md:bottom-24 lg:max-w-[44rem] xl:max-w-[48rem]"
             : "relative z-10 max-w-xl"
         ].join(" ")}
         layout
@@ -1014,7 +1095,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
           opacity: fullStageChromeVisible ? 1 : 0,
           y: fullStageChromeVisible ? 0 : 18
         }}
-        transition={SPRING}
+        transition={PANEL_SPRING}
         style={{ pointerEvents: fullStageChromeVisible ? "auto" : "none" }}
       >
         <AnimatePresence initial={false} mode="wait">
@@ -1030,28 +1111,31 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 6 }}
-              transition={SPRING}
+              transition={PANEL_SPRING}
             >
               {fullStageVideo ? (
                 <>
                   <div className="flex w-full items-center justify-center">
-                    <button
+                    <motion.button
                       type="button"
                       aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                       onClick={handleTogglePlay}
                       className={[
-                        "flex size-11 items-center justify-center rounded-full border transition-all duration-300 md:size-12",
+                        "flex size-11 items-center justify-center rounded-full border md:size-12",
                         sectionMuted
                           ? "border-white/15 bg-white/8 text-white/30"
-                          : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:scale-105 hover:bg-white/25"
+                          : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:bg-white/25"
                       ].join(" ")}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.94 }}
+                      transition={MICRO_SPRING}
                     >
                       {isPlaying ? (
                         <Pause className="size-5 md:size-5.5" />
                       ) : (
                         <Play className="ml-0.5 size-5 md:size-5.5" />
                       )}
-                    </button>
+                    </motion.button>
                   </div>
 
                   <ScrubBarContainer
@@ -1059,45 +1143,27 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                     value={currentTime}
                     onScrub={handleScrub}
                   >
-                    <div className="flex w-full items-center gap-3 md:gap-5">
-                      <ScrubBarTimeLabel
-                        time={currentTime}
-                        className="w-10 shrink-0 text-left text-sm font-semibold tabular-nums text-silver-100 md:w-12 md:text-base"
-                      />
-                      <div className="relative min-w-0 flex-1">
-                        <ScrubBarTrack className="h-1.5 bg-white/20 md:h-2">
-                          <SectionMarkers sections={sections} durationSeconds={durationSeconds} />
-                          <ScrubBarProgress className="[&>div]:bg-white" />
-                          <ScrubBarThumb className="size-4 bg-white shadow-lg md:size-5" />
-                        </ScrubBarTrack>
-                      </div>
-                      <ScrubBarTimeLabel
-                        time={Math.max(durationSeconds - currentTime, 0)}
-                        className="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-silver-100 md:w-12 md:text-base"
-                      />
+                    <div className="relative w-full">
+                      <ScrubBarTrack className="h-1.5 bg-white/20 md:h-2">
+                        <ScrubBarProgress className="[&>div]:bg-white" />
+                        <ScrubBarThumb className="size-4 bg-white shadow-lg md:size-5" />
+                      </ScrubBarTrack>
                     </div>
                   </ScrubBarContainer>
                 </>
               ) : (
                 <>
-                  {/* Scrub bar with section markers */}
+                  {/* Reduced transport scrub */}
                   <ScrubBarContainer
                     duration={durationSeconds}
                     value={currentTime}
                     onScrub={handleScrub}
                   >
-                    <div className="flex w-full flex-col gap-1.5">
-                      <div className="relative">
-                        <ScrubBarTrack className="h-1.5 bg-white/10">
-                          <SectionMarkers sections={sections} durationSeconds={durationSeconds} />
-                          <ScrubBarProgress className="[&>div]:bg-white" />
-                          <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
-                        </ScrubBarTrack>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] font-medium text-silver-400">
-                        <ScrubBarTimeLabel time={currentTime} />
-                        <ScrubBarTimeLabel time={Math.max(durationSeconds - currentTime, 0)} />
-                      </div>
+                    <div className="relative w-full">
+                      <ScrubBarTrack className="h-1.5 bg-white/10">
+                        <ScrubBarProgress className="[&>div]:bg-white" />
+                        <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
+                      </ScrubBarTrack>
                     </div>
                   </ScrubBarContainer>
 
@@ -1109,23 +1175,26 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                   />
 
                   {/* Play button — compact */}
-                  <button
+                  <motion.button
                     type="button"
                     aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                     onClick={handleTogglePlay}
                     className={[
-                      "flex size-14 items-center justify-center rounded-full border-2 transition-all duration-300",
+                      "flex size-14 items-center justify-center rounded-full border-2",
                       sectionMuted
                         ? "border-white/15 bg-white/8 text-white/30"
-                        : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:scale-105 hover:bg-white/25"
+                        : "border-white/25 bg-white/15 text-white shadow-2xl backdrop-blur-md hover:bg-white/25"
                     ].join(" ")}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.94 }}
+                    transition={MICRO_SPRING}
                   >
                     {isPlaying ? (
                       <Pause className="size-6" />
                     ) : (
                       <Play className="ml-0.5 size-6" />
                     )}
-                  </button>
+                  </motion.button>
                 </>
               )}
             </motion.div>
@@ -1139,7 +1208,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: immersive ? 0 : 1, y: 0 }}
               exit={{ opacity: 0, y: 6 }}
-              transition={SPRING}
+              transition={PANEL_SPRING}
             >
               {/* Floating single-line caption — hidden in immersive */}
               {!immersive && (
@@ -1178,29 +1247,27 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                     </ScrubBarContainer>
                   </div>
 
-                  {/* Time */}
-                  <span className="shrink-0 text-xs tabular-nums text-silver-400">
-                    {formatTimestamp(currentTime)}
-                  </span>
-
                   {/* Compact play */}
-                  <button
+                  <motion.button
                     type="button"
                     aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                     onClick={handleTogglePlay}
                     className={[
-                      "flex shrink-0 items-center justify-center rounded-full transition-all duration-200",
+                      "flex shrink-0 items-center justify-center rounded-full",
                       sectionMuted
                         ? "h-8 w-8 bg-white/8 text-white/30"
                         : "h-8 w-8 bg-white/15 text-white hover:bg-white/25"
                     ].join(" ")}
+                    whileHover={{ scale: 1.06 }}
+                    whileTap={{ scale: 0.94 }}
+                    transition={MICRO_SPRING}
                   >
                     {isPlaying ? (
                       <Pause className="size-4" />
                     ) : (
                       <Play className="size-4 ml-0.5" />
                     )}
-                  </button>
+                  </motion.button>
                 </div>
               )}
             </motion.div>

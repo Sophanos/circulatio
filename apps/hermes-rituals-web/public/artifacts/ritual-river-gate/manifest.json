@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "hermes_ritual_artifact.v1",
+  "artifactId": "ritual-river-gate",
+  "planId": "ritual_plan_fixture_river_gate",
+  "createdAt": "2026-04-24T09:15:00Z",
+  "title": "Return to the river gate before naming it.",
+  "description": "A containment-first dream-return ritual built from one waking image, paced by breath and spoken softly enough to preserve the original charge.",
+  "privacyClass": "private",
+  "locale": "en-US",
+  "sourceRefs": [
+    {
+      "sourceType": "journey",
+      "recordId": "journey-threshold-river",
+      "role": "primary",
+      "label": "Threshold river journey",
+      "evidenceIds": []
+    }
+  ],
+  "durationMs": 56000,
+  "sections": [
+    {
+      "id": "section-arrival",
+      "title": "Arrival",
+      "startMs": 0,
+      "endMs": 6000,
+      "kind": "arrival",
+      "preferredLens": "cinema",
+      "channels": { "voice": true, "ambient": true, "breath": true }
+    },
+    {
+      "id": "section-breath",
+      "title": "Grounding breath",
+      "startMs": 6000,
+      "endMs": 23000,
+      "kind": "breath",
+      "preferredLens": "breath",
+      "skippable": true,
+      "channels": { "voice": true, "ambient": true, "breath": true, "pulse": true }
+    },
+    {
+      "id": "section-image",
+      "title": "Image return",
+      "startMs": 23000,
+      "endMs": 33000,
+      "kind": "image",
+      "preferredLens": "photo",
+      "skippable": true,
+      "channels": { "voice": true, "ambient": true }
+    },
+    {
+      "id": "section-reflection",
+      "title": "Reflection",
+      "startMs": 33000,
+      "endMs": 43000,
+      "kind": "reflection",
+      "preferredLens": "meditation",
+      "skippable": true,
+      "channels": { "voice": true, "ambient": true, "music": true }
+    },
+    {
+      "id": "section-closing",
+      "title": "Closing",
+      "startMs": 43000,
+      "endMs": 56000,
+      "kind": "closing",
+      "preferredLens": "body",
+      "capturePrompt": "What changed when you did not advance?",
+      "channels": { "voice": true, "ambient": true, "breath": true }
+    }
+  ],
+  "surfaces": {
+    "text": {
+      "body": "Let the river stay a river for a moment. Let the gate remain closed, silver, and patient. You do not need to explain why it returned. Breathe with the distance between your body and the image. Let the dog stand at the edge if it wants to. Notice what changes when you do not advance."
+    },
+    "audio": {
+      "src": null,
+      "mimeType": null,
+      "durationMs": null,
+      "provider": "mock"
+    },
+    "captions": {
+      "segments": [
+        { "id": "cap_1", "startMs": 0, "endMs": 6000, "text": "Let the river stay a river for a moment." },
+        { "id": "cap_2", "startMs": 6000, "endMs": 13500, "text": "Let the gate remain closed, silver, and patient." },
+        { "id": "cap_3", "startMs": 13500, "endMs": 23000, "text": "You do not need to explain why it returned." },
+        { "id": "cap_4", "startMs": 23000, "endMs": 33000, "text": "Breathe with the distance between your body and the image." },
+        { "id": "cap_5", "startMs": 33000, "endMs": 43000, "text": "Let the dog stand at the edge if it wants to." },
+        { "id": "cap_6", "startMs": 43000, "endMs": 56000, "text": "Notice what changes when you do not advance." }
+      ]
+    },
+    "breath": {
+      "enabled": true,
+      "pattern": "lengthened_exhale",
+      "inhaleSeconds": 4.2,
+      "holdSeconds": 1.8,
+      "exhaleSeconds": 6.4,
+      "restSeconds": 2.2,
+      "cycles": 4,
+      "visualForm": "orb",
+      "phaseLabels": true
+    },
+    "meditation": {
+      "enabled": true,
+      "fieldType": "threshold_stillness",
+      "durationMs": 20000,
+      "macroProgressPolicy": "session_progress",
+      "microMotion": "convergence",
+      "instructionDensity": "sparse"
+    },
+    "image": {
+      "enabled": true,
+      "src": "https://picsum.photos/seed/river-gate/1600/1200",
+      "alt": "A cold river threshold with a closed gate held in fog.",
+      "provider": "fixture"
+    },
+    "cinema": {
+      "enabled": true,
+      "src": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      "posterSrc": "https://picsum.photos/seed/river-gate-video/1920/1080",
+      "mimeType": null,
+      "durationMs": null,
+      "provider": "youtube",
+      "title": "River gate ambient study",
+      "playbackMode": "ambient_loop",
+      "presentation": "full_background",
+      "startAtSeconds": 12
+    }
+  },
+  "timeline": [
+    { "atMs": 0, "kind": "voice", "ref": "cap_1" },
+    { "atMs": 6000, "kind": "breath_phase", "phase": "inhale" },
+    { "atMs": 33000, "kind": "meditation_phase", "phase": "settle" }
+  ],
+  "interaction": {
+    "finishPrompt": "What changed when you did not advance?",
+    "captureBodyResponse": false,
+    "returnCommand": "/circulation ritual complete ritual-river-gate"
+  },
+  "safety": {
+    "stopInstruction": "Stop if this increases activation; orient to the room.",
+    "contraindications": [],
+    "blockedSurfaces": []
+  },
+  "render": {
+    "rendererVersion": "ritual-renderer.v1",
+    "mode": "fixture_manifest",
+    "providers": ["mock"],
+    "cacheKeys": [],
+    "budget": { "currency": "USD", "estimated": 0, "actual": 0 },
+    "warnings": ["fixture_manifest_from_legacy_mock"]
+  }
+}

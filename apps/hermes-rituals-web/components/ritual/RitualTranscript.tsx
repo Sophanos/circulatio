@@ -1,7 +1,9 @@
 "use client"
 
 import { useMemo } from "react"
+import { motion } from "motion/react"
 
+import { MICRO_SPRING, RITUAL_FADE } from "@/components/ritual/motion"
 import { getSectionForCaption } from "@/components/ritual/RitualSectionList"
 import type { PresentationArtifact, RitualSection } from "@/lib/artifact-contract"
 
@@ -16,10 +18,9 @@ export function RitualTranscript({
   currentMs: number
   onSeek?: (ms: number) => void
 }) {
-  const activeSections = sections ?? artifact.ritualSections ?? []
-  const captions = artifact.captions ?? []
-
   const grouped = useMemo(() => {
+    const activeSections = sections ?? artifact.ritualSections ?? []
+    const captions = artifact.captions ?? []
     const map = new Map<string, { section: RitualSection; cues: typeof captions }>()
     for (const cue of captions) {
       const section = getSectionForCaption(activeSections, cue)
@@ -32,19 +33,18 @@ export function RitualTranscript({
       }
     }
     return Array.from(map.values())
-  }, [activeSections, captions])
+  }, [artifact.captions, artifact.ritualSections, sections])
 
   return (
     <div className="flex flex-col gap-8 py-2">
       {grouped.map(({ section, cues }) => {
         const muted = section.muted ?? false
         return (
-          <div
+          <motion.div
             key={section.id}
-            className={[
-              "transition-opacity duration-500",
-              muted ? "opacity-30" : "opacity-100"
-            ].join(" ")}
+            initial={false}
+            animate={{ opacity: muted ? 0.3 : 1 }}
+            transition={RITUAL_FADE}
           >
             {/* Section header */}
             <div className="mb-3 flex items-center gap-2.5">
@@ -64,23 +64,30 @@ export function RitualTranscript({
               {cues.map((cue) => {
                 const isCurrent = currentMs >= cue.startMs && currentMs < cue.endMs
                 return (
-                  <button
+                  <motion.button
                     key={`${cue.startMs}-${cue.endMs}`}
                     type="button"
                     onClick={() => onSeek?.(cue.startMs)}
                     className={[
-                      "rounded-2xl px-4 py-3 text-left text-base leading-relaxed transition-all duration-300",
+                      "rounded-2xl px-4 py-3 text-left text-base leading-relaxed",
                       isCurrent
-                        ? "bg-white/90 font-semibold text-graphite-950"
-                        : "bg-transparent text-silver-200 hover:bg-white/10 hover:text-silver-50"
+                        ? "font-semibold text-graphite-950"
+                        : "text-silver-200 hover:text-silver-50"
                     ].join(" ")}
+                    initial={false}
+                    animate={{
+                      backgroundColor: isCurrent ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0)"
+                    }}
+                    whileHover={isCurrent ? undefined : { backgroundColor: "rgba(255,255,255,0.10)" }}
+                    whileTap={{ scale: 0.99 }}
+                    transition={MICRO_SPRING}
                   >
                     {cue.text}
-                  </button>
+                  </motion.button>
                 )
               })}
             </div>
-          </div>
+          </motion.div>
         )
       })}
     </div>

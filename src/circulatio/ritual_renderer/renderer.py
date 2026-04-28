@@ -174,6 +174,12 @@ class RitualRenderer:
         providers = ["mock"]
         if any(asset.get("provider") == "chutes" for asset in provider_assets.values()):
             providers.append("chutes")
+        render_mode = str(
+            cast(dict[str, object], plan.get("deliveryPolicy") or {}).get("renderMode")
+            or "dry_run_manifest"
+        )
+        if provider_assets:
+            render_mode = "render_static"
         sections = self._sections(
             plan=plan,
             surfaces=surfaces,
@@ -226,10 +232,7 @@ class RitualRenderer:
             },
             "render": {
                 "rendererVersion": RENDERER_VERSION,
-                "mode": str(
-                    cast(dict[str, object], plan.get("deliveryPolicy") or {}).get("renderMode")
-                    or "dry_run_manifest"
-                ),
+                "mode": render_mode,
                 "providers": providers,
                 "cacheKeys": [str(plan.get("stableHash"))] if plan.get("stableHash") else [],
                 "budget": {"currency": "USD", "estimated": 0, "actual": 0},

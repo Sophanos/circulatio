@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "hermes_ritual_artifact.v1",
+  "artifactId": "cinema-river-gate",
+  "planId": "ritual_plan_fixture_cinema_river_gate",
+  "createdAt": "2026-04-24T09:25:00Z",
+  "title": "River gate cinema render.",
+  "description": "A first cinematic rendering path with captions, scene cards, and a restrained stage designed for later video export.",
+  "privacyClass": "private",
+  "locale": "en-US",
+  "sourceRefs": [
+    {
+      "sourceType": "journey",
+      "recordId": "journey-threshold-river",
+      "role": "primary",
+      "label": "River threshold material",
+      "evidenceIds": []
+    }
+  ],
+  "durationMs": 44000,
+  "sections": [
+    {
+      "id": "section-arrival",
+      "title": "Waterline",
+      "startMs": 0,
+      "endMs": 12000,
+      "kind": "arrival",
+      "preferredLens": "cinema",
+      "channels": { "voice": true, "ambient": true }
+    },
+    {
+      "id": "section-threshold",
+      "title": "Threshold frame",
+      "startMs": 12000,
+      "endMs": 32000,
+      "kind": "image",
+      "preferredLens": "cinema",
+      "skippable": true,
+      "channels": { "voice": true, "ambient": true }
+    },
+    {
+      "id": "section-closing",
+      "title": "Held crossing",
+      "startMs": 32000,
+      "endMs": 44000,
+      "kind": "closing",
+      "preferredLens": "cinema",
+      "capturePrompt": "What did the image ask to keep unnamed?",
+      "channels": { "voice": true, "ambient": true }
+    }
+  ],
+  "surfaces": {
+    "text": {
+      "body": "The water keeps its own counsel. The threshold is visible now. You can cross later, or not at all. For this moment, the image only asks to be seen."
+    },
+    "audio": {
+      "src": null,
+      "mimeType": null,
+      "durationMs": null,
+      "provider": "mock"
+    },
+    "captions": {
+      "segments": [
+        { "id": "cap_1", "startMs": 0, "endMs": 8000, "text": "The water keeps its own counsel." },
+        { "id": "cap_2", "startMs": 8000, "endMs": 18000, "text": "The threshold is visible now." },
+        { "id": "cap_3", "startMs": 18000, "endMs": 32000, "text": "You can cross later, or not at all." },
+        { "id": "cap_4", "startMs": 32000, "endMs": 44000, "text": "For this moment, the image only asks to be seen." }
+      ]
+    },
+    "breath": {
+      "enabled": false,
+      "pattern": "steadying",
+      "inhaleSeconds": 4,
+      "holdSeconds": 0,
+      "exhaleSeconds": 4,
+      "restSeconds": 0
+    },
+    "meditation": {
+      "enabled": false,
+      "fieldType": "image_afterglow",
+      "durationMs": 0,
+      "macroProgressPolicy": "session_progress",
+      "microMotion": "still",
+      "instructionDensity": "none"
+    },
+    "image": {
+      "enabled": true,
+      "src": "https://picsum.photos/seed/cinema-river-cover/1600/1200",
+      "alt": "A cinematic river threshold image used as the poster frame.",
+      "provider": "fixture"
+    },
+    "cinema": {
+      "enabled": true,
+      "src": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+      "posterSrc": "https://picsum.photos/seed/cinema-river-cover/1920/1080",
+      "mimeType": null,
+      "durationMs": null,
+      "provider": "youtube",
+      "title": "River gate cinema study",
+      "playbackMode": "ambient_loop",
+      "presentation": "full_background",
+      "startAtSeconds": 18
+    }
+  },
+  "timeline": [
+    { "atMs": 0, "kind": "voice", "ref": "cap_1" },
+    { "atMs": 12000, "kind": "image", "ref": "section-threshold" }
+  ],
+  "interaction": {
+    "finishPrompt": "What did the image ask to keep unnamed?",
+    "captureBodyResponse": false,
+    "returnCommand": "/circulation ritual complete cinema-river-gate"
+  },
+  "safety": {
+    "stopInstruction": "Stop if this increases activation; orient to the room.",
+    "contraindications": [],
+    "blockedSurfaces": []
+  },
+  "render": {
+    "rendererVersion": "ritual-renderer.v1",
+    "mode": "fixture_manifest",
+    "providers": ["mock"],
+    "cacheKeys": [],
+    "budget": { "currency": "USD", "estimated": 0, "actual": 0 },
+    "warnings": ["fixture_manifest_from_legacy_mock", "cinema_category_rendered_as_player_lens"]
+  }
+}

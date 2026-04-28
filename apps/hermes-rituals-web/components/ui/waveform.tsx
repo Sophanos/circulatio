@@ -204,7 +204,12 @@ export const ScrollingWaveform = ({
   const lastTimeRef = useRef<number>(0)
   const seedRef = useRef(SCROLLING_WAVEFORM_SEED)
   const dataIndexRef = useRef(0)
+  const progressRef = useRef(progress)
   const heightStyle = typeof height === "number" ? `${height}px` : height
+
+  useEffect(() => {
+    progressRef.current = progress
+  }, [progress])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -270,9 +275,10 @@ export const ScrollingWaveform = ({
 
       const step = barWidth + barGap
       const centerY = rect.height / 2
+      const latestProgress = progressRef.current
       const syncedProgress =
-        typeof progress === "number" && Number.isFinite(progress)
-          ? Math.min(Math.max(progress, 0), 1)
+        typeof latestProgress === "number" && Number.isFinite(latestProgress)
+          ? Math.min(Math.max(latestProgress, 0), 1)
           : null
 
       if (syncedProgress !== null && data && data.length > 0) {
@@ -407,7 +413,6 @@ export const ScrollingWaveform = ({
     fadeEdges,
     fadeWidth,
     data,
-    progress,
   ])
 
   return (

@@ -5,6 +5,7 @@ import { Volume2, VolumeX } from "lucide-react"
 import * as SliderPrimitive from "@radix-ui/react-slider"
 import { motion, AnimatePresence } from "motion/react"
 
+import { MICRO_SPRING, RITUAL_FADE } from "@/components/ritual/motion"
 import type { ArtifactChannels } from "@/lib/artifact-contract"
 
 const CHANNEL_ORDER = ["voice", "ambient", "breath", "pulse", "music"] as const
@@ -32,24 +33,27 @@ export function CompactChannelMixer({
         const isHovered = hoveredChannel === name
 
         return (
-          <div
+          <motion.div
             key={name}
             className={[
-              "flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors",
-              muted
-                ? "text-silver-500"
-                : "text-silver-100 hover:bg-white/[0.04]"
+              "flex items-center gap-3 rounded-lg px-2 py-2.5",
+              muted ? "text-silver-500" : "text-silver-100"
             ].join(" ")}
+            whileHover={muted ? undefined : { backgroundColor: "rgba(255,255,255,0.04)" }}
+            transition={MICRO_SPRING}
             onMouseEnter={() => setHoveredChannel(name)}
             onMouseLeave={() => setHoveredChannel((prev) => (prev === name ? null : prev))}
           >
-            <button
+            <motion.button
               type="button"
               onClick={() => onToggle?.(name, !muted)}
-              className="flex size-6 shrink-0 items-center justify-center rounded-full transition-colors"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full"
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.94 }}
+              transition={MICRO_SPRING}
             >
               {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-            </button>
+            </motion.button>
 
             <div className="flex min-w-0 flex-1 items-center">
               <AnimatePresence mode="popLayout">
@@ -60,7 +64,7 @@ export function CompactChannelMixer({
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: "auto" }}
                     exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.15 }}
+                    transition={MICRO_SPRING}
                   >
                     <SliderPrimitive.Root
                       value={[gain]}
@@ -83,14 +87,14 @@ export function CompactChannelMixer({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.1 }}
+                    transition={RITUAL_FADE}
                   >
                     {name}
                   </motion.span>
                 )}
               </AnimatePresence>
             </div>
-          </div>
+          </motion.div>
         )
       })}
     </div>

@@ -2,10 +2,10 @@ import Link from "next/link"
 
 const navItems = [
   { href: "/capture/new", label: "Capture" },
-  { href: "/rituals/ritual-river-gate", label: "Rituals" },
-  { href: "/broadcasts/broadcast-myth-weather-0422", label: "Broadcasts" },
-  { href: "/cinema/cinema-river-gate", label: "Cinema" },
-  { href: "/artifacts/ritual-river-gate", label: "Artifacts" }
+  { href: "/artifacts/ritual-river-gate", label: "Ritual" },
+  { href: "/artifacts/broadcast-myth-weather-0422", label: "Broadcast" },
+  { href: "/artifacts/cinema-river-gate", label: "Cinema" },
+  { href: "/artifacts/weekly-ritual-dry-run", label: "Manifest" }
 ]
 
 export function TopNav() {

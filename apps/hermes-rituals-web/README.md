@@ -95,7 +95,7 @@ bun run lint
 
 ## Artifact Media Contract
 
-- `/artifacts/[artifactId]` is the local manifest player. It should load `apps/hermes-rituals-web/public/artifacts/{artifactId}/manifest.json`, not the older mock-only ritual/broadcast/cinema routes.
+- `/artifacts/[artifactId]` is the local manifest player. It loads `apps/hermes-rituals-web/public/artifacts/{artifactId}/manifest.json` first and falls back to local fixtures only while mocks are being retired.
 - Real provider artifacts are identified by concrete manifest sources: `surfaces.audio.src`, `surfaces.image.enabled + src`, caption tracks, and caption segments. Dry-run artifacts may be useful but can have mock audio and no generated image.
 - `RitualPlayer` must preserve the current dark, minimal player chrome. The waveform may become more accurate, but do not redesign the visible scrub bar, caption stack, or play controls without an explicit product request.
 - Audio playback uses `artifact.audioUrl` first. Silent WAV blob URLs are fallback-only. When real audio exists, the player waits for metadata, uses actual media duration, decodes audio peaks for the waveform, and ties waveform progress to scrub/playback time.
@@ -106,7 +106,9 @@ bun run lint
 
 ## Notes
 
-- Data is mocked first via `lib/mock-artifacts.ts`.
-- The ritual page is the flagship v1 surface.
+- Ritual, broadcast, cinema, breath, meditation, image/photo, and body remain experience categories/lenses inside the canonical artifact player.
+- Legacy `/rituals`, `/broadcasts`, and `/cinema` routes are compatibility redirects to `/artifacts/[artifactId]`.
+- Mock data is being sunset by replacing each mock artifact with a manifest fixture under `public/artifacts`; keep `lib/mock-artifacts.ts` as a temporary fixture index only.
+- The artifact player is the flagship v1 surface.
 - `start` serves the output produced by the Turbopack production build.
 - Local UI primitives are structured so official ElevenLabs UI registry components can replace targeted wrappers later.
