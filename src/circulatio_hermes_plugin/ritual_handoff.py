@@ -18,8 +18,9 @@ from circulatio.ritual_renderer.renderer import (
     artifact_id_for_plan,
 )
 
-_PROVIDER_SURFACES = {"audio", "captions", "image", "cinema"}
+_PROVIDER_SURFACES = {"audio", "captions", "image", "cinema", "music"}
 _VIDEO_PROVIDER_PROFILES = {"chutes_video", "chutes_all"}
+_MUSIC_PROVIDER_PROFILES = {"chutes_music", "chutes_all"}
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,8 @@ class HermesHandoffRenderOptions:
     request_timeout_seconds: int
     chutes_token_env: str
     allow_beta_video: bool
+    allow_beta_music: bool
+    music_steps: int
     video_image: str
     provider_backed: bool
     warnings: list[str]
@@ -275,6 +278,10 @@ class HermesRitualArtifactHandoff:
                 argv.append("--transcribe-captions")
             if options.allow_beta_video and "cinema" in options.surfaces:
                 argv.append("--allow-beta-video")
+            if "music" in options.surfaces:
+                argv.extend(["--music-steps", str(options.music_steps)])
+            if options.allow_beta_music and "music" in options.surfaces:
+                argv.append("--allow-beta-music")
             if options.video_image and "cinema" in options.surfaces:
                 argv.extend(["--video-image", options.video_image])
             timeout = max(timeout, 300, options.request_timeout_seconds * 3 + 30)
@@ -313,6 +320,8 @@ class HermesRitualArtifactHandoff:
             str(policy.get("chutesTokenEnv") or "CHUTES_API_TOKEN").strip() or "CHUTES_API_TOKEN"
         )
         allow_beta_video = bool(policy.get("allowBetaVideo"))
+        allow_beta_music = bool(policy.get("allowBetaMusic"))
+        music_steps = self._positive_int(policy.get("musicSteps"), default=32)
         video_image = str(policy.get("videoImage") or "").strip()
         transcribe = bool(policy.get("transcribeCaptions")) or "captions" in selected
         provider_backed = False
@@ -346,6 +355,16 @@ class HermesRitualArtifactHandoff:
                 if profile not in _VIDEO_PROVIDER_PROFILES:
                     warnings.append("ritual_handoff_cinema_skipped_provider_profile")
                     selected = [surface for surface in selected if surface != "cinema"]
+            if "music" in requested:
+                if "music" not in allowed or not self._plan_allows_music(plan):
+                    warnings.append("ritual_handoff_music_skipped_by_plan_policy")
+                    selected = [surface for surface in selected if surface != "music"]
+                if not allow_beta_music:
+                    warnings.append("ritual_handoff_music_skipped_without_beta_gate")
+                    selected = [surface for surface in selected if surface != "music"]
+                if profile not in _MUSIC_PROVIDER_PROFILES:
+                    warnings.append("ritual_handoff_music_skipped_provider_profile")
+                    selected = [surface for surface in selected if surface != "music"]
             if not selected:
                 blocking_warnings.append("ritual_handoff_chutes_skipped_no_allowed_surfaces")
             warnings = list(dict.fromkeys([*blocking_warnings, *warnings]))
@@ -358,6 +377,8 @@ class HermesRitualArtifactHandoff:
             request_timeout_seconds=timeout,
             chutes_token_env=token_env,
             allow_beta_video=allow_beta_video,
+            allow_beta_music=allow_beta_music,
+            music_steps=music_steps,
             video_image=video_image,
             provider_backed=provider_backed,
             warnings=warnings,
@@ -422,6 +443,12 @@ class HermesRitualArtifactHandoff:
                 and cinema.get("enabled") is True
                 and cinema.get("src")
                 and cinema.get("provider") == "chutes"
+            ):
+                return False
+        if "music" in options.surfaces:
+            music = surfaces.get("music")
+            if not (
+                isinstance(music, dict) and music.get("src") and music.get("provider") == "chutes"
             ):
                 return False
         return True
@@ -506,14 +533,15 @@ class HermesRitualArtifactHandoff:
         providers = [str(item) for item in value if str(item)]
         return providers or ["mock"]
 
-    def _surface_summary(self, surfaces: dict[str, object]) -> dict[str, bool]:
+    def _surface_summary(self, surfaces: dict[str, object]) -> dict[str, object]:
         audio = surfaces.get("audio")
         captions = surfaces.get("captions")
         image = surfaces.get("image")
         cinema = surfaces.get("cinema")
+        music = surfaces.get("music")
         caption_segments = captions.get("segments") if isinstance(captions, dict) else None
         caption_tracks = captions.get("tracks") if isinstance(captions, dict) else None
-        summary = {
+        summary: dict[str, object] = {
             "audio": bool(isinstance(audio, dict) and audio.get("src")),
             "captions": bool(caption_segments or caption_tracks),
             "image": bool(isinstance(image, dict) and image.get("enabled") and image.get("src")),
@@ -522,6 +550,12 @@ class HermesRitualArtifactHandoff:
             summary["cinema"] = bool(
                 isinstance(cinema, dict) and cinema.get("enabled") and cinema.get("src")
             )
+        if "music" in surfaces:
+            summary["music"] = {
+                "available": bool(isinstance(music, dict) and music.get("src")),
+                "provider": music.get("provider") if isinstance(music, dict) else None,
+                "mimeType": music.get("mimeType") if isinstance(music, dict) else None,
+            }
         return summary
 
     def _requested_provider_surfaces(self, value: object) -> list[str]:
@@ -587,3 +621,7 @@ class HermesRitualArtifactHandoff:
         visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
         cinema = cast(dict[str, object], visual.get("cinema") or {})
         return bool(cinema.get("enabled")) and self._plan_allows_external_providers(plan)
+
+    def _plan_allows_music(self, plan: dict[str, object]) -> bool:
+        music = cast(dict[str, object], plan.get("music") or {})
+        return bool(music.get("enabled")) and self._plan_allows_external_providers(plan)

@@ -5,9 +5,18 @@ from typing import cast
 
 from .presentation import RequestedRitualSurfaces
 
-_CANONICAL_SURFACES = {"text", "audio", "captions", "breath", "meditation", "image", "cinema"}
+_CANONICAL_SURFACES = {
+    "text",
+    "audio",
+    "captions",
+    "breath",
+    "meditation",
+    "image",
+    "cinema",
+    "music",
+}
 _SURFACE_ALIASES = {"video": "cinema", "photo": "image"}
-_UNSUPPORTED_SURFACES = {"music"}
+_UNSUPPORTED_SURFACES: set[str] = set()
 
 _BREATH_PATTERNS = {"steadying", "lengthened_exhale", "box_breath", "orienting"}
 _MEDITATION_FIELD_TYPES = {
@@ -90,7 +99,7 @@ def _normalize_surface_config(
                 result[key] = raw
             else:
                 warnings.append(f"requested_surface_invalid_request_field_omitted:{surface}.{key}")
-        elif surface in {"image", "cinema"} and key == "allowExternalGeneration":
+        elif surface in {"image", "cinema", "music"} and key == "allowExternalGeneration":
             if isinstance(raw, bool):
                 result[key] = raw
             else:

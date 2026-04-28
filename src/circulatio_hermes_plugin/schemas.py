@@ -483,7 +483,7 @@ ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
 
 PLAN_RITUAL_TOOL_SCHEMA = _schema(
     "circulatio_plan_ritual",
-    "Plan one personalized ritual from existing Circulatio material and return a typed PresentationRitualPlan. Use one ritual-planning call for text, audio, captions, breath, meditation, image, and cinema surfaces; do not call separate backend tools per visual mode. Do not use this as generic meditation generation, and do not interpret newly logged material unless the user explicitly asks for meaning. Default to text, captions, breath, and meditation with mock/local rendering. Video or external image/audio generation requires explicit user wording plus renderPolicy.videoAllowed or renderPolicy.externalProvidersAllowed and budget.",
+    "Plan one personalized ritual from existing Circulatio material and return a typed PresentationRitualPlan. Use one ritual-planning call for text, audio, captions, breath, meditation, image, cinema, and music surfaces; do not call separate backend tools per visual mode. Do not use this as generic meditation generation, and do not interpret newly logged material unless the user explicitly asks for meaning. Default to text, captions, breath, and meditation with mock/local rendering. External/generated music requires explicit requestedSurfaces.music.enabled, renderPolicy.externalProvidersAllowed, providerAllowlist containing chutes, positive budget, and renderPolicy.allowBetaMusic. Video or external image/audio generation requires explicit user wording plus renderPolicy.videoAllowed or renderPolicy.externalProvidersAllowed and budget.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -625,6 +625,13 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                         "maxDurationSeconds": {"type": "integer"},
                     },
                 },
+                "music": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean"},
+                        "allowExternalGeneration": {"type": "boolean"},
+                    },
+                },
             },
         },
         "renderPolicy": {
@@ -640,13 +647,18 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                 "surfaces": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Explicit renderer surfaces. Use cinema or video to opt into Chutes video.",
+                    "description": "Explicit renderer surfaces. Use cinema/video for Chutes video and music for Chutes DiffRhythm.",
                 },
                 "transcribeCaptions": {"type": "boolean"},
                 "maxCostUsd": {"type": "number"},
                 "maxCost": {"type": "object"},
                 "videoAllowed": {"type": "boolean"},
                 "allowBetaVideo": {"type": "boolean"},
+                "allowBetaMusic": {"type": "boolean"},
+                "musicSteps": {
+                    "type": "integer",
+                    "description": "Chutes DiffRhythm generation steps. Defaults to 32.",
+                },
                 "videoImage": {
                     "type": "string",
                     "description": "Optional local path, data URL, or base64 image payload for image-to-video rendering.",

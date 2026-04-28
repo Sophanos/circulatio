@@ -160,6 +160,42 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
         asyncio.run(run())
 
+    def test_plan_ritual_music_surface_is_allowed_when_external_providers_are_enabled(self) -> None:
+        async def run() -> None:
+            _, service, llm = self._service()
+            workflow = await service.plan_ritual(
+                {
+                    "userId": "user_1",
+                    "ritualIntent": "journey_broadcast",
+                    "narrativeMode": "hybrid",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "requestedSurfaces": {
+                        "music": {"enabled": True, "allowExternalGeneration": True},
+                    },
+                    "renderPolicy": {
+                        "mode": "render_static",
+                        "externalProvidersAllowed": True,
+                        "providerAllowlist": ["mock", "chutes"],
+                        "maxCost": {"currency": "USD", "amount": 0.05},
+                        "allowBetaMusic": True,
+                        "musicSteps": 40,
+                    },
+                }
+            )
+
+            plan = workflow["plan"]
+            self.assertEqual(plan["music"]["role"], "ambient_bed")
+            self.assertEqual(plan["music"]["providerPromptPolicy"], "none")
+            self.assertIn("music", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn(
+                "no_raw_material_to_external_provider",
+                plan["safetyBoundary"]["providerRestrictions"],
+            )
+            self.assertEqual(llm.interpret_calls, [])
+
+        asyncio.run(run())
+
     def test_plan_ritual_cinema_surface_builds_sanitized_storyboard_when_gated(self) -> None:
         async def run() -> None:
             repository, service, llm = self._service()
@@ -323,12 +359,15 @@ class PresentationPlanServiceTests(unittest.TestCase):
             self.assertIn("breath", workflow["renderRequest"]["allowedSurfaces"])
             self.assertIn("meditation", workflow["renderRequest"]["allowedSurfaces"])
             self.assertNotIn("music", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertIn("music", plan["safetyBoundary"]["blockedSurfaces"])
+            self.assertNotIn("music", plan)
             self.assertIn("requested_surface_boolean_normalized:breath", workflow["warnings"])
             self.assertIn("requested_surface_boolean_normalized:meditation", workflow["warnings"])
             self.assertIn("requested_surface_boolean_normalized:captions", workflow["warnings"])
+            self.assertIn("requested_surface_boolean_normalized:music", workflow["warnings"])
             self.assertIn("requested_surface_alias_normalized:video->cinema", workflow["warnings"])
             self.assertIn("requested_surface_boolean_normalized:cinema", workflow["warnings"])
-            self.assertIn("requested_surface_unsupported_omitted:music", workflow["warnings"])
+            self.assertIn("music_disabled_without_external_providers", workflow["warnings"])
             self.assertIn("cinema_disabled_without_video_allowed", workflow["warnings"])
             self.assertEqual(len(llm.alive_today_calls), 1)
             self.assertEqual(await repository.list_interpretation_runs("user_1"), [])

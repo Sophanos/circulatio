@@ -108,6 +108,92 @@ class HermesRitualHandoffTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("--video-image") + 1], video_image)
             self.assertTrue(result["artifact"]["surfaces"]["cinema"])
 
+    def test_handoff_passes_provider_backed_music_flags_when_all_gates_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp, music_enabled=True)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(
+                profile="chutes_music",
+                surfaces=["music"],
+                allow_beta_music=True,
+                music_steps=48,
+            )
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                        provider="chutes",
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[argv.index("--provider-profile") + 1], "chutes_music")
+            self.assertEqual(argv[argv.index("--surfaces") + 1], "music")
+            self.assertIn("--allow-beta-music", argv)
+            self.assertEqual(argv[argv.index("--music-steps") + 1], "48")
+            self.assertEqual(
+                result["artifact"]["surfaces"]["music"],
+                {"available": True, "provider": "chutes", "mimeType": "audio/wav"},
+            )
+
+    def test_music_request_without_beta_gate_falls_back_with_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp, music_enabled=True)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(
+                profile="chutes_music",
+                surfaces=["music"],
+                allow_beta_music=False,
+            )
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertIn("--mock-providers", argv)
+            self.assertIn("ritual_handoff_music_skipped_without_beta_gate", result["warnings"])
+
+    def test_music_request_not_allowed_by_render_request_falls_back_with_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp, music_enabled=True)
+            response = self._response(plan, allowed_surfaces=["audio", "captions", "image"])
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(
+                profile="chutes_music",
+                surfaces=["music"],
+                allow_beta_music=True,
+            )
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertIn("--mock-providers", argv)
+            self.assertIn("ritual_handoff_music_skipped_by_plan_policy", result["warnings"])
+
     def test_chutes_all_without_explicit_cinema_surface_does_not_enable_video(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             temp = Path(tempdir)
@@ -219,7 +305,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
             self.assertIn("ritual_handoff_chutes_skipped_missing_api_token", result["warnings"])
 
     def _handoff(
-        self, temp: Path, *, cinema_enabled: bool = False
+        self, temp: Path, *, cinema_enabled: bool = False, music_enabled: bool = False
     ) -> tuple[HermesRitualArtifactHandoff, dict[str, object]]:
         script = temp / "render_ritual_artifact.py"
         script.write_text("", encoding="utf-8")
@@ -233,16 +319,25 @@ class HermesRitualHandoffTests(unittest.TestCase):
             open_local_default=False,
             renderer_timeout_seconds=60,
         )
-        return HermesRitualArtifactHandoff(config), self._plan(cinema_enabled=cinema_enabled)
+        return HermesRitualArtifactHandoff(config), self._plan(
+            cinema_enabled=cinema_enabled,
+            music_enabled=music_enabled,
+        )
 
-    def _response(self, plan: dict[str, object]) -> dict[str, object]:
+    def _response(
+        self, plan: dict[str, object], *, allowed_surfaces: list[str] | None = None
+    ) -> dict[str, object]:
+        if allowed_surfaces is None:
+            allowed_surfaces = ["audio", "captions", "image", "cinema"]
+            if isinstance(plan.get("music"), dict):
+                allowed_surfaces.append("music")
         return {
             "status": "ok",
             "requestId": "request_fixture",
             "result": {
                 "plan": plan,
                 "renderRequest": {
-                    "allowedSurfaces": ["audio", "captions", "image", "cinema"],
+                    "allowedSurfaces": allowed_surfaces,
                 },
                 "warnings": [],
             },
@@ -255,6 +350,8 @@ class HermesRitualHandoffTests(unittest.TestCase):
         surfaces: list[str] | None = None,
         video_allowed: bool = False,
         allow_beta_video: bool = False,
+        allow_beta_music: bool = False,
+        music_steps: int = 32,
         video_image: str = "",
     ) -> dict[str, object]:
         policy: dict[str, object] = {
@@ -267,6 +364,8 @@ class HermesRitualHandoffTests(unittest.TestCase):
             "maxCost": {"currency": "USD", "amount": 0.05},
             "videoAllowed": video_allowed,
             "allowBetaVideo": allow_beta_video,
+            "allowBetaMusic": allow_beta_music,
+            "musicSteps": music_steps,
         }
         if surfaces is not None:
             policy["surfaces"] = surfaces
@@ -286,6 +385,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 plan_id=plan_id,
                 provider=provider,
                 cinema="cinema" in surfaces.split(","),
+                music="music" in surfaces.split(","),
             )
             return object()
 
@@ -299,6 +399,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
         plan_id: str,
         provider: str,
         cinema: bool = False,
+        music: bool = False,
     ) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         audio = {
@@ -318,6 +419,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
             "durationMs": None,
             "provider": None,
         }
+        music_surface = None
         providers = ["mock"]
         if provider == "chutes":
             providers.append("chutes")
@@ -347,31 +449,43 @@ class HermesRitualHandoffTests(unittest.TestCase):
                     "durationMs": None,
                     "checksum": "video-checksum",
                 }
+            if music:
+                music_surface = {
+                    "src": f"/artifacts/{artifact_id}/music.wav",
+                    "provider": "chutes",
+                    "model": "chutes-diffrhythm",
+                    "mimeType": "audio/wav",
+                    "durationMs": None,
+                    "checksum": "music-checksum",
+                }
+        surfaces = {
+            "text": {"body": "A rendered artifact."},
+            "audio": audio,
+            "captions": {
+                "tracks": [
+                    {
+                        "src": f"/artifacts/{artifact_id}/captions.vtt",
+                        "format": "webvtt",
+                        "lang": "en-US",
+                        "kind": "subtitles",
+                        "label": "English",
+                    }
+                ],
+                "segments": [
+                    {"id": "seg_1", "startMs": 0, "endMs": 3000, "text": "Hello."},
+                ],
+            },
+            "image": image,
+            "cinema": cinema_surface,
+        }
+        if music_surface is not None:
+            surfaces["music"] = music_surface
         manifest = {
             "schemaVersion": "hermes_ritual_artifact.v1",
             "artifactId": artifact_id,
             "planId": plan_id,
             "durationMs": 150000,
-            "surfaces": {
-                "text": {"body": "A rendered artifact."},
-                "audio": audio,
-                "captions": {
-                    "tracks": [
-                        {
-                            "src": f"/artifacts/{artifact_id}/captions.vtt",
-                            "format": "webvtt",
-                            "lang": "en-US",
-                            "kind": "subtitles",
-                            "label": "English",
-                        }
-                    ],
-                    "segments": [
-                        {"id": "seg_1", "startMs": 0, "endMs": 3000, "text": "Hello."},
-                    ],
-                },
-                "image": image,
-                "cinema": cinema_surface,
-            },
+            "surfaces": surfaces,
             "render": {
                 "rendererVersion": "ritual-renderer.v1",
                 "mode": "render_static" if provider == "chutes" else "dry_run_manifest",
@@ -382,8 +496,8 @@ class HermesRitualHandoffTests(unittest.TestCase):
         (out_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         (out_dir / "captions.vtt").write_text("WEBVTT\n", encoding="utf-8")
 
-    def _plan(self, *, cinema_enabled: bool = False) -> dict[str, object]:
-        return {
+    def _plan(self, *, cinema_enabled: bool = False, music_enabled: bool = False) -> dict[str, object]:
+        plan: dict[str, object] = {
             "id": "ritual_plan_fixture",
             "title": "Fixture podcast ritual",
             "locale": "en-US",
@@ -425,6 +539,14 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 "providerRestrictions": ["no_raw_material_to_external_provider"],
             },
         }
+        if music_enabled:
+            plan["music"] = {
+                "enabled": True,
+                "role": "ambient_bed",
+                "sourceRefs": ["weekly_fixture"],
+                "providerPromptPolicy": "none",
+            }
+        return plan
 
 
 if __name__ == "__main__":

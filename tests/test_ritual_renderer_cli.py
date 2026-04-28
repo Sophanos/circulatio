@@ -231,6 +231,115 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertIn("chutes_provider_missing_api_token", manifest["render"]["warnings"])
             self.assertEqual(manifest["surfaces"]["audio"]["provider"], "mock")
 
+    def test_chutes_music_requires_beta_and_plan_permission(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["music"] = {
+                "enabled": True,
+                "role": "ambient_bed",
+                "sourceRefs": ["weekly_fixture"],
+                "providerPromptPolicy": "none",
+            }
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch("circulatio.ritual_renderer.renderer.generate_music") as music:
+                    manifest = render_plan_file(
+                        plan_path=plan_path,
+                        out_dir=out_dir,
+                        options={
+                            "providerProfile": "chutes_music",
+                            "surfaces": ["music"],
+                            "maxCostUsd": 0.05,
+                            "requestTimeoutSeconds": 5,
+                            "publicBasePath": "/artifacts/test",
+                        },
+                    )
+
+            music.assert_not_called()
+            self.assertNotIn("music", manifest["surfaces"])
+            self.assertIn("chutes_music_skipped_without_beta_gate", manifest["render"]["warnings"])
+
+    def test_chutes_music_with_beta_gate_renders_provider_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["music"] = {
+                "enabled": True,
+                "role": "ambient_bed",
+                "sourceRefs": ["weekly_fixture"],
+                "providerPromptPolicy": "none",
+            }
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            def generate_bed(*, out_path: Path, steps: int, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"music")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-diffrhythm",
+                    "steps": steps,
+                }
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.generate_music",
+                    side_effect=generate_bed,
+                ) as music:
+                    manifest = render_plan_file(
+                        plan_path=plan_path,
+                        out_dir=out_dir,
+                        options={
+                            "providerProfile": "chutes_music",
+                            "surfaces": ["music"],
+                            "maxCostUsd": 0.05,
+                            "requestTimeoutSeconds": 5,
+                            "allowBetaMusic": True,
+                            "musicSteps": 48,
+                            "publicBasePath": "/artifacts/test",
+                        },
+                    )
+
+            music.assert_called_once()
+            self.assertEqual(music.call_args.kwargs["steps"], 48)
+            self.assertEqual(manifest["surfaces"]["music"]["provider"], "chutes")
+            self.assertEqual(manifest["surfaces"]["music"]["model"], "chutes-diffrhythm")
+            self.assertEqual(manifest["surfaces"]["music"]["src"], "/artifacts/test/music.wav")
+            self.assertTrue(manifest["sections"][0]["channels"]["music"])
+
+    def test_chutes_music_skips_when_plan_does_not_allow_music(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": self._fixture_plan()}), encoding="utf-8")
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch("circulatio.ritual_renderer.renderer.generate_music") as music:
+                    manifest = render_plan_file(
+                        plan_path=plan_path,
+                        out_dir=out_dir,
+                        options={
+                            "providerProfile": "chutes_music",
+                            "surfaces": ["music"],
+                            "maxCostUsd": 0.05,
+                            "allowBetaMusic": True,
+                        },
+                    )
+
+            music.assert_not_called()
+            self.assertNotIn("music", manifest["surfaces"])
+            self.assertIn(
+                "chutes_music_blocked_by_plan_music_policy",
+                manifest["render"]["warnings"],
+            )
+
     def test_chutes_cinema_path_requires_beta_and_uses_generated_image(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             temp = Path(tempdir)
@@ -393,6 +502,45 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertEqual(payload["seed"], 42)
             self.assertEqual(payload["guidance_scale"], 1.0)
             self.assertEqual(payload["guidance_scale_2"], 1.0)
+
+    def test_chutes_diffrhythm_music_payload_matches_live_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            captured: dict[str, object] = {}
+
+            def fake_post_asset(**kwargs: object) -> dict[str, object]:
+                captured.update(kwargs)
+                out_path = kwargs["out_path"]
+                assert isinstance(out_path, Path)
+                out_path.write_bytes(b"music")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-diffrhythm",
+                }
+
+            with patch(
+                "circulatio.ritual_renderer.providers.chutes._post_asset",
+                side_effect=fake_post_asset,
+            ):
+                chutes.generate_music(
+                    token="test-token",
+                    out_path=temp / "music.wav",
+                    steps=48,
+                    audio_b64="ignored-legacy-input",
+                    timeout_seconds=9,
+                )
+
+            self.assertEqual(captured["url"], chutes.DIFFRHYTHM_GENERATE_URL)
+            payload = captured["payload"]
+            self.assertIsInstance(payload, dict)
+            payload = payload if isinstance(payload, dict) else {}
+            self.assertEqual(payload["seed"], None)
+            self.assertEqual(payload["steps"], 48)
+            self.assertEqual(payload["lyrics"], None)
+            self.assertEqual(payload["batch_size"], 1)
+            self.assertNotIn("audio_b64", payload)
 
     def test_chutes_video_warning_is_sanitized(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

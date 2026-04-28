@@ -353,6 +353,9 @@ class RitualRenderer:
         if "music" in selected and not self._options.get("allowBetaMusic"):
             warnings.append("chutes_music_skipped_without_beta_gate")
             selected.discard("music")
+        if "music" in selected and not self._plan_allows_music(plan):
+            warnings.append("chutes_music_blocked_by_plan_music_policy")
+            selected.discard("music")
         if "cinema" in selected and not self._options.get("allowBetaVideo"):
             warnings.append("chutes_video_skipped_without_beta_gate")
             selected.discard("cinema")
@@ -563,6 +566,10 @@ class RitualRenderer:
         cinema = cast(dict[str, object], visual.get("cinema") or {})
         return bool(cinema.get("enabled"))
 
+    def _plan_allows_music(self, plan: dict[str, object]) -> bool:
+        music = cast(dict[str, object], plan.get("music") or {})
+        return bool(music.get("enabled")) and self._plan_allows_external_providers(plan)
+
     def _asset_ref(self, asset: ChutesAsset, *, public_base: str) -> dict[str, object]:
         return {
             "src": f"{public_base}/{asset['path'].name}",
@@ -672,6 +679,8 @@ class RitualRenderer:
         meditation = cast(dict[str, object], surfaces.get("meditation") or {})
         image = cast(dict[str, object], surfaces.get("image") or {})
         cinema = cast(dict[str, object], surfaces.get("cinema") or {})
+        music = cast(dict[str, object], surfaces.get("music") or {})
+        music_channel = {"music": True} if music.get("src") else {}
 
         sections: list[RitualManifestSection] = []
         cursor = 0
@@ -694,7 +703,7 @@ class RitualRenderer:
                 "endMs": min(arrival_ms, duration_ms),
                 "kind": "arrival",
                 "preferredLens": self._primary_lens(image=image, cinema=cinema),
-                "channels": {"voice": True, "ambient": True},
+                "channels": {"voice": True, "ambient": True, **music_channel},
             }
         )
 
@@ -724,7 +733,7 @@ class RitualRenderer:
                     "kind": "image",
                     "preferredLens": self._primary_lens(image=image, cinema=cinema),
                     "skippable": True,
-                    "channels": {"voice": True, "ambient": True},
+                    "channels": {"voice": True, "ambient": True, **music_channel},
                 }
             )
 
@@ -745,7 +754,7 @@ class RitualRenderer:
                         )
                     ),
                     "skippable": True,
-                    "channels": {"voice": True, "ambient": True},
+                    "channels": {"voice": True, "ambient": True, **music_channel},
                 }
             )
 

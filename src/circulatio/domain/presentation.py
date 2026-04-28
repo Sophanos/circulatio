@@ -121,6 +121,11 @@ class RequestedCinemaSurface(TypedDict, total=False):
     maxDurationSeconds: NotRequired[int]
 
 
+class RequestedMusicSurface(TypedDict, total=False):
+    enabled: Required[bool]
+    allowExternalGeneration: NotRequired[bool]
+
+
 class RequestedRitualSurfaces(TypedDict, total=False):
     text: NotRequired[RequestedTextSurface]
     audio: NotRequired[RequestedAudioSurface]
@@ -129,6 +134,7 @@ class RequestedRitualSurfaces(TypedDict, total=False):
     meditation: NotRequired[RequestedMeditationSurface]
     image: NotRequired[RequestedImageSurface]
     cinema: NotRequired[RequestedCinemaSurface]
+    music: NotRequired[RequestedMusicSurface]
 
 
 class RitualMaxCost(TypedDict, total=False):
@@ -160,6 +166,8 @@ class RitualRenderPolicy(TypedDict, total=False):
     externalProvidersAllowed: NotRequired[bool]
     providerAllowlist: NotRequired[list[str]]
     videoAllowed: NotRequired[bool]
+    allowBetaMusic: NotRequired[bool]
+    musicSteps: NotRequired[int]
     maxCost: NotRequired[RitualMaxCost]
     cachePolicy: NotRequired[RitualCachePolicy]
     delivery: NotRequired[RitualDeliveryPolicy]
@@ -256,6 +264,13 @@ class PresentationMeditationSpec(TypedDict, total=False):
     syncMarkers: Required[list[dict[str, object]]]
 
 
+class PresentationMusicSpec(TypedDict, total=False):
+    enabled: Required[bool]
+    role: Required[Literal["ambient_bed"]]
+    sourceRefs: Required[list[Id]]
+    providerPromptPolicy: Required[ProviderPromptPolicy]
+
+
 class VisualPromptSurfacePlan(TypedDict, total=False):
     enabled: Required[bool]
     prompt: NotRequired[str]
@@ -333,6 +348,7 @@ class PresentationRitualPlan(TypedDict, total=False):
     breath: Required[PresentationBreathSpec]
     meditation: Required[PresentationMeditationSpec]
     visualPromptPlan: Required[VisualPromptPlan]
+    music: NotRequired[PresentationMusicSpec]
     interactionSpec: Required[RitualInteractionSpec]
     deliveryPolicy: Required[PresentationDeliveryPolicy]
     safetyBoundary: Required[PresentationSafetyBoundary]
@@ -457,6 +473,7 @@ __all__ = [
     "PresentationApprovalState",
     "PresentationBreathSpec",
     "PresentationCostEstimate",
+    "PresentationMusicSpec",
     "PresentationPrivacyClass",
     "PresentationRenderRequest",
     "PresentationRitualPlan",
@@ -467,6 +484,7 @@ __all__ = [
     "ProviderPromptPolicy",
     "PresentationSourceRole",
     "PresentationSourceType",
+    "RequestedMusicSurface",
     "RequestedRitualSurfaces",
     "RitualCompletionBodyStatePayload",
     "RitualCompletionEvent",

@@ -125,6 +125,26 @@ test("caption segments do not become the primary ritual structure", () => {
   assert.equal(sections.at(-1)?.endMs, 300000)
 })
 
+test("manifest music becomes optional artifact media and channel state", () => {
+  const manifest = baseManifest()
+  manifest.surfaces.music = {
+    src: "/artifacts/test/music.wav",
+    mimeType: "audio/wav",
+    provider: "chutes",
+    model: "chutes-diffrhythm",
+    durationMs: null
+  }
+
+  const artifact = ritualArtifactFromManifest(manifest)
+  const sections = deriveRitualSectionsFromManifest(manifest)
+
+  assert.equal(artifact.musicUrl, "/artifacts/test/music.wav")
+  assert.equal(artifact.musicMimeType, "audio/wav")
+  assert.deepEqual(artifact.channels?.music, { muted: false, gain: 0.22 })
+  assert.equal(sections[0].channels?.music, true)
+  assert.equal(sections[1].channels?.music, undefined)
+})
+
 test("experience frame resolves recommended lens and body prompt state", () => {
   const manifest = baseManifest()
   manifest.sections = [

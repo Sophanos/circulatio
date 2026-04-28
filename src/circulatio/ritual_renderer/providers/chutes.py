@@ -134,11 +134,15 @@ def generate_music(
     steps: int = 32,
     audio_b64: str | None = None,
     timeout_seconds: int = 240,
+    seed: int | None = None,
+    lyrics: str | None = None,
+    batch_size: int = 1,
 ) -> ChutesAsset:
+    del audio_b64
     return _post_asset(
         token=token,
         url=DIFFRHYTHM_GENERATE_URL,
-        payload={"steps": steps, "audio_b64": audio_b64},
+        payload={"seed": seed, "steps": steps, "lyrics": lyrics, "batch_size": batch_size},
         out_path=out_path,
         default_mime="audio/wav",
         model="chutes-diffrhythm",

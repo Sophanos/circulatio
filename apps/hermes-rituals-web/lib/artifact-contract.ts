@@ -145,6 +145,8 @@ export type PresentationArtifact = {
   sessionId?: string
   journeyId?: string
   audioUrl?: string
+  musicUrl?: string
+  musicMimeType?: string | null
   videoUrl?: string
   stageVideo?: PresentationVideoSource
   coverImageUrl?: string
@@ -419,6 +421,10 @@ function breathDurationMs(manifest: RitualArtifactManifest) {
   return cycleMs * Math.max(breath.cycles ?? 1, 1)
 }
 
+function hasMusicSurface(manifest: RitualArtifactManifest) {
+  return Boolean(manifest.surfaces.music?.src)
+}
+
 function surfacePreferredLens(manifest: RitualArtifactManifest): RitualSectionPreferredLens {
   const cinema = manifest.surfaces.cinema
   if (cinema?.enabled && cinema.src) return "cinema"
@@ -457,6 +463,8 @@ function surfaceAwareManifestSections(
     cursor = section.endMs
   }
 
+  const musicChannel = hasMusicSurface(manifest) ? { music: true } : {}
+
   push({
     id: "section-arrival",
     title: "Arrival",
@@ -464,7 +472,7 @@ function surfaceAwareManifestSections(
     endMs: Math.min(arrivalDurationMs, durationMs),
     kind: "arrival",
     preferredLens: surfacePreferredLens(manifest),
-    channels: { voice: true, ambient: true }
+    channels: { voice: true, ambient: true, ...musicChannel }
   })
 
   const breathMs = breathDurationMs(manifest)
@@ -494,7 +502,7 @@ function surfaceAwareManifestSections(
       kind: "image",
       preferredLens: surfacePreferredLens(manifest),
       skippable: true,
-      channels: { voice: true, ambient: true }
+      channels: { voice: true, ambient: true, ...musicChannel }
     })
   }
 
@@ -507,7 +515,7 @@ function surfaceAwareManifestSections(
       kind: "reflection",
       preferredLens: manifest.surfaces.meditation?.enabled ? "meditation" : surfacePreferredLens(manifest),
       skippable: true,
-      channels: { voice: true, ambient: true }
+      channels: { voice: true, ambient: true, ...musicChannel }
     })
   }
 
@@ -594,6 +602,8 @@ export function ritualArtifactFromManifest(
   const breath = manifest.surfaces.breath
   const image = manifest.surfaces.image
   const cinema = manifest.surfaces.cinema
+  const music = manifest.surfaces.music
+  const hasMusic = Boolean(music?.src)
   const captions = manifest.surfaces.captions?.segments?.map((segment) => ({
     startMs: segment.startMs,
     endMs: segment.endMs,
@@ -624,6 +634,8 @@ export function ritualArtifactFromManifest(
       manifest.interaction.completion?.endpoint ?? manifest.interaction.completionEndpoint,
     captureBodyResponse: manifest.interaction.captureBodyResponse,
     audioUrl: manifest.surfaces.audio?.src ?? undefined,
+    musicUrl: hasMusic ? music?.src ?? undefined : undefined,
+    musicMimeType: hasMusic ? music?.mimeType ?? null : undefined,
     videoUrl: cinema?.enabled && cinema.src ? cinema.src : undefined,
     stageVideo,
     coverImageUrl: image?.enabled && image.src ? image.src : stageVideo?.posterImageUrl,
@@ -633,7 +645,8 @@ export function ritualArtifactFromManifest(
       voice: { muted: false, gain: 0.82 },
       ambient: { muted: false, gain: 0.36 },
       breath: { muted: false, gain: 0.58 },
-      pulse: { muted: false, gain: 0.24 }
+      pulse: { muted: false, gain: 0.24 },
+      ...(hasMusic ? { music: { muted: false, gain: 0.22 } } : {})
     },
     breathCycle: breath?.enabled
       ? {

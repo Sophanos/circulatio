@@ -317,7 +317,8 @@ class HermesBridgePluginTests(unittest.TestCase):
                 self.assertIn("artifactUrl", response["result"])
                 self.assertIn("requested_surface_boolean_normalized:breath", warnings)
                 self.assertIn("requested_surface_alias_normalized:video->cinema", warnings)
-                self.assertIn("requested_surface_unsupported_omitted:music", warnings)
+                self.assertIn("requested_surface_boolean_normalized:music", warnings)
+                self.assertIn("music_disabled_without_external_providers", warnings)
 
         asyncio.run(run())
 

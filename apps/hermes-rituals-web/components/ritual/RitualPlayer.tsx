@@ -30,6 +30,7 @@ import {
   ScrubBarTrack
 } from "@/components/ui/scrub-bar"
 import type {
+  ArtifactChannels,
   CaptionCue,
   PresentationArtifact,
   PresentationVideoSource,
@@ -55,6 +56,11 @@ function resolveDurationMs(artifact: PresentationArtifact) {
 }
 
 const WAVEFORM_SAMPLE_COUNT = 720
+
+function clampUnit(value: number, fallback = 0) {
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(Math.max(value, 0), 1)
+}
 
 function captionWaveformData(captions: CaptionCue[], durationMs: number, samples = WAVEFORM_SAMPLE_COUNT) {
   const timelineDurationMs = Math.max(durationMs, captions.at(-1)?.endMs ?? 0, 1)
@@ -537,6 +543,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   artifact: PresentationArtifact
   sections: RitualSection[]
   stageLens: RitualStageLens
+  channels?: ArtifactChannels
+  masterVolume?: number
   playerMode?: PlayerMode
   immersive?: boolean
   chromeVisible?: boolean
@@ -553,6 +561,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   artifact,
   sections,
   stageLens,
+  channels,
+  masterVolume = 1,
   playerMode = "full",
   immersive,
   chromeVisible = true,
@@ -567,12 +577,14 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   onPlayingChange
 }, ref) {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const musicAudioRef = useRef<HTMLAudioElement>(null)
   const animationFrameRef = useRef<number | null>(null)
   const syntheticClockRef = useRef<number | null>(null)
   const playbackAnchorRef = useRef<{ audioSeconds: number; startedAtMs: number } | null>(null)
   const blobUrlRef = useRef<string | null>(null)
   const plannedDurationMs = resolveDurationMs(artifact)
   const audioStateKey = `${artifact.id}:${artifact.audioUrl ?? plannedDurationMs}`
+  const musicStateKey = `${artifact.id}:${artifact.musicUrl ?? ""}`
   const [audioState, setAudioState] = useState(() => ({
     key: audioStateKey,
     url: artifact.audioUrl ?? ""
@@ -594,6 +606,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   }, [durationSeconds])
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
+  const [musicDurationState, setMusicDurationState] = useState({
+    key: musicStateKey,
+    durationSeconds: 0
+  })
+  const musicDurationSeconds =
+    musicDurationState.key === musicStateKey ? musicDurationState.durationSeconds : 0
   const [breathClockOffsetMs, setBreathClockOffsetMs] = useState(0)
   const currentTimeMs = currentTime * 1000
   const currentTimeMsRef = useRef(0)
@@ -601,6 +619,10 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   useLayoutEffect(() => {
     currentTimeMsRef.current = currentTimeMs
   }, [currentTimeMs])
+  const musicDurationSecondsRef = useRef(musicDurationSeconds)
+  useLayoutEffect(() => {
+    musicDurationSecondsRef.current = musicDurationSeconds
+  }, [musicDurationSeconds])
   const stageVideoSource = resolveStageVideo(artifact)
   const fullStageVideo = isFullStageVideo(stageLens, stageVideoSource)
   const fullStageChromeVisible = !fullStageVideo || chromeVisible
@@ -640,15 +662,74 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     return source
   }, [artifact.audioUrl, audioStateKey, audioUrl, plannedDurationMs])
 
+  const musicOffsetForTimeline = useCallback((timelineSeconds: number) => {
+    const musicDuration = musicDurationSecondsRef.current
+    if (Number.isFinite(musicDuration) && musicDuration > 0) {
+      return ((timelineSeconds % musicDuration) + musicDuration) % musicDuration
+    }
+    return timelineSeconds <= 0 ? 0 : null
+  }, [])
+
+  const syncMusicToTimeline = useCallback((timelineSeconds: number) => {
+    const music = musicAudioRef.current
+    if (!music || !artifact.musicUrl) return
+    const offset = musicOffsetForTimeline(timelineSeconds)
+    if (offset === null) return
+    try {
+      if (Math.abs(music.currentTime - offset) > 0.25) {
+        music.currentTime = offset
+      }
+    } catch {}
+  }, [artifact.musicUrl, musicOffsetForTimeline])
+
+  const applyMusicVolume = useCallback(() => {
+    const music = musicAudioRef.current
+    if (!music) return
+    const masterGain = clampUnit(masterVolume, 1)
+    const channel = channels?.music ?? artifact.channels?.music
+    const channelGain = clampUnit(channel?.gain ?? 0.22, 0.22)
+    const muted = !artifact.musicUrl || masterGain <= 0 || Boolean(channel?.muted)
+    try {
+      music.volume = masterGain * channelGain
+    } catch {}
+    music.muted = muted
+  }, [artifact.channels?.music, artifact.musicUrl, channels?.music, masterVolume])
+
+  const playMusicFromTimeline = useCallback(async (timelineSeconds: number) => {
+    const music = musicAudioRef.current
+    if (!music || !artifact.musicUrl) return
+    syncMusicToTimeline(timelineSeconds)
+    applyMusicVolume()
+    try {
+      await music.play()
+    } catch {
+      music.pause()
+    }
+  }, [applyMusicVolume, artifact.musicUrl, syncMusicToTimeline])
+
+  const pauseMusic = useCallback(() => {
+    musicAudioRef.current?.pause()
+  }, [])
+
+  const resetMusic = useCallback(() => {
+    const music = musicAudioRef.current
+    if (!music) return
+    music.pause()
+    try {
+      music.currentTime = 0
+    } catch {}
+  }, [])
+
   const stopSyntheticClock = useCallback(() => {
     if (syntheticClockRef.current !== null) {
       window.clearInterval(syntheticClockRef.current)
       syntheticClockRef.current = null
     }
     playbackAnchorRef.current = null
+    pauseMusic()
     setIsPlaying(false)
     onPlayingChange?.(false)
-  }, [onPlayingChange])
+  }, [onPlayingChange, pauseMusic])
 
   const startSyntheticClock = useCallback(() => {
     const startSeconds = Math.min(Math.max(currentTime, 0), durationSecondsRef.current)
@@ -687,6 +768,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         }
         setIsPlaying(false)
         onPlayingChange?.(false)
+        resetMusic()
         setCurrentTime(0)
         onTimeUpdate?.(0)
         onComplete?.()
@@ -697,10 +779,11 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
     setIsPlaying(true)
     onPlayingChange?.(true)
+    void playMusicFromTimeline(startSeconds)
     onTimeUpdate?.(startSeconds * 1000)
     syntheticClockRef.current = window.setInterval(tick, 100)
     tick()
-  }, [currentTime, onComplete, onPlayingChange, onTimeUpdate])
+  }, [currentTime, onComplete, onPlayingChange, onTimeUpdate, playMusicFromTimeline, resetMusic])
 
   useImperativeHandle(ref, () => ({
     seek: (ms: number) => {
@@ -714,6 +797,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (!artifact.audioUrl || (audio && !audio.paused && !audio.ended)) {
         playbackAnchorRef.current = { audioSeconds: seconds, startedAtMs: performance.now() }
       }
+      syncMusicToTimeline(seconds)
       if (stageLens === "breath") {
         setBreathClockOffsetMs(ms)
       }
@@ -816,6 +900,31 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     }
   }, [artifact.audioUrl, audioUrl])
 
+  const handleMusicLoadedMetadata = useCallback(() => {
+    const music = musicAudioRef.current
+    const seconds = music?.duration
+    const timelineSeconds = currentTimeMsRef.current / 1000
+    if (music && typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
+      setMusicDurationState({ key: musicStateKey, durationSeconds: seconds })
+      try {
+        music.currentTime = ((timelineSeconds % seconds) + seconds) % seconds
+      } catch {}
+    } else {
+      syncMusicToTimeline(timelineSeconds)
+    }
+    if (isPlaying) {
+      void playMusicFromTimeline(timelineSeconds)
+    }
+  }, [isPlaying, musicStateKey, playMusicFromTimeline, syncMusicToTimeline])
+
+  useEffect(() => {
+    resetMusic()
+  }, [artifact.id, artifact.musicUrl, resetMusic])
+
+  useEffect(() => {
+    applyMusicVolume()
+  }, [applyMusicVolume])
+
   useLayoutEffect(() => {
     if (stageLens === "breath") {
       setBreathClockOffsetMs(currentTimeMsRef.current)
@@ -856,6 +965,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       stopFrameClock()
       setIsPlaying(false)
       onPlayingChange?.(false)
+      resetMusic()
       setCurrentTime(0)
       onTimeUpdate?.(0)
       onComplete?.()
@@ -887,12 +997,14 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
     const handlePlay = () => {
       startFrameClock()
-      syncTime()
+      const nextSeconds = syncTime()
+      void playMusicFromTimeline(nextSeconds)
       setIsPlaying(true)
       onPlayingChange?.(true)
     }
     const handlePause = () => {
       syncTime()
+      pauseMusic()
       playbackAnchorRef.current = null
       stopFrameClock()
       setIsPlaying(false)
@@ -914,12 +1026,24 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("ended", handleEnded)
     }
-  }, [onComplete, onPlayingChange, onTimeUpdate])
+  }, [onComplete, onPlayingChange, onTimeUpdate, pauseMusic, playMusicFromTimeline, resetMusic])
 
   const activeSection =
     frameActiveSection ??
     sections.find((s) => currentTime * 1000 >= s.startMs && currentTime * 1000 < s.endMs)
   const sectionMuted = activeSection?.muted ?? false
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const masterGain = clampUnit(masterVolume, 1)
+    const channel = channels?.voice ?? artifact.channels?.voice
+    const channelGain = clampUnit(channel?.gain ?? 0.82, 0.82)
+    try {
+      audio.volume = masterGain * channelGain
+    } catch {}
+    audio.muted = masterGain <= 0 || Boolean(channel?.muted) || sectionMuted
+  }, [artifact.channels?.voice, channels?.voice, masterVolume, sectionMuted])
 
   const handleTogglePlay = async () => {
     if (!artifact.audioUrl) {
@@ -952,6 +1076,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (isPlaying) {
         playbackAnchorRef.current = { audioSeconds: time, startedAtMs: performance.now() }
       }
+      syncMusicToTimeline(time)
       if (stageLens === "breath") {
         setBreathClockOffsetMs(time * 1000)
       }
@@ -969,6 +1094,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       if (!audioRef.current.paused && !audioRef.current.ended) {
         playbackAnchorRef.current = { audioSeconds: time, startedAtMs: performance.now() }
       }
+      syncMusicToTimeline(time)
       if (stageLens === "breath") {
         setBreathClockOffsetMs(time * 1000)
       }
@@ -999,6 +1125,16 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         preload="metadata"
         onLoadedMetadata={handleLoadedMetadata}
       />
+      {artifact.musicUrl ? (
+        <audio
+          key={`${artifact.id}:music:${artifact.musicUrl}`}
+          ref={musicAudioRef}
+          src={artifact.musicUrl}
+          preload="metadata"
+          loop
+          onLoadedMetadata={handleMusicLoadedMetadata}
+        />
+      ) : null}
 
       {/* Scene / Video Stage */}
       <motion.div

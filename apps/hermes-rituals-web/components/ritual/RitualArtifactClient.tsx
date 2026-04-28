@@ -895,6 +895,8 @@ export function RitualArtifactClient({
             artifact={artifact}
             sections={sections}
             stageLens={stageLens}
+            channels={channels}
+            masterVolume={masterVolume}
             playerMode={
               stageLens === "breath" || stageLens === "meditation" || stageLens === "body"
                 ? "minimal"

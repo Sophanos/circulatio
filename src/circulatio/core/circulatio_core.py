@@ -602,6 +602,7 @@ class CirculatioCore:
         warnings: list[str] = list(surface_warnings)
         blocked_surfaces: list[str] = []
         cinema_requested = bool(requested.get("cinema", {}).get("enabled"))
+        music_requested = bool(requested.get("music", {}).get("enabled"))
         if grounding_only:
             warnings.append("presentation_grounding_only_safety_adjustment")
             blocked_surfaces.extend(["cinema", "intense_breath_holds"])
@@ -622,6 +623,10 @@ class CirculatioCore:
             requested["image"] = {**requested.get("image", {}), "enabled": False}
             blocked_surfaces.append("image")
             warnings.append("image_disabled_without_external_providers")
+        if music_requested and not external_allowed:
+            requested["music"] = {**requested.get("music", {}), "enabled": False}
+            blocked_surfaces.append("music")
+            warnings.append("music_disabled_without_external_providers")
         duration = self._presentation_duration(render_policy)
         source_digest = input_data["sourceDigest"]
         source_refs = input_data.get("sourceRefs", [])
@@ -664,6 +669,7 @@ class CirculatioCore:
             source_digest=source_digest,
             source_ref_ids=source_ref_ids,
         )
+        music_spec = self._presentation_music_spec(requested, source_ref_ids=source_ref_ids)
         render_mode = cast(str, render_policy.get("mode", "dry_run_manifest"))
         frontend_route = "/artifacts/{artifactId}"
         evidence_ids = [str(item) for item in source_digest.get("evidenceIds", []) if str(item)]
@@ -746,10 +752,12 @@ class CirculatioCore:
                 "generatedFromSurface": input_data["sourceType"],
             },
         }
+        if music_spec["enabled"]:
+            plan["music"] = music_spec
         stable_hash = self._presentation_stable_hash(plan)
         plan["stableHash"] = stable_hash
         allowed_surfaces = ["text"]
-        for surface in ("captions", "breath", "meditation", "audio", "image", "cinema"):
+        for surface in ("captions", "breath", "meditation", "audio", "image", "cinema", "music"):
             if requested.get(surface, {}).get("enabled"):
                 allowed_surfaces.append(surface)
         cost_estimate = {
@@ -796,6 +804,7 @@ class CirculatioCore:
         normalized.setdefault("audio", {"enabled": False})
         normalized.setdefault("image", {"enabled": False})
         normalized.setdefault("cinema", {"enabled": False, "maxDurationSeconds": 30})
+        normalized.setdefault("music", {"enabled": False})
         return cast(RequestedRitualSurfaces, normalized), warnings
 
     def _presentation_render_policy(self, policy: RitualRenderPolicy) -> RitualRenderPolicy:
@@ -806,6 +815,8 @@ class CirculatioCore:
         normalized.setdefault("externalProvidersAllowed", False)
         normalized.setdefault("providerAllowlist", ["mock", "local"])
         normalized.setdefault("videoAllowed", False)
+        normalized.setdefault("allowBetaMusic", False)
+        normalized.setdefault("musicSteps", 32)
         normalized.setdefault("maxCost", {"currency": "USD", "amount": 0})
         normalized.setdefault(
             "cachePolicy", {"read": True, "write": True, "cacheScope": "local_dev"}
@@ -1051,6 +1062,20 @@ class CirculatioCore:
             ],
             "maxDurationSeconds": max_duration,
             "providerPromptPolicy": "sanitized_visual_only",
+        }
+
+    def _presentation_music_spec(
+        self,
+        requested: RequestedRitualSurfaces,
+        *,
+        source_ref_ids: list[str],
+    ) -> dict[str, object]:
+        enabled = bool(requested.get("music", {}).get("enabled"))
+        return {
+            "enabled": enabled,
+            "role": "ambient_bed",
+            "sourceRefs": source_ref_ids,
+            "providerPromptPolicy": "none",
         }
 
     def _presentation_source_ref_ids(self, refs: list[PresentationSourceRef]) -> list[str]:
