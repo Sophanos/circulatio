@@ -27,6 +27,13 @@ _MEDITATION_FIELD_TYPES = {
 }
 _MEDITATION_DENSITIES = {"none", "sparse", "phase_label"}
 _IMAGE_STYLE_INTENTS = {"symbolic_non_literal", "abstract", "photographic", "user_provided"}
+_MUSIC_STYLE_INTENTS = {
+    "dream_integration",
+    "body_settling",
+    "threshold_crossing",
+    "quiet_reflection",
+    "mythic_motion",
+}
 
 
 def normalize_requested_ritual_surfaces(
@@ -104,6 +111,17 @@ def _normalize_surface_config(
                 result[key] = raw
             else:
                 warnings.append(f"requested_surface_invalid_request_field_omitted:{surface}.{key}")
+        elif surface == "music" and key == "styleIntent":
+            if isinstance(raw, str) and raw in _MUSIC_STYLE_INTENTS:
+                result[key] = raw
+            else:
+                warnings.append(f"requested_surface_invalid_request_field_omitted:{surface}.{key}")
+        elif surface == "music" and key == "musicDurationSeconds":
+            duration = _coerce_int(raw)
+            if duration is None:
+                warnings.append(f"requested_surface_invalid_request_field_omitted:{surface}.{key}")
+            else:
+                result[key] = min(max(duration, 15), 285)
         elif surface == "cinema" and key == "maxDurationSeconds":
             duration = _coerce_int(raw)
             if duration is None:
@@ -112,6 +130,12 @@ def _normalize_surface_config(
                 result[key] = min(max(duration, 1), 30)
         elif surface == "audio" and key in {"voiceId", "tone", "pace"} and isinstance(raw, str):
             result[key] = raw
+        elif surface == "audio" and key == "speed":
+            speed = _coerce_float(raw)
+            if speed is None:
+                warnings.append(f"requested_surface_invalid_request_field_omitted:{surface}.{key}")
+            else:
+                result[key] = min(max(speed, 0.1), 3.0)
         elif surface == "captions" and key == "format" and isinstance(raw, str):
             result[key] = raw
         elif surface == "text":
@@ -182,4 +206,18 @@ def _coerce_int(value: object) -> int | None:
         stripped = value.strip()
         if stripped.isdecimal() or (stripped.startswith("-") and stripped[1:].isdecimal()):
             return int(stripped)
+    return None
+
+
+def _coerce_float(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
     return None

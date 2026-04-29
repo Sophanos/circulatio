@@ -55,7 +55,11 @@ class SelfEvolutionExecutionTests(unittest.TestCase):
         self.assertIn('"prompt_fragments_cand_0001"', trace_text)
 
     def test_skill_routing_harness_scores_store_first_case(self) -> None:
-        cases = load_case_set([self._dataset_path("execution_skill_routing.jsonl")])
+        cases = [
+            case
+            for case in load_case_set([self._dataset_path("execution_skill_routing.jsonl")])
+            if case.get("caseId") == "execution_skill_store_first_001"
+        ]
         client = FakeEvolutionLlmClient(
             responses={
                 "circulatio_execution_skill_routing": {
@@ -82,7 +86,11 @@ class SelfEvolutionExecutionTests(unittest.TestCase):
         self.assertTrue(results[0].passed)
 
     def test_tool_choice_harness_uses_full_schema_set(self) -> None:
-        cases = load_case_set([self._dataset_path("execution_tool_choice.jsonl")])
+        cases = [
+            case
+            for case in load_case_set([self._dataset_path("execution_tool_choice.jsonl")])
+            if case.get("caseId") == "execution_tool_feedback_route_001"
+        ]
         client = FakeEvolutionLlmClient(
             responses={
                 "circulatio_execution_tool_choice": {

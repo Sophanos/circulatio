@@ -56,7 +56,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transcribe-captions",
         action="store_true",
-        help="Use Chutes Whisper to regenerate captions from rendered speech.",
+        help="Regenerate captions from rendered speech using the selected transcription provider.",
+    )
+    parser.add_argument(
+        "--transcription-provider",
+        default="fallback",
+        choices=["fallback", "chutes", "openai"],
+        help="Caption transcription provider. Fallback keeps voiceScript-derived captions.",
+    )
+    parser.add_argument(
+        "--openai-api-key-env",
+        default="OPENAI_API_KEY",
+        help="Environment variable containing the OpenAI API key for transcription.",
+    )
+    parser.add_argument(
+        "--openai-transcription-model",
+        default="whisper-1",
+        help="OpenAI transcription model. Defaults to whisper-1 for timed caption output.",
+    )
+    parser.add_argument(
+        "--openai-transcription-response-format",
+        default="verbose_json",
+        help="OpenAI transcription response format. Defaults to verbose_json for segments.",
     )
     parser.add_argument(
         "--request-timeout-seconds",
@@ -82,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Chutes Diffrhythm generation steps.",
     )
     parser.add_argument(
+        "--music-duration-seconds",
+        type=int,
+        default=0,
+        help="Chutes DiffRhythm music duration in seconds. Uses the plan value when omitted.",
+    )
+    parser.add_argument(
         "--allow-beta-music",
         action="store_true",
         help="Allow beta/developer music provider calls when all other gates pass.",
@@ -97,16 +124,24 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     surfaces = [item.strip() for item in args.surfaces.split(",") if item.strip()]
+    transcription_provider = args.transcription_provider
+    if transcription_provider == "fallback" and args.transcribe_captions:
+        transcription_provider = "chutes"
     options: RitualRenderOptions = {
         "mockProviders": bool(args.mock_providers),
         "dryRun": bool(args.dry_run),
         "providerProfile": args.provider_profile,
         "chutesTokenEnv": args.chutes_token_env,
+        "openaiApiKeyEnv": args.openai_api_key_env,
         "transcribeCaptions": bool(args.transcribe_captions),
+        "transcriptionProvider": transcription_provider,
+        "openaiTranscriptionModel": args.openai_transcription_model,
+        "openaiTranscriptionResponseFormat": args.openai_transcription_response_format,
         "requestTimeoutSeconds": int(args.request_timeout_seconds),
         "maxCostUsd": float(args.max_cost_usd),
         "videoImage": args.video_image,
         "musicSteps": int(args.music_steps),
+        "musicDurationSeconds": int(args.music_duration_seconds),
         "allowBetaMusic": bool(args.allow_beta_music),
         "allowBetaVideo": bool(args.allow_beta_video),
     }

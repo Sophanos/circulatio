@@ -1,7 +1,7 @@
 # Presentation Layer
 ## Embodied Presentation Contract
 
-> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields, typed top-level ritual `sections`, and beta gates for music/video. Provider-backed Chutes rendering is renderer-owned and available through explicit manual renderer flags; Hermes-controlled photo + podcast handoff is now an initial local integration that still defaults to mock/dry-run unless strict provider gates pass. Hermes Rituals now keeps the existing player UI while using real audio duration, decoded waveform peaks, scrub-linked waveform progress, generated images, typed sections, recommended lenses, explicit body capture, and no-op session events for future Hermes subscription. Captions are cue data, not canonical ritual structure. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, or external media calls.
+> **Status:** Phase 1 plan-only ritual delivery is implemented for local/static playback. Phase 2 scheduled ritual invitations are implemented as consent-bound `ritual_invitation` rhythmic briefs with safe acceptance payloads. Phase 3 local completion sync is implemented as an idempotent persistence operation, and the Hermes Rituals completion route now falls back to the repo-local Circulatio bridge when no external completion URL is configured. The renderer emits completion manifest fields, typed top-level ritual `sections`, and provider gates for audio, image, music, and cinema/video. Kokoro speech, DiffRhythm music, and WAN image-to-video provider contracts have been live-smoke-tested through Chutes; provider-backed rendering remains renderer-owned, explicit, budget-gated, and beta-gated for music/video. Chutes Whisper remains unreliable, so fallback caption segments remain canonical; renderer-owned official OpenAI transcription is available only when `transcriptionProvider=openai`, `providerAllowlist` includes `openai`, and the server environment supplies `OPENAI_API_KEY`. Hermes Rituals keeps the existing player UI while using real audio duration, decoded waveform peaks, scrub-linked waveform progress, generated images, typed sections, recommended lenses, explicit body capture, and no-op session events for future Hermes subscription. Circulatio still does not own frontend rendering, cron, consent prompting, delivery, tool routing, or external media calls.
 
 Circulatio should evolve from a text interpretation backend into a **symbolic backend that emits embodied, voice-aware, breath-aware, interaction-ready presentation plans**. Hosts render them; Circulatio does not own frontend code.
 
@@ -18,6 +18,61 @@ For live camera/body-reading guidance, see `EMBODIED_GUIDANCE_SURFACE.md`. That 
 
 ---
 
+## Layered Ritual System Map
+
+The ritual experience is a stack of connected layers. Each layer has a narrow job so the whole path can become elastic without turning Circulatio into a router or media runtime.
+
+```text
+Layer 0  Circulatio memory/context
+         dreams, body states, events, symbols, journeys, alive-today summaries
+
+Layer 1  Hermes-agent routing
+         user message + memory context -> one explicit tool choice
+
+Layer 2  Ritual invitation
+         scheduled or manual invitation only; no planning or rendering before acceptance
+
+Layer 3  Accepted ritual plan
+         circulatio_plan_ritual -> PresentationRitualPlan + allowed render surfaces
+
+Layer 4  Renderer handoff
+         mock/static by default; Chutes/OpenAI only with provider, token, budget, and gates
+
+Layer 5  Artifact manifest
+         sections, captions, narration, music, breath, meditation, image, cinema, completion fields
+
+Layer 6  Hermes Rituals playback
+         one artifact player with lenses/channels, not separate product silos
+
+Layer 7  Completion sync
+         explicit completion/reflection/body/practice feedback only; no hidden interpretation
+
+Layer 8  Future live guidance
+         guidanceSessionId + Hermes-agent companion + optional sensor/coach tracks
+```
+
+The E2E seams now have explicit tests and eval cases rather than being left to the symbolic compiler:
+
+- Hermes-agent routing evals cover `dream + body state -> breath + music`, `only breath`, `music but no narration`, full voice/music/image, cinema, scheduled cron, acceptance, decline, and completion.
+- Scheduled `ritual_invitation -> user acceptance -> circulatio_plan_ritual -> renderer -> artifact URL` is represented as an acceptance-gated path; decline stays response-only.
+- Browser playback E2E covers narration, ambient music, captions, breath pacer, cinema, completion sync, and narrow breath+music artifacts.
+- Journey CLI reports now expose selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, and browser check result.
+- Whisper through Chutes remains unresolved; fallback captions are canonical and official OpenAI transcription is optional provider-backed caption refinement.
+
+Hermes-agent may decide to deploy only the surfaces the user/context calls for. Examples:
+
+```text
+settle the body now      -> breath + optional sparse captions, no narration, no music
+spoken meditation        -> audio at slow speed + captions + meditation field
+breath with ambient bed  -> breath + music, no narration unless explicitly useful
+dream integration ritual -> audio + captions + breath/meditation + optional music/image
+cinematic artifact       -> image/cinema only when explicitly requested and beta gates pass
+```
+
+`text` remains plan metadata and fallback content. It should not force a visible text-heavy experience when Hermes chose breath, music, or meditation as the active surface.
+
+---
+
 ## Bridge To Embodied Guidance
 
 Embodied presentation should become the stable base that live body guidance can attach to later.
@@ -27,14 +82,20 @@ Implemented now in the presentation layer:
 - `deriveRitualExperienceFrame` derives phase, active section, recommended lens, effective lens, available tracks, body prompt mode, and allowed explicit writes;
 - manual lens switching remains available while section `preferredLens` supplies the default foreground surface;
 - captions attach to sections by time overlap but no longer define canonical structure when sections are present;
-- body-response capture is available at closing/completion as an explicit user action through the Body lens or rail;
+- completion capture is available at closing/completion as an explicit user action through the Body lens or rail, including no-note completion, body state, literal words, and practice feedback;
 - host-side ritual session events exist as a local no-op contract for future Hermes subscription;
 - artifact completion remains idempotent and separate from practice, active imagination, and camera telemetry.
+
+Implemented as the first embodied-guidance bridge:
+- `/live/{guidanceSessionId}` opens a no-camera-first guidance shell attached to an artifact context;
+- the shell supports breath, meditation, image, movement, and companion-cue focus modes;
+- camera preflight is explicit and camera permission is requested only after user action;
+- the companion remains a bounded track inside the live shell.
 
 Do later in the embodied guidance surface:
 - add camera/body signals as a sensor track;
 - add reference-video comparison as a media track extension;
-- attach Hermes-agent to a `guidanceSessionId`;
+- attach production Hermes-agent live coaching to `guidanceSessionId`;
 - use Coach OS `coachState` for live cue selection;
 - persist only explicit body states, practice outcomes, reflections, or active imagination material.
 
@@ -161,14 +222,16 @@ Hermes chat/tool call
 
 This is a local host handoff, not Circulatio core persistence and not provider-backed rendering. The plugin writes local handoff files and static artifacts for development; Circulatio core still only compiles the typed plan.
 
-Phase 1 enabled surfaces are text, `voiceScript`-as-plan, captions, breath, and meditation. Audio is mock/placeholder by default. Chutes provider-backed speech, captions, image, music, and video are available only when the renderer is called with:
+Phase 1 enabled surfaces are text, `voiceScript`-as-plan, captions, breath, and meditation. Audio is mock/placeholder by default. Chutes provider-backed speech, image, music, and video are available only when the renderer is called with:
 - an explicit `--provider-profile chutes_*`
 - a positive `--max-cost-usd`
 - an API token in `CHUTES_API_TOKEN` or the configured token env var
 - a plan that does not disable external providers
 - a renderer-side product gate that allows the requested surface
 
-Circulatio still emits plans only. It does not call Chutes, does not store media blobs, and does not manage artifact cache.
+Caption transcription is separate from speech synthesis. Fallback captions from `voiceScript.segments` are always valid. Official OpenAI transcription may refine timed captions only when `transcriptionProvider=openai`, `providerAllowlist` contains `openai`, and the configured key env var, normally `OPENAI_API_KEY`, is present in the process environment or ignored repo-local `.env`. Literal API keys must never be placed in render policies, manifests, plans, eval data, or logs.
+
+Circulatio still emits plans only. It does not call Chutes or OpenAI, does not store media blobs, and does not manage artifact cache.
 
 ### Stabilization notes
 
@@ -177,7 +240,8 @@ These constraints remain active across the local artifact flow:
 1. Completion UI and routes record only explicit completion, body-state, reflection, or practice-feedback payloads; they must not imply interpretation.
 2. Fallback captions must remain first-class artifact output.
 3. Music and video must remain behind stricter product gates.
-4. Implementation statuses in this document and linked docs must stay current.
+4. OpenAI transcription is optional and failure-tolerant; it must never block artifact validity.
+5. Implementation statuses in this document and linked docs must stay current.
 
 ### Hermes-Controlled Photo + Podcast Artifact Flow
 
@@ -191,7 +255,7 @@ Hermes user intent
 -> plan with audio + captions + symbolic image surfaces
 -> handoff persists plan
 -> handoff invokes renderer with Chutes flags only when strict gates pass
--> renderer calls Kokoro speech, Whisper captions, and Z-Image
+-> renderer calls Kokoro speech and Z-Image; captions use fallback segments or optional OpenAI transcription when gated
 -> renderer writes manifest.json, captions.vtt, audio, and image assets
 -> handoff returns artifactUrl + artifact metadata + warnings
 -> Hermes Rituals plays generated audio and displays image/captions
@@ -223,13 +287,17 @@ Hermes request shape for this flow:
     maxDurationSeconds: 180,
     externalProvidersAllowed: true,
     videoAllowed: false,
-    providerAllowlist: ["mock", "chutes"],
+    providerAllowlist: ["mock", "chutes", "openai"],
     maxCost: { currency: "USD", amount: 0.05 },
 
     // Handoff-only plugin policy for this phase.
     providerProfile: "chutes_all",
     surfaces: ["audio", "captions", "image"],
     transcribeCaptions: true,
+    transcriptionProvider: "openai",
+    openaiApiKeyEnv: "OPENAI_API_KEY",
+    openaiTranscriptionModel: "whisper-1",
+    openaiTranscriptionResponseFormat: "verbose_json",
     requestTimeoutSeconds: 180,
 
     sourceDataPolicy: {
@@ -241,7 +309,7 @@ Hermes request shape for this flow:
 }
 ```
 
-`providerProfile`, `surfaces`, `transcribeCaptions`, `requestTimeoutSeconds`, and `chutesTokenEnv` are handoff-only plugin fields, not formal Circulatio domain fields. `circulatio_plan_ritual` passes the original `renderPolicy` into `HermesRitualArtifactHandoff`; Circulatio core remains provider-agnostic.
+`providerProfile`, `surfaces`, `transcribeCaptions`, `transcriptionProvider`, `openaiApiKeyEnv`, `openaiTranscriptionModel`, `openaiTranscriptionResponseFormat`, `requestTimeoutSeconds`, and token-env names are handoff-only plugin fields, not formal Circulatio domain fields. `circulatio_plan_ritual` passes the original `renderPolicy` into `HermesRitualArtifactHandoff`; Circulatio core remains provider-agnostic.
 
 Internal handoff extraction uses this shape:
 
@@ -253,6 +321,10 @@ HermesHandoffRenderOptions
 - transcribeCaptions
 - requestTimeoutSeconds
 - chutesTokenEnv
+- transcriptionProvider
+- openaiApiKeyEnv
+- openaiTranscriptionModel
+- openaiTranscriptionResponseFormat
 - providerBacked
 - warnings
 ```
@@ -268,6 +340,7 @@ Provider-backed rendering is allowed only when all gates pass:
 7. Requested surfaces intersect `result.renderRequest.allowedSurfaces`.
 8. Selected surfaces are limited to `audio`, `captions`, and `image`.
 9. The plan allows external providers and includes `no_raw_material_to_external_provider`.
+10. If `transcriptionProvider=openai`, `providerAllowlist` must include `openai`, the configured `openaiApiKeyEnv` must exist, and failure must fall back to plan-derived captions.
 
 Safe surface selection:
 
@@ -299,6 +372,10 @@ scripts/render_ritual_artifact.py \
   --provider-profile chutes_all \
   --surfaces audio,captions,image \
   --transcribe-captions \
+  --transcription-provider openai \
+  --openai-api-key-env OPENAI_API_KEY \
+  --openai-transcription-model whisper-1 \
+  --openai-transcription-response-format verbose_json \
   --max-cost-usd {positiveBudget} \
   --request-timeout-seconds {timeout} \
   --public-base /artifacts/{artifactId}
@@ -308,8 +385,9 @@ Provider safety and privacy rules:
 
 - Kokoro receives only derived `voiceScript` text.
 - Z-Image receives only `visualPromptPlan.image.prompt` when `providerPromptPolicy == "sanitized_visual_only"`.
-- Source refs, raw material text, graph records, dream bodies, and chat history must never be sent to Chutes.
-- `externalProvidersAllowed=false` blocks Chutes.
+- Source refs, raw material text, graph records, dream bodies, and chat history must never be sent to Chutes or OpenAI.
+- OpenAI receives only the rendered narration audio for transcription, after the plan has already enforced the no-raw-material provider policy.
+- `externalProvidersAllowed=false` blocks Chutes and OpenAI transcription.
 - Missing `no_raw_material_to_external_provider` blocks Chutes.
 - Video and music remain disabled for this flow.
 - Provider warnings are returned to Hermes in `artifact.renderWarnings` and merged into response warnings.
@@ -330,7 +408,8 @@ For a successful Chutes-backed photo + podcast artifact, `manifest.json` should 
       durationMs: null,
       provider: "chutes",
       model: "chutes-kokoro",
-      voiceId: "chutes-kokoro",
+      voiceId: "af_heart" | "af_nicole" | string,
+      speed: 0.82 | 0.9 | 1.0,
       checksum: string
     },
     captions: {
@@ -349,13 +428,13 @@ For a successful Chutes-backed photo + podcast artifact, `manifest.json` should 
   render: {
     rendererVersion: "ritual-renderer.v1",
     mode: "render_static",
-    providers: ["mock", "chutes"],
+    providers: ["mock", "chutes", "openai"],
     warnings: []
   }
 }
 ```
 
-Degraded states remain valid when the manifest and captions are valid: Whisper failure keeps fallback captions; audio failure can leave placeholder audio plus warnings; image failure can leave image disabled plus warnings; missing token, zero budget, or disabled providers fall back to mock/dry-run-compatible output.
+Degraded states remain valid when the manifest and captions are valid: unresolved or failed Chutes/OpenAI transcription keeps fallback captions; audio failure can leave placeholder audio plus warnings; image failure can leave image disabled plus warnings; missing token, zero budget, or disabled providers fall back to mock/dry-run-compatible output.
 
 Existing manifests are checked for suitability before reuse. A mock manifest can satisfy a mock request, but it cannot satisfy a Chutes audio request unless `surfaces.audio.src` exists and `provider == "chutes"`; it cannot satisfy a Chutes image request unless image is enabled with a Chutes `src`; captions may be provider or fallback captions as long as segments or `captions.vtt` exist.
 
@@ -370,7 +449,7 @@ Frontend playback rules:
 - The scrub bar, audio element, decoded waveform progress, captions, and section clock share the same media time.
 - Real audio metadata can arrive after first render; browser tests should wait for slider duration to switch from planned manifest duration to actual audio duration before asserting scrub behavior.
 - Image-backed artifacts enter the Photo lens by default unless a cinema video is present.
-- Caption timing from Whisper or fallback segments drives `CaptionStack`, section rows, transcript grouping, and ElevenLabs-style character alignment.
+- Caption timing from fallback segments, or a future working transcription provider, drives `CaptionStack`, section rows, transcript grouping, and ElevenLabs-style character alignment.
 - `TranscriptCard` uses caption-derived character timing where segments exist; exact word-level alignment remains a future provider surface.
 
 Script-duration follow-up: the current plan duration can target 120-180 seconds, but actual `voiceScript` text may be shorter. If exact podcast length becomes product-critical, add a podcast/broadcast profile in `CirculatioCore._presentation_voice_segments()` that accepts `target_seconds`, estimates a measured-pace word budget of roughly 240-280 words for two minutes or 330-390 words for three minutes, and emits structured segments such as opening, source thread, symbolic image, integration, and closing.
@@ -382,7 +461,7 @@ Tests for this flow should cover:
 - Handoff builds Chutes argv only when mode, external provider, allowlist, profile, budget, token, plan policy, and surface gates pass.
 - Handoff always passes explicit `--surfaces audio,captions,image` for this flow.
 - Existing mock manifests do not block Chutes rerender when Chutes is actually requested.
-- Renderer fallback captions survive Whisper failure.
+- Renderer fallback captions remain valid when transcription is unavailable or unresolved.
 - Explicit `--surfaces audio,captions,image` with `chutes_all` does not render music or cinema.
 - Frontend components play `artifact.audioUrl` before silent fallback.
 
@@ -590,7 +669,7 @@ This follows the general idempotency-key pattern for retry-safe POST side effect
 
 Provider hardening remains renderer-side:
 - Chutes speech and image stay opt-in and budget-gated.
-- Whisper/captions may fail transiently.
+- The current Whisper/Chutes caption path is unresolved and must not be required for a passing ritual artifact.
 - Fallback captions from `voiceScript.segments` stay first-class.
 - Fallback captions must be valid timed cue files.
 - Cinema/video is an opt-in manifest surface on `/artifacts/{artifactId}`, not a separate
@@ -613,7 +692,7 @@ Provider hardening remains renderer-side:
 - Reflection is stored literally only when user-authored.
 - Practice feedback is recorded only when explicitly provided.
 - No interpretation is triggered.
-- Caption fallback survives Whisper failure and writes WebVTT cues.
+- Caption fallback survives missing or unresolved transcription and writes WebVTT cues.
 - Music and video remain off by default.
 - External providers remain opt-in, budget-gated, and renderer-owned.
 
@@ -654,12 +733,17 @@ VoiceScript
 - segments[]
 - tone: steady | gentle | clear | warm | holding | neutral
 - pace: normal | measured | slow
+- voiceId?: Kokoro voice id such as af_heart
+- speed?: Kokoro speech speed, 0.1-3.0
 - pausePolicy
 - silenceMarkers[]
 - contraindications[]
 ```
 
-The LLM should not emit raw SSML as canonical output. It should emit structured voice intent. Deterministic code can then render safe SSML or plain-text pause instructions.
+The LLM should not emit raw SSML as canonical output. It should emit structured voice intent.
+Deterministic code can then render safe SSML, plain-text pause instructions, or provider-specific
+speech settings. For meditation and breath-led rituals, Hermes should prefer slower speech
+(`pace=slow` or `speed` around `0.82-0.9`) unless the user asks for a normal spoken pace.
 
 ### BreathCycleSpec
 
@@ -780,6 +864,11 @@ input
       enabled: boolean
     audio:
       enabled: boolean
+    music:
+      enabled: boolean
+      allowExternalGeneration: boolean
+      styleIntent?: dream_integration | body_settling | threshold_crossing | quiet_reflection | mythic_motion
+      musicDurationSeconds?: integer
 - privacyClass
 - safetyContext
 - deliveryPolicy
@@ -802,6 +891,33 @@ Chutes cinema rendering requires all of:
 - `renderRequest.allowedSurfaces` containing `cinema`
 - `visualPromptPlan.cinema.providerPromptPolicy = sanitized_visual_only`
 - a non-empty sanitized storyboard prompt
+
+Chutes DiffRhythm music rendering requires all of:
+- `requestedSurfaces.music.enabled = true`
+- `requestedSurfaces.music.allowExternalGeneration = true`
+- a host-selected `requestedSurfaces.music.styleIntent` when Hermes memory has enough signal
+- `renderPolicy.mode = render_static`
+- `renderPolicy.externalProvidersAllowed = true`
+- `renderPolicy.providerAllowlist` containing `chutes`
+- `renderPolicy.providerProfile = chutes_music` or `chutes_all`
+- `renderPolicy.surfaces` containing `music`
+- `renderPolicy.allowBetaMusic = true`
+- positive budget and a configured Chutes token
+- `renderRequest.allowedSurfaces` containing `music`
+- `plan.music.providerPromptPolicy = derived_user_facing_only`
+- a non-empty `plan.music.stylePrompt`
+
+The style prompt is derived from approved/user-facing Circulatio summaries, active themes,
+recurring symbols, and Hermes-selected style intent. It must not contain raw dream text,
+private notes, or unapproved material. The renderer sends that value to DiffRhythm as
+`style_prompt`; narration audio remains `surfaces.audio`, and generated music remains the
+separate `surfaces.music` ambient bed.
+
+Hermes may also request narrow ritual plans. If the user asks for only breath and music,
+the host should explicitly set `requestedSurfaces.breath.enabled=true`,
+`requestedSurfaces.music.enabled=true`, and set unrelated surfaces such as captions,
+meditation, audio, image, and cinema to `enabled=false`. `text` remains plan metadata even
+when no spoken or visual text surface is rendered.
 
 Completion sync uses a separate operation:
 
@@ -845,12 +961,14 @@ Hermes must enforce consent before scheduled invitation delivery. Circulatio can
 Renderer-owned responsibilities:
 - Extend artifact manifest `interaction` with completion flags.
 - Populate stable completion fields for frontend use.
-- Preserve fallback captions on Whisper failure.
+- Preserve fallback captions when transcription is unavailable or unresolved.
 - Keep provider calls isolated under provider adapters.
 - Keep provider caches renderer-owned.
 - Enforce budget gates before provider calls.
 - Enforce raw prompt guards before provider calls.
 - Keep video behind explicit beta/developer gates.
+- Keep music behind explicit beta/developer gates and require a non-empty
+  approved-summary-derived DiffRhythm style prompt.
 - Keep default weekly ritual artifacts text, breath, meditation, and captions only.
 
 `contracts.py` should model completion fields in the manifest. `renderer.py` should fill them. `providers/chutes.py` should remain provider-specific and should not leak provider assumptions into Circulatio domain types.
@@ -942,7 +1060,7 @@ When user-authored reflection is submitted on completion, it is stored literally
 ### Renderer
 
 - `contracts.py`: extend manifest `interaction` with completion flags.
-- `renderer.py`: populate completion fields, harden provider gates, preserve fallback captions on Whisper failure.
+- `renderer.py`: populate completion fields, harden provider gates, preserve fallback captions when transcription is unavailable or unresolved.
 - `cli.py`: add cache flags only if renderer-owned cache is implemented.
 - `providers/chutes.py`: keep provider isolation; add stricter errors only as needed.
 - `scripts/render_ritual_artifact.py`: no functional change expected.
@@ -979,7 +1097,7 @@ When user-authored reflection is submitted on completion, it is stored literally
 - Backend completion service tests for event storage, replay, conflict, reflection-only storage, and no interpretation.
 - Hermes bridge/plugin tests for completion tool dispatch and schema.
 - Frontend route tests for valid POST, missing manifest, ID mismatch, missing idempotency, and adapter not configured.
-- Renderer tests for Whisper failure fallback, budget gate, raw prompt guard, video gate, and default weekly no music/video.
+- Renderer tests for fallback captions without a working transcription provider, budget gate, raw prompt guard, video gate, and default weekly no music/video.
 
 ### Phase 3 evals
 

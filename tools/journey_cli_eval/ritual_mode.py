@@ -183,9 +183,14 @@ class RitualJourneyConfig:
     provider_profile: str
     live_providers: bool
     include_video: bool
+    include_music: bool
     allow_beta_video: bool
+    allow_beta_music: bool
     max_cost_usd: float
     chutes_token_env: str
+    transcription_provider: str
+    openai_api_key_env: str
+    openai_transcription_model: str
     http_check: bool
     request_timeout_seconds: int
 
@@ -264,9 +269,14 @@ def run_ritual_journey_eval(
     provider_profile: str = "mock",
     live_providers: bool = False,
     include_video: bool = False,
+    include_music: bool = False,
     allow_beta_video: bool = False,
+    allow_beta_music: bool = False,
     max_cost_usd: float = 0.0,
     chutes_token_env: str = "CHUTES_API_TOKEN",
+    transcription_provider: str = "fallback",
+    openai_api_key_env: str = "OPENAI_API_KEY",
+    openai_transcription_model: str = "whisper-1",
     http_check: bool = False,
     request_timeout_seconds: int = 180,
     run_id: str | None = None,
@@ -283,9 +293,14 @@ def run_ritual_journey_eval(
         provider_profile=provider_profile,
         live_providers=live_providers,
         include_video=include_video,
+        include_music=include_music,
         allow_beta_video=allow_beta_video,
+        allow_beta_music=allow_beta_music,
         max_cost_usd=max_cost_usd,
         chutes_token_env=chutes_token_env,
+        transcription_provider=transcription_provider,
+        openai_api_key_env=openai_api_key_env,
+        openai_transcription_model=openai_transcription_model,
         http_check=http_check,
         request_timeout_seconds=request_timeout_seconds,
     )
@@ -364,13 +379,27 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
                 "providerProfile": config.provider_profile,
                 "liveProviders": config.live_providers,
                 "includeVideo": config.include_video,
+                "includeMusic": config.include_music,
                 "allowBetaVideo": config.allow_beta_video,
+                "allowBetaMusic": config.allow_beta_music,
                 "maxCostUsd": config.max_cost_usd,
                 "chutesTokenEnv": config.chutes_token_env,
+                "transcriptionProvider": config.transcription_provider,
+                "openaiApiKeyEnv": config.openai_api_key_env,
+                "openaiTranscriptionModel": config.openai_transcription_model,
                 "httpCheck": config.http_check,
             }
         ),
         "scenarios": [daily.__dict__, weekly.__dict__, *negative_results],
+        "selectedToolSequence": _tool_sequence(recorder.calls),
+        "surfaceRequests": _surface_requests(recorder.calls),
+        "renderPolicies": _render_policies(recorder.calls),
+        "artifactUrls": [str(item.get("url") or "") for item in artifacts],
+        "manifestSurfaces": {
+            str(item.get("artifactId") or ""): item.get("manifestSummary", {})
+            for item in artifacts
+        },
+        "browserCheckSummary": _browser_check_summary(browser_checks),
         "scorecard": scorecard,
         "passed": not _has_failed(scorecard),
         "findings": findings,
@@ -461,7 +490,10 @@ async def _run_daily_scenario(
         scenario.artifact_ids.append(str(artifact["artifactId"]))
         scenario.warnings.extend(str(item) for item in artifact.get("warnings", []) if str(item))
         artifacts.append(artifact)
-        browser_checks.append(_audit_artifact(artifact, config=config, completed=False))
+        audit = _audit_artifact(artifact, config=config, completed=False)
+        browser_checks.append(audit)
+        artifact["browserCheckResult"] = "pass" if audit.get("passed") else "fail"
+        artifact["browserCheckPassed"] = bool(audit.get("passed"))
         completion = await _record_completion(
             config=config,
             recorder=recorder,
@@ -471,6 +503,8 @@ async def _run_daily_scenario(
         )
         scenario.completion_ids.append(str(completion.get("completionId") or ""))
         _mark_completion_submitted(browser_checks[-1], ok=bool(completion.get("ok")))
+        artifact["browserCheckResult"] = "pass" if browser_checks[-1].get("passed") else "fail"
+        artifact["browserCheckPassed"] = bool(browser_checks[-1].get("passed"))
         _event(
             timeline,
             scenario.name,
@@ -554,7 +588,10 @@ async def _run_weekly_scenario(
         scenario.artifact_ids.append(str(artifact["artifactId"]))
         scenario.warnings.extend(str(item) for item in artifact.get("warnings", []) if str(item))
         artifacts.append(artifact)
-        browser_checks.append(_audit_artifact(artifact, config=config, completed=False))
+        audit = _audit_artifact(artifact, config=config, completed=False)
+        browser_checks.append(audit)
+        artifact["browserCheckResult"] = "pass" if audit.get("passed") else "fail"
+        artifact["browserCheckPassed"] = bool(audit.get("passed"))
         completion = await _record_completion(
             config=config,
             recorder=recorder,
@@ -564,6 +601,8 @@ async def _run_weekly_scenario(
         )
         scenario.completion_ids.append(str(completion.get("completionId") or ""))
         _mark_completion_submitted(browser_checks[-1], ok=bool(completion.get("ok")))
+        artifact["browserCheckResult"] = "pass" if browser_checks[-1].get("passed") else "fail"
+        artifact["browserCheckPassed"] = bool(browser_checks[-1].get("passed"))
         _event(
             timeline,
             scenario.name,
@@ -684,7 +723,10 @@ async def _run_negative_scenarios(
     )
     if missing_artifact:
         artifacts.append(missing_artifact)
-        browser_checks.append(_audit_artifact(missing_artifact, config=config, completed=False))
+        audit = _audit_artifact(missing_artifact, config=config, completed=False)
+        browser_checks.append(audit)
+        missing_artifact["browserCheckResult"] = "pass" if audit.get("passed") else "fail"
+        missing_artifact["browserCheckPassed"] = bool(audit.get("passed"))
 
     zero_budget_policy = _provider_policy(
         config=config,
@@ -777,6 +819,7 @@ def _plan_payload(
 ) -> _JSON:
     image_requested = bool(config.live_providers) if request_image is None else request_image
     cinema_requested = bool(config.include_video) if request_cinema is None else request_cinema
+    music_requested = bool(config.include_music)
     return {
         "ritualIntent": intent,
         "narrativeMode": "hybrid",
@@ -805,15 +848,28 @@ def _plan_payload(
             },
             "image": {"enabled": image_requested, "styleIntent": "symbolic_non_literal"},
             "cinema": {"enabled": cinema_requested, "maxDurationSeconds": 8},
+            "music": {
+                "enabled": music_requested,
+                "allowExternalGeneration": music_requested,
+                "styleIntent": "dream_integration",
+                "musicDurationSeconds": 60,
+            },
         },
         "renderPolicy": render_policy
         or _provider_policy(
             config=config,
             live=config.live_providers,
             provider_profile=config.provider_profile,
-            surfaces=["audio", "captions", "image", *(["video"] if config.include_video else [])],
+            surfaces=[
+                "audio",
+                "captions",
+                "image",
+                *(["music"] if config.include_music else []),
+                *(["video"] if config.include_video else []),
+            ],
             video_allowed=config.include_video,
             allow_beta_video=config.allow_beta_video,
+            allow_beta_music=config.allow_beta_music,
             max_cost_usd=config.max_cost_usd,
             chutes_token_env=config.chutes_token_env,
         ),
@@ -843,9 +899,16 @@ def _weekly_acceptance_payload(*, invitation: _JSON | None, config: RitualJourne
         config=config,
         live=config.live_providers,
         provider_profile=config.provider_profile,
-        surfaces=["audio", "captions", "image", *(["video"] if config.include_video else [])],
+        surfaces=[
+            "audio",
+            "captions",
+            "image",
+            *(["music"] if config.include_music else []),
+            *(["video"] if config.include_video else []),
+        ],
         video_allowed=config.include_video,
         allow_beta_video=config.allow_beta_video,
+        allow_beta_music=config.allow_beta_music,
         max_cost_usd=config.max_cost_usd,
         chutes_token_env=config.chutes_token_env,
     )
@@ -855,6 +918,12 @@ def _weekly_acceptance_payload(*, invitation: _JSON | None, config: RitualJourne
         requested.setdefault("captions", {"enabled": True, "format": "webvtt"})
         requested["image"] = {"enabled": bool(config.live_providers)}
         requested["cinema"] = {"enabled": bool(config.include_video), "maxDurationSeconds": 8}
+        requested["music"] = {
+            "enabled": bool(config.include_music),
+            "allowExternalGeneration": bool(config.include_music),
+            "styleIntent": "dream_integration",
+            "musicDurationSeconds": 60,
+        }
     return payload
 
 
@@ -868,6 +937,7 @@ def _provider_policy(
     chutes_token_env: str | None = None,
     video_allowed: bool = False,
     allow_beta_video: bool = False,
+    allow_beta_music: bool = False,
 ) -> _JSON:
     if not live:
         return {
@@ -880,20 +950,30 @@ def _provider_policy(
             "surfaces": surfaces,
             "videoAllowed": False,
             "allowBetaVideo": False,
+            "allowBetaMusic": False,
+            "transcriptionProvider": "fallback",
             "maxCost": {"currency": "USD", "amount": 0},
         }
+    provider_allowlist = ["chutes"]
+    if config.transcription_provider == "openai":
+        provider_allowlist.append("openai")
     return {
         "mode": "render_static",
         "defaultDurationSeconds": 120,
         "maxDurationSeconds": 180,
         "externalProvidersAllowed": True,
-        "providerAllowlist": ["chutes"],
+        "providerAllowlist": provider_allowlist,
         "providerProfile": provider_profile,
         "surfaces": surfaces,
         "transcribeCaptions": "captions" in surfaces,
+        "transcriptionProvider": config.transcription_provider,
+        "openaiApiKeyEnv": config.openai_api_key_env,
+        "openaiTranscriptionModel": config.openai_transcription_model,
+        "openaiTranscriptionResponseFormat": "verbose_json",
         "requestTimeoutSeconds": config.request_timeout_seconds,
         "videoAllowed": video_allowed,
         "allowBetaVideo": allow_beta_video,
+        "allowBetaMusic": allow_beta_music,
         "chutesTokenEnv": chutes_token_env or config.chutes_token_env,
         "maxCost": {"currency": "USD", "amount": config.max_cost_usd},
         "maxCostUsd": config.max_cost_usd if max_cost_usd is None else max_cost_usd,
@@ -971,6 +1051,9 @@ def _artifact_from_response(
         "surfaces": artifact.get("surfaces", {}),
         "warnings": list(dict.fromkeys(warnings)),
         "manifestSummary": _manifest_summary(manifest),
+        "manifestSurfaces": _manifest_summary(manifest),
+        "browserCheckResult": "pending",
+        "browserCheckPassed": False,
     }
 
 
@@ -982,6 +1065,8 @@ def _audit_artifact(artifact: _JSON, *, config: RitualJourneyConfig, completed: 
         manifest.get("interaction") if isinstance(manifest.get("interaction"), dict) else {}
     )
     artifact_id = str(artifact.get("artifactId") or manifest.get("artifactId") or "")
+    scenario = str(artifact.get("scenario") or "")
+    accepted_provider_run = bool(config.live_providers and scenario in {"daily", "weekly"})
     checks: list[_JSON] = []
 
     def add(name: str, status: str, detail: str = "") -> None:
@@ -1005,9 +1090,15 @@ def _audit_artifact(artifact: _JSON, *, config: RitualJourneyConfig, completed: 
         add("audio_play_works", "pass" if audio_path.exists() else "fail")
         add("scrub_moves_time_and_waveform", "pass" if audio_path.exists() else "fail")
     else:
-        add("audio_wav_loads", "skip", "audio provider fallback expected")
-        add("audio_play_works", "skip", "no rendered audio asset")
-        add("scrub_moves_time_and_waveform", "skip", "no rendered audio asset")
+        status = "fail" if accepted_provider_run else "skip"
+        detail = (
+            "live provider audio missing"
+            if status == "fail"
+            else "audio provider fallback expected"
+        )
+        add("audio_wav_loads", status, detail)
+        add("audio_play_works", status, detail)
+        add("scrub_moves_time_and_waveform", status, detail)
 
     image = surfaces.get("image") if isinstance(surfaces.get("image"), dict) else {}
     image_src = str(image.get("src") or "") if isinstance(image, dict) else ""
@@ -1019,7 +1110,25 @@ def _audit_artifact(artifact: _JSON, *, config: RitualJourneyConfig, completed: 
             str(image_path),
         )
     else:
-        add("generated_image_visible_on_photo", "skip", "image provider fallback expected")
+        status = "fail" if accepted_provider_run else "skip"
+        detail = (
+            "live provider image missing"
+            if status == "fail"
+            else "image provider fallback expected"
+        )
+        add("generated_image_visible_on_photo", status, detail)
+
+    music = surfaces.get("music") if isinstance(surfaces.get("music"), dict) else {}
+    music_src = str(music.get("src") or "") if isinstance(music, dict) else ""
+    if music_src:
+        music_path = manifest_path.with_name(Path(music_src).name)
+        add("music_audio_loads", "pass" if music_path.exists() else "fail", str(music_path))
+        add("music_loops_and_syncs", "pass" if music_path.exists() else "fail")
+    else:
+        status = "fail" if accepted_provider_run and config.include_music else "skip"
+        detail = "live provider music missing" if status == "fail" else "music not requested"
+        add("music_audio_loads", status, detail)
+        add("music_loops_and_syncs", status, detail)
 
     cinema = surfaces.get("cinema") if isinstance(surfaces.get("cinema"), dict) else {}
     cinema_src = str(cinema.get("src") or "") if isinstance(cinema, dict) else ""
@@ -1027,7 +1136,13 @@ def _audit_artifact(artifact: _JSON, *, config: RitualJourneyConfig, completed: 
         cinema_path = manifest_path.with_name(Path(cinema_src).name)
         add("cinema_mp4_loads", "pass" if cinema_path.exists() else "fail", str(cinema_path))
     else:
-        add("cinema_mp4_loads", "skip", "video beta gate blocked or not requested")
+        status = "fail" if accepted_provider_run and config.include_video else "skip"
+        detail = (
+            "live provider cinema missing"
+            if status == "fail"
+            else "video beta gate blocked or not requested"
+        )
+        add("cinema_mp4_loads", status, detail)
 
     breath = surfaces.get("breath") if isinstance(surfaces.get("breath"), dict) else {}
     meditation = surfaces.get("meditation") if isinstance(surfaces.get("meditation"), dict) else {}
@@ -1060,6 +1175,77 @@ def _mark_completion_submitted(audit: _JSON, *, ok: bool) -> None:
         if isinstance(check, dict) and check.get("name") == "completion_submit_works":
             check["status"] = "pass" if ok else "fail"
             check["detail"] = "completion tool returned ok" if ok else "completion tool failed"
+    audit["passed"] = not any(
+        isinstance(check, dict) and check.get("status") == "fail"
+        for check in audit.get("checks", [])
+    )
+
+
+def _tool_sequence(tool_calls: list[_JSON]) -> list[_JSON]:
+    return [
+        {
+            "scenario": call.get("scenario"),
+            "turn": call.get("turn"),
+            "tool": call.get("tool"),
+            "status": call.get("status"),
+        }
+        for call in tool_calls
+    ]
+
+
+def _surface_requests(tool_calls: list[_JSON]) -> list[_JSON]:
+    requests: list[_JSON] = []
+    for call in tool_calls:
+        if call.get("tool") != "circulatio_plan_ritual":
+            continue
+        payload = call.get("payload") if isinstance(call.get("payload"), dict) else {}
+        requests.append(
+            {
+                "scenario": call.get("scenario"),
+                "turn": call.get("turn"),
+                "requestedSurfaces": payload.get("requestedSurfaces", {}),
+            }
+        )
+    return requests
+
+
+def _render_policies(tool_calls: list[_JSON]) -> list[_JSON]:
+    policies: list[_JSON] = []
+    for call in tool_calls:
+        if call.get("tool") != "circulatio_plan_ritual":
+            continue
+        payload = call.get("payload") if isinstance(call.get("payload"), dict) else {}
+        policies.append(
+            {
+                "scenario": call.get("scenario"),
+                "turn": call.get("turn"),
+                "renderPolicy": payload.get("renderPolicy", {}),
+            }
+        )
+    return policies
+
+
+def _browser_check_summary(browser_checks: list[_JSON]) -> list[_JSON]:
+    summary: list[_JSON] = []
+    for audit in browser_checks:
+        failed = []
+        skipped = []
+        for check in audit.get("checks", []):
+            if not isinstance(check, dict):
+                continue
+            if check.get("status") == "fail":
+                failed.append(check.get("name"))
+            if check.get("status") == "skip":
+                skipped.append(check.get("name"))
+        summary.append(
+            {
+                "artifactId": audit.get("artifactId"),
+                "passed": bool(audit.get("passed")),
+                "failedChecks": failed,
+                "skippedChecks": skipped,
+            }
+        )
+    return summary
 
 
 def _scorecard(
@@ -1122,6 +1308,13 @@ def _scorecard(
             ),
             "transcript_sections": _passfail(
                 _audit_status_ok(browser_checks, "section_list_includes_transcript")
+            ),
+            "music_real_or_expected_fallback": _passfail(
+                _audit_status_ok(browser_checks, "music_audio_loads")
+            ),
+            "music_sync": _passfail(_audit_status_ok(browser_checks, "music_loops_and_syncs")),
+            "cinema_real_or_expected_fallback": _passfail(
+                _audit_status_ok(browser_checks, "cinema_mp4_loads")
             ),
         },
         "ui": {
@@ -1230,6 +1423,14 @@ def _render_markdown(*, report: _JSON, artifacts: object, browser_checks: object
     for item in report.get("jtbd", []):
         if isinstance(item, dict):
             lines.append(f"- {item.get('job')}: {item.get('outcome')}")
+    lines.extend(["", "## Selected Tool Sequence"])
+    for item in report.get("selectedToolSequence", []):
+        if isinstance(item, dict):
+            scenario = item.get("scenario")
+            turn = item.get("turn")
+            tool = item.get("tool")
+            status = item.get("status")
+            lines.append(f"- `{scenario}/{turn}` -> `{tool}` ({status})")
     lines.extend(["", "## Scorecard"])
     scorecard = report.get("scorecard") if isinstance(report.get("scorecard"), dict) else {}
     for group, values in scorecard.items():
@@ -1242,7 +1443,11 @@ def _render_markdown(*, report: _JSON, artifacts: object, browser_checks: object
     lines.extend(["", "## Artifacts"])
     for artifact in artifacts if isinstance(artifacts, list) else []:
         if isinstance(artifact, dict):
-            lines.append(f"- `{artifact.get('artifactId')}` - {artifact.get('url')}")
+            surfaces = artifact.get("manifestSurfaces", artifact.get("manifestSummary", {}))
+            lines.append(
+                f"- `{artifact.get('artifactId')}` - {artifact.get('url')} - "
+                f"browser: `{artifact.get('browserCheckResult')}` - surfaces: `{surfaces}`"
+            )
     lines.extend(["", "## Browser Checks"])
     for audit in browser_checks if isinstance(browser_checks, list) else []:
         if not isinstance(audit, dict):
@@ -1273,6 +1478,7 @@ def _manifest_summary(manifest: _JSON) -> _JSON:
     meditation = surfaces.get("meditation") if isinstance(surfaces.get("meditation"), dict) else {}
     image = surfaces.get("image") if isinstance(surfaces.get("image"), dict) else {}
     cinema = surfaces.get("cinema") if isinstance(surfaces.get("cinema"), dict) else {}
+    music = surfaces.get("music") if isinstance(surfaces.get("music"), dict) else {}
     return {
         "schemaVersion": manifest.get("schemaVersion"),
         "planId": manifest.get("planId"),
@@ -1282,6 +1488,7 @@ def _manifest_summary(manifest: _JSON) -> _JSON:
         "meditation": bool(meditation.get("enabled")),
         "image": bool(image.get("enabled") and image.get("src")),
         "cinema": bool(cinema.get("enabled") and cinema.get("src")),
+        "music": bool(music.get("src")),
     }
 
 

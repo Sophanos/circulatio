@@ -39,11 +39,16 @@ class RitualRenderOptions(TypedDict, total=False):
     publicBasePath: str
     providerProfile: str
     chutesTokenEnv: str
+    openaiApiKeyEnv: str
     transcribeCaptions: bool
+    transcriptionProvider: Literal["fallback", "chutes", "openai"]
+    openaiTranscriptionModel: str
+    openaiTranscriptionResponseFormat: str
     requestTimeoutSeconds: int
     maxCostUsd: float
     videoImage: str
     musicSteps: int
+    musicDurationSeconds: int
     allowBetaMusic: bool
     allowBetaVideo: bool
 

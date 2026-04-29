@@ -169,6 +169,7 @@ def parse_args() -> argparse.Namespace:
             "chutes_audio",
             "chutes_image",
             "chutes_video",
+            "chutes_music",
             "chutes_all",
         ],
         help="Provider profile for accepted ritual renders in ritual eval mode.",
@@ -184,9 +185,22 @@ def parse_args() -> argparse.Namespace:
         help="Request cinema in accepted ritual renders. Requires live providers and beta gates.",
     )
     parser.add_argument(
+        "--ritual-include-music",
+        action="store_true",
+        help=(
+            "Request generated music in accepted ritual renders. "
+            "Requires live providers and beta gates."
+        ),
+    )
+    parser.add_argument(
         "--ritual-allow-beta-video",
         action="store_true",
         help="Pass the beta video gate for accepted ritual renders.",
+    )
+    parser.add_argument(
+        "--ritual-allow-beta-music",
+        action="store_true",
+        help="Pass the beta music gate for accepted ritual renders.",
     )
     parser.add_argument(
         "--ritual-max-cost-usd",
@@ -198,6 +212,22 @@ def parse_args() -> argparse.Namespace:
         "--ritual-chutes-token-env",
         default="CHUTES_API_TOKEN",
         help="Environment variable name containing the Chutes token.",
+    )
+    parser.add_argument(
+        "--ritual-transcription-provider",
+        default="fallback",
+        choices=["fallback", "chutes", "openai"],
+        help="Caption transcription provider for provider-backed accepted renders.",
+    )
+    parser.add_argument(
+        "--ritual-openai-api-key-env",
+        default="OPENAI_API_KEY",
+        help="Environment variable name containing the OpenAI API key for transcription.",
+    )
+    parser.add_argument(
+        "--ritual-openai-transcription-model",
+        default="whisper-1",
+        help="OpenAI transcription model for ritual captions.",
     )
     parser.add_argument(
         "--ritual-http-check",
@@ -264,9 +294,14 @@ def main() -> int:
             provider_profile=args.ritual_provider_profile,
             live_providers=args.ritual_live_providers,
             include_video=args.ritual_include_video,
+            include_music=args.ritual_include_music,
             allow_beta_video=args.ritual_allow_beta_video,
+            allow_beta_music=args.ritual_allow_beta_music,
             max_cost_usd=args.ritual_max_cost_usd,
             chutes_token_env=args.ritual_chutes_token_env,
+            transcription_provider=args.ritual_transcription_provider,
+            openai_api_key_env=args.ritual_openai_api_key_env,
+            openai_transcription_model=args.ritual_openai_transcription_model,
             http_check=args.ritual_http_check,
             request_timeout_seconds=args.ritual_request_timeout_seconds,
             run_id=args.ritual_run_id,

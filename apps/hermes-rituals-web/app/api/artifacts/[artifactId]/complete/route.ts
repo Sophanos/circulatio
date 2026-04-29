@@ -14,7 +14,16 @@ function stringArray(value: unknown) {
 
 function cleanMetadata(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
-  const blocked = new Set(["transcript", "captions", "rawMaterialText", "providerPrompt"])
+  const blocked = new Set([
+    "transcript",
+    "captions",
+    "rawMaterialText",
+    "providerPrompt",
+    "cameraData",
+    "videoFrame",
+    "poseLandmarks",
+    "sensorTelemetry"
+  ])
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).filter(([key]) => !blocked.has(key))
   )

@@ -88,16 +88,53 @@ duplicate requests return the original response.
 - If the user only asks to breathe or settle without symbolic context, still use
   `circulatio_plan_ritual` with `ritualIntent` set to `breath_container` or
   `meditation_container`; do not force interpretation.
+- For spoken meditation, breath, or settling rituals, treat speech pace as part
+  of the ritual container. Use `requestedSurfaces.audio.pace="slow"` or
+  `speed` around `0.82-0.9` for immersive meditative delivery; use normal speed
+  only when the user asks for a concise spoken reflection or podcast-like pace.
+  If choosing a voice, pass a Kokoro voice id such as `af_heart` or `af_nicole`
+  as `requestedSurfaces.audio.voiceId`.
 - For image, cinema, or external provider generation, require explicit user
   wording and the matching render policy. Use `cinema`, not `video`, and do not
   request music by default. Otherwise default to text, captions, breath, and
   meditation.
+- If the user asks for ritual music, or asks Hermes to shape a ritual artifact
+  from dream material, mood/body state, recent events, recurring symbols, or
+  an alive-today thread, request the music surface in the same
+  `circulatio_plan_ritual` call. Set `requestedSurfaces.music.enabled=true`,
+  `allowExternalGeneration=true`, and choose a conservative `styleIntent`
+  (`dream_integration`, `body_settling`, `threshold_crossing`, `mythic_motion`,
+  or `quiet_reflection`) from existing Hermes/Circulatio memory. Do not send
+  raw dream text or private notes as a provider prompt; Circulatio derives the
+  Chutes DiffRhythm `style_prompt` from approved summaries in the plan.
+- Provider-backed ritual music also needs `renderPolicy.mode=render_static`,
+  `externalProvidersAllowed=true`, `providerAllowlist` containing `chutes`,
+  `providerProfile=chutes_music` or `chutes_all`, `surfaces` containing
+  `music`, a positive budget, and `allowBetaMusic=true`.
+- If timed caption transcription is requested and Chutes Whisper is unavailable,
+  set `renderPolicy.transcriptionProvider="openai"`,
+  `renderPolicy.openaiApiKeyEnv="OPENAI_API_KEY"`,
+  `renderPolicy.openaiTranscriptionModel="whisper-1"`, and
+  `renderPolicy.openaiTranscriptionResponseFormat="verbose_json"`. Never pass
+  a literal API key in tool arguments; the renderer reads the key from the
+  server environment or ignored repo-local `.env`. If OpenAI transcription fails, fallback captions from the
+  plan remain valid and the artifact should still render.
+- For narrow rituals, explicitly disable surfaces the user did not ask for.
+  For example, a breath-and-music ritual should set `breath.enabled=true`,
+  `music.enabled=true`, and set `captions`, `meditation`, `audio`, `image`,
+  and `cinema` to `{ "enabled": false }` unless Hermes intentionally wants
+  those surfaces. `text` remains plan metadata and should not be treated as a
+  rendered media channel.
 - The local plugin returns a concrete Hermes Rituals artifact URL after safe
   mock/dry-run rendering. Use `openLocal` only when the user explicitly asks to
   open it locally.
 - Scheduled ritual surfacing is a `ritual_invitation` rhythmic brief invitation.
-  Actual ritual planning happens only after the user accepts the invitation;
-  scheduled cron must not call `circulatio_plan_ritual` or render media.
+  Scheduled jobs call only `circulatio_generate_rhythmic_briefs`. Present the
+  returned invitation and safe `acceptancePayload` to the user. Actual ritual
+  planning happens only after the user accepts the invitation; then Hermes calls
+  `circulatio_plan_ritual` with that acceptance payload. Scheduled cron must
+  not call `circulatio_plan_ritual`, invoke renderer handoff, create a practice
+  session, write a weekly review, or run interpretation.
 - If the user wants a practice or rhythmic surfacing, call
   `circulatio_generate_practice_recommendation` or
   `circulatio_generate_rhythmic_briefs`, then use the matching response tool

@@ -125,6 +125,8 @@ export function BodyPicker({
 
   return (
     <motion.div
+      data-testid="ritual-body-picker"
+      data-body-picker-variant={variant}
       className={cn("flex h-full min-h-0 flex-col", compact ? "gap-4 p-4 md:p-5" : "gap-4")}
       layout
       transition={BODY_SPRING}
@@ -208,7 +210,18 @@ export function BodyPicker({
             >
               {wordsOpen || value.noteText ? "Hide words" : "Add words"}
             </button>
-            <span className="text-xs leading-5 text-silver-500">Save from the side panel.</span>
+            {onSubmit ? (
+              <BodySubmitControls
+                canSubmit={canSubmit}
+                completionStatus={completionStatus}
+                submitError={submitError}
+                endpointAvailable={endpointAvailable}
+                disabled={disabled}
+                onSubmit={onSubmit}
+              />
+            ) : (
+              <span className="text-xs leading-5 text-silver-500">Save from the side panel.</span>
+            )}
           </div>
         ) : null}
 

@@ -117,7 +117,13 @@ class PresentationPlanServiceTests(unittest.TestCase):
                     "windowStart": "2026-04-12T00:00:00Z",
                     "windowEnd": "2026-04-19T23:59:59Z",
                     "requestedSurfaces": {
-                        "audio": {"enabled": True, "tone": "steady", "pace": "measured"},
+                        "audio": {
+                            "enabled": True,
+                            "tone": "steady",
+                            "pace": "measured",
+                            "voiceId": "af_nicole",
+                            "speed": 0.86,
+                        },
                         "captions": {"enabled": True, "format": "webvtt"},
                         "image": {
                             "enabled": True,
@@ -144,6 +150,8 @@ class PresentationPlanServiceTests(unittest.TestCase):
             self.assertIn("captions", workflow["renderRequest"]["allowedSurfaces"])
             self.assertIn("image", workflow["renderRequest"]["allowedSurfaces"])
             self.assertNotIn("cinema", workflow["renderRequest"]["allowedSurfaces"])
+            self.assertEqual(plan["speechMarkupPlan"]["voiceId"], "af_nicole")
+            self.assertEqual(plan["speechMarkupPlan"]["speed"], 0.86)
             self.assertTrue(plan["visualPromptPlan"]["image"]["enabled"])
             self.assertEqual(
                 plan["visualPromptPlan"]["image"]["providerPromptPolicy"],
@@ -171,7 +179,12 @@ class PresentationPlanServiceTests(unittest.TestCase):
                     "windowStart": "2026-04-12T00:00:00Z",
                     "windowEnd": "2026-04-19T23:59:59Z",
                     "requestedSurfaces": {
-                        "music": {"enabled": True, "allowExternalGeneration": True},
+                        "music": {
+                            "enabled": True,
+                            "allowExternalGeneration": True,
+                            "styleIntent": "dream_integration",
+                            "musicDurationSeconds": 15,
+                        },
                     },
                     "renderPolicy": {
                         "mode": "render_static",
@@ -186,13 +199,63 @@ class PresentationPlanServiceTests(unittest.TestCase):
 
             plan = workflow["plan"]
             self.assertEqual(plan["music"]["role"], "ambient_bed")
-            self.assertEqual(plan["music"]["providerPromptPolicy"], "none")
+            self.assertEqual(plan["music"]["providerPromptPolicy"], "derived_user_facing_only")
+            self.assertEqual(plan["music"]["styleIntent"], "dream_integration")
+            self.assertEqual(plan["music"]["musicDurationSeconds"], 15)
+            self.assertIn("instrumental", plan["music"]["stylePrompt"])
             self.assertIn("music", workflow["renderRequest"]["allowedSurfaces"])
             self.assertIn(
                 "no_raw_material_to_external_provider",
                 plan["safetyBoundary"]["providerRestrictions"],
             )
             self.assertEqual(llm.interpret_calls, [])
+
+        asyncio.run(run())
+
+    def test_plan_ritual_can_limit_plan_to_breath_and_music_surfaces(self) -> None:
+        async def run() -> None:
+            _, service, _ = self._service()
+            workflow = await service.plan_ritual(
+                {
+                    "userId": "user_1",
+                    "ritualIntent": "breath_container",
+                    "narrativeMode": "breath_only",
+                    "windowStart": "2026-04-12T00:00:00Z",
+                    "windowEnd": "2026-04-19T23:59:59Z",
+                    "requestedSurfaces": {
+                        "breath": {"enabled": True, "request": {"pattern": "steadying"}},
+                        "music": {
+                            "enabled": True,
+                            "allowExternalGeneration": True,
+                            "styleIntent": "body_settling",
+                            "musicDurationSeconds": 15,
+                        },
+                        "captions": {"enabled": False},
+                        "meditation": {"enabled": False},
+                        "audio": {"enabled": False},
+                        "image": {"enabled": False},
+                        "cinema": {"enabled": False},
+                    },
+                    "renderPolicy": {
+                        "mode": "render_static",
+                        "externalProvidersAllowed": True,
+                        "providerAllowlist": ["mock", "chutes"],
+                        "providerProfile": "chutes_music",
+                        "surfaces": ["music"],
+                        "maxCost": {"currency": "USD", "amount": 0.05},
+                        "allowBetaMusic": True,
+                    },
+                }
+            )
+
+            plan = workflow["plan"]
+            self.assertTrue(plan["breath"]["enabled"])
+            self.assertFalse(plan["meditation"]["enabled"])
+            self.assertEqual(plan["music"]["styleIntent"], "body_settling")
+            self.assertEqual(
+                workflow["renderRequest"]["allowedSurfaces"],
+                ["text", "breath", "music"],
+            )
 
         asyncio.run(run())
 

@@ -69,6 +69,11 @@ export function useRitualExperience({
   } | null>(null)
   const eventsRef = useRef<RitualSessionEvent[]>([])
   const previousSectionIdRef = useRef<string | null>(null)
+  const onSessionEventRef = useRef(onSessionEvent)
+
+  useEffect(() => {
+    onSessionEventRef.current = onSessionEvent
+  }, [onSessionEvent])
 
   const baseFrame = useMemo<RitualExperienceFrame>(
     () =>
@@ -80,9 +85,15 @@ export function useRitualExperience({
       }),
     [artifact, completionStatus, currentMs, sections]
   )
+  const lastSectionEndMs = sections.at(-1)?.endMs ?? 0
+  const bodyCompletionOverride =
+    lensOverride?.artifactId === artifact.id &&
+    lensOverride.lens === "body" &&
+    lastSectionEndMs > 0 &&
+    currentMs >= lastSectionEndMs
   const activeLensOverride =
     lensOverride?.artifactId === artifact.id &&
-    lensOverride.sectionId === baseFrame.activeSection?.id
+    (lensOverride.sectionId === baseFrame.activeSection?.id || bodyCompletionOverride)
       ? lensOverride.lens
       : null
   const frame = useMemo<RitualExperienceFrame>(
@@ -99,13 +110,10 @@ export function useRitualExperience({
     [activeLensOverride, artifact, baseFrame, completionStatus, currentMs, sections]
   )
 
-  const emit = useCallback(
-    (event: RitualSessionEvent) => {
-      eventsRef.current.push(event)
-      onSessionEvent?.(event)
-    },
-    [onSessionEvent]
-  )
+  const emit = useCallback((event: RitualSessionEvent) => {
+    eventsRef.current.push(event)
+    onSessionEventRef.current?.(event)
+  }, [])
 
   useEffect(() => {
     previousSectionIdRef.current = null

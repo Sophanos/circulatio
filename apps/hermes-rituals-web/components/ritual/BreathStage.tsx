@@ -330,7 +330,9 @@ export function BreathStage({
       header={immersive ? undefined : header}
       footer={immersive ? immersiveFooter : cardFooter}
     >
-      <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
+      <div data-testid="ritual-breath-pacer" data-breath-phase={phase.label}>
+        <BreathVisual cycle={breathCycle} currentMs={currentMs} phase={phase} />
+      </div>
     </RitualStageShell>
   )
 }

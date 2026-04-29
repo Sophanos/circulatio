@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from circulatio.ritual_renderer.providers import chutes
 from circulatio.ritual_renderer.providers.chutes import ChutesProviderError
+from circulatio.ritual_renderer.providers.openai import OpenAITranscriptionError
 from circulatio.ritual_renderer.renderer import artifact_id_for_plan, render_plan_file
 
 
@@ -162,7 +163,7 @@ class RitualRendererCliTests(unittest.TestCase):
                     "circulatio.ritual_renderer.renderer.synthesize_speech", side_effect=synthesize
                 ):
                     with patch(
-                        "circulatio.ritual_renderer.renderer.transcribe_audio",
+                        "circulatio.ritual_renderer.renderer.transcribe_chutes_audio",
                         return_value={"segments": [{"start": 0, "end": 1.5, "text": "Hello."}]},
                     ):
                         with patch(
@@ -195,6 +196,121 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertNotIn("music", manifest["surfaces"])
             self.assertFalse(manifest["surfaces"]["cinema"]["enabled"])
 
+    def test_openai_transcription_provider_replaces_fallback_captions_when_segments_return(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": self._fixture_plan()}), encoding="utf-8")
+
+            def synthesize(*, out_path: Path, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"audio")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-kokoro",
+                }
+
+            with patch.dict(
+                os.environ,
+                {"CHUTES_API_TOKEN": "test-token", "OPENAI_API_KEY": "test-openai-token"},
+            ):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.synthesize_speech",
+                    side_effect=synthesize,
+                ):
+                    with patch(
+                        "circulatio.ritual_renderer.renderer.openai_provider.transcribe_audio",
+                        return_value={
+                            "segments": [
+                                {
+                                    "id": "seg_oai",
+                                    "start": 0,
+                                    "end": 2.4,
+                                    "text": "OpenAI timed.",
+                                }
+                            ]
+                        },
+                    ) as transcribe:
+                        manifest = render_plan_file(
+                            plan_path=plan_path,
+                            out_dir=out_dir,
+                            options={
+                                "providerProfile": "chutes_speech",
+                                "surfaces": ["audio", "captions"],
+                                "transcribeCaptions": True,
+                                "transcriptionProvider": "openai",
+                                "openaiApiKeyEnv": "OPENAI_API_KEY",
+                                "openaiTranscriptionModel": "whisper-1",
+                                "openaiTranscriptionResponseFormat": "verbose_json",
+                                "maxCostUsd": 0.05,
+                                "requestTimeoutSeconds": 5,
+                                "publicBasePath": "/artifacts/test",
+                            },
+                        )
+
+            transcribe.assert_called_once()
+            captions = manifest["surfaces"]["captions"]["segments"]
+            self.assertEqual(captions[0]["id"], "seg_oai")
+            self.assertEqual(captions[0]["endMs"], 2400)
+            self.assertEqual(captions[0]["text"], "OpenAI timed.")
+            self.assertNotIn("openai_transcription_failed", manifest["render"]["warnings"])
+
+    def test_openai_transcription_failure_keeps_fallback_captions_and_audio(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": self._fixture_plan()}), encoding="utf-8")
+
+            def synthesize(*, out_path: Path, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"audio")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-kokoro",
+                }
+
+            with patch.dict(
+                os.environ,
+                {"CHUTES_API_TOKEN": "test-token", "OPENAI_API_KEY": "test-openai-token"},
+            ):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.synthesize_speech",
+                    side_effect=synthesize,
+                ):
+                    with patch(
+                        "circulatio.ritual_renderer.renderer.openai_provider.transcribe_audio",
+                        side_effect=OpenAITranscriptionError("network down"),
+                    ):
+                        manifest = render_plan_file(
+                            plan_path=plan_path,
+                            out_dir=out_dir,
+                            options={
+                                "providerProfile": "chutes_speech",
+                                "surfaces": ["audio", "captions"],
+                                "transcribeCaptions": True,
+                                "transcriptionProvider": "openai",
+                                "openaiApiKeyEnv": "OPENAI_API_KEY",
+                                "maxCostUsd": 0.05,
+                                "requestTimeoutSeconds": 5,
+                                "publicBasePath": "/artifacts/test",
+                            },
+                        )
+
+            self.assertEqual(manifest["surfaces"]["audio"]["provider"], "chutes")
+            captions = manifest["surfaces"]["captions"]["segments"]
+            self.assertEqual(captions[0]["id"], "cap_1")
+            self.assertTrue((out_dir / "captions.vtt").exists())
+            self.assertTrue(
+                any(
+                    str(item).startswith("openai_transcription_failed")
+                    for item in manifest["render"]["warnings"]
+                )
+            )
+
     def test_chutes_speech_profile_without_token_writes_warning_manifest(self) -> None:
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as tempdir:
@@ -219,6 +335,8 @@ class RitualRendererCliTests(unittest.TestCase):
                     "audio",
                     "--max-cost-usd",
                     "0.01",
+                    "--chutes-token-env",
+                    "MISSING_CHUTES_API_TOKEN",
                 ],
                 cwd=root,
                 env=env,
@@ -231,6 +349,48 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertIn("chutes_provider_missing_api_token", manifest["render"]["warnings"])
             self.assertEqual(manifest["surfaces"]["audio"]["provider"], "mock")
 
+    def test_chutes_audio_passes_plan_voice_and_speed_to_kokoro(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            plan = deepcopy(self._fixture_plan())
+            plan["speechMarkupPlan"]["voiceId"] = "af_nicole"
+            plan["speechMarkupPlan"]["speed"] = 0.82
+            plan_path = temp / "plan.json"
+            out_dir = temp / "artifact"
+            plan_path.write_text(json.dumps({"plan": plan}), encoding="utf-8")
+
+            def synthesize(*, out_path: Path, **_: object) -> dict[str, object]:
+                out_path.write_bytes(b"audio")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-kokoro",
+                }
+
+            with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
+                with patch(
+                    "circulatio.ritual_renderer.renderer.synthesize_speech",
+                    side_effect=synthesize,
+                ) as speech:
+                    manifest = render_plan_file(
+                        plan_path=plan_path,
+                        out_dir=out_dir,
+                        options={
+                            "providerProfile": "chutes_speech",
+                            "surfaces": ["audio"],
+                            "maxCostUsd": 0.05,
+                            "requestTimeoutSeconds": 5,
+                            "publicBasePath": "/artifacts/test",
+                        },
+                    )
+
+            speech.assert_called_once()
+            self.assertEqual(speech.call_args.kwargs["voice"], "af_nicole")
+            self.assertEqual(speech.call_args.kwargs["speed"], 0.82)
+            self.assertEqual(manifest["surfaces"]["audio"]["voiceId"], "af_nicole")
+            self.assertEqual(manifest["surfaces"]["audio"]["speed"], 0.82)
+
     def test_chutes_music_requires_beta_and_plan_permission(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             temp = Path(tempdir)
@@ -239,7 +399,11 @@ class RitualRendererCliTests(unittest.TestCase):
                 "enabled": True,
                 "role": "ambient_bed",
                 "sourceRefs": ["weekly_fixture"],
-                "providerPromptPolicy": "none",
+                "providerPromptPolicy": "derived_user_facing_only",
+                "styleIntent": "quiet_reflection",
+                "stylePrompt": "instrumental reflective ambient music, slow pulse, no vocals",
+                "musicDurationSeconds": 60,
+                "seed": 42,
             }
             plan_path = temp / "plan.json"
             out_dir = temp / "artifact"
@@ -271,7 +435,11 @@ class RitualRendererCliTests(unittest.TestCase):
                 "enabled": True,
                 "role": "ambient_bed",
                 "sourceRefs": ["weekly_fixture"],
-                "providerPromptPolicy": "none",
+                "providerPromptPolicy": "derived_user_facing_only",
+                "styleIntent": "quiet_reflection",
+                "stylePrompt": "instrumental reflective ambient music, slow pulse, no vocals",
+                "musicDurationSeconds": 60,
+                "seed": 42,
             }
             plan_path = temp / "plan.json"
             out_dir = temp / "artifact"
@@ -308,10 +476,17 @@ class RitualRendererCliTests(unittest.TestCase):
 
             music.assert_called_once()
             self.assertEqual(music.call_args.kwargs["steps"], 48)
+            self.assertEqual(
+                music.call_args.kwargs["style_prompt"],
+                "instrumental reflective ambient music, slow pulse, no vocals",
+            )
+            self.assertEqual(music.call_args.kwargs["music_duration"], 60)
+            self.assertEqual(music.call_args.kwargs["seed"], 42)
             self.assertEqual(manifest["surfaces"]["music"]["provider"], "chutes")
             self.assertEqual(manifest["surfaces"]["music"]["model"], "chutes-diffrhythm")
             self.assertEqual(manifest["surfaces"]["music"]["src"], "/artifacts/test/music.wav")
             self.assertTrue(manifest["sections"][0]["channels"]["music"])
+            self.assertTrue(manifest["sections"][1]["channels"]["music"])
 
     def test_chutes_music_skips_when_plan_does_not_allow_music(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -528,7 +703,10 @@ class RitualRendererCliTests(unittest.TestCase):
                     token="test-token",
                     out_path=temp / "music.wav",
                     steps=48,
-                    audio_b64="ignored-legacy-input",
+                    style_prompt="instrumental ambient electronic, slow pulse, no vocals",
+                    music_duration=15,
+                    scheduler="euler",
+                    cfg_strength=4,
                     timeout_seconds=9,
                 )
 
@@ -539,8 +717,53 @@ class RitualRendererCliTests(unittest.TestCase):
             self.assertEqual(payload["seed"], None)
             self.assertEqual(payload["steps"], 48)
             self.assertEqual(payload["lyrics"], None)
+            self.assertEqual(payload["scheduler"], "euler")
             self.assertEqual(payload["batch_size"], 1)
+            self.assertEqual(payload["cfg_strength"], 4.0)
+            self.assertEqual(
+                payload["style_prompt"],
+                "instrumental ambient electronic, slow pulse, no vocals",
+            )
+            self.assertEqual(payload["music_duration"], 15)
             self.assertNotIn("audio_b64", payload)
+
+    def test_chutes_kokoro_speech_payload_matches_live_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            captured: dict[str, object] = {}
+
+            def fake_post_asset(**kwargs: object) -> dict[str, object]:
+                captured.update(kwargs)
+                out_path = kwargs["out_path"]
+                assert isinstance(out_path, Path)
+                out_path.write_bytes(b"audio")
+                return {
+                    "path": out_path,
+                    "mimeType": "audio/wav",
+                    "provider": "chutes",
+                    "model": "chutes-kokoro",
+                }
+
+            with patch(
+                "circulatio.ritual_renderer.providers.chutes._post_asset",
+                side_effect=fake_post_asset,
+            ):
+                chutes.synthesize_speech(
+                    token="test-token",
+                    text="example-string",
+                    voice="af_heart",
+                    speed=0.82,
+                    out_path=temp / "audio.wav",
+                    timeout_seconds=9,
+                )
+
+            self.assertEqual(captured["url"], chutes.KOKORO_SPEAK_URL)
+            payload = captured["payload"]
+            self.assertIsInstance(payload, dict)
+            payload = payload if isinstance(payload, dict) else {}
+            self.assertEqual(payload["text"], "example-string")
+            self.assertEqual(payload["voice"], "af_heart")
+            self.assertEqual(payload["speed"], 0.82)
 
     def test_chutes_video_warning_is_sanitized(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

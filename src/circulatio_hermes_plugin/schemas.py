@@ -483,7 +483,7 @@ ANALYSIS_PACKET_TOOL_SCHEMA = _schema(
 
 PLAN_RITUAL_TOOL_SCHEMA = _schema(
     "circulatio_plan_ritual",
-    "Plan one personalized ritual from existing Circulatio material and return a typed PresentationRitualPlan. Use one ritual-planning call for text, audio, captions, breath, meditation, image, cinema, and music surfaces; do not call separate backend tools per visual mode. Do not use this as generic meditation generation, and do not interpret newly logged material unless the user explicitly asks for meaning. Default to text, captions, breath, and meditation with mock/local rendering. External/generated music requires explicit requestedSurfaces.music.enabled, renderPolicy.externalProvidersAllowed, providerAllowlist containing chutes, positive budget, and renderPolicy.allowBetaMusic. Video or external image/audio generation requires explicit user wording plus renderPolicy.videoAllowed or renderPolicy.externalProvidersAllowed and budget.",
+    "Plan one personalized ritual from existing Circulatio material and return a typed PresentationRitualPlan. Use one ritual-planning call for text, audio, captions, breath, meditation, image, cinema, and music surfaces; do not call separate backend tools per visual mode. Do not use this as generic meditation generation, and do not interpret newly logged material unless the user explicitly asks for meaning. Default to text, captions, breath, and meditation with mock/local rendering. When Hermes memory has enough dream, mood/body-state, recent-event, or symbol context and the user wants a generated ritual/music artifact, request music in this same call so Circulatio can derive a sanitized DiffRhythm style prompt from approved summaries only. External/generated music requires requestedSurfaces.music.enabled, requestedSurfaces.music.allowExternalGeneration, renderPolicy.externalProvidersAllowed, providerAllowlist containing chutes, positive budget, providerProfile chutes_music or chutes_all, renderPolicy.surfaces containing music, and renderPolicy.allowBetaMusic. Video or external image/audio generation requires explicit user wording plus renderPolicy.videoAllowed or renderPolicy.externalProvidersAllowed and budget.",
     {
         "windowStart": {"type": "string"},
         "windowEnd": {"type": "string"},
@@ -544,6 +544,12 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                             "enum": ["neutral", "clear", "gentle", "holding", "steady"],
                         },
                         "pace": {"type": "string", "enum": ["normal", "measured", "slow"]},
+                        "speed": {
+                            "type": "number",
+                            "minimum": 0.1,
+                            "maximum": 3,
+                            "description": "Optional Kokoro speech speed. Use slow values around 0.82-0.9 for meditative or breath-led rituals.",
+                        },
                     },
                 },
                 "captions": {
@@ -630,6 +636,22 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                     "properties": {
                         "enabled": {"type": "boolean"},
                         "allowExternalGeneration": {"type": "boolean"},
+                        "styleIntent": {
+                            "type": "string",
+                            "enum": [
+                                "dream_integration",
+                                "body_settling",
+                                "threshold_crossing",
+                                "quiet_reflection",
+                                "mythic_motion",
+                            ],
+                            "description": "Optional agent hint for context-derived ambient music. Use dream_integration for dream material, body_settling for body-state or activation context, threshold_crossing for transition material, mythic_motion for symbolic/mythic material, and quiet_reflection otherwise.",
+                        },
+                        "musicDurationSeconds": {
+                            "type": "integer",
+                            "minimum": 15,
+                            "maximum": 285,
+                        },
                     },
                 },
             },
@@ -650,6 +672,23 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                     "description": "Explicit renderer surfaces. Use cinema/video for Chutes video and music for Chutes DiffRhythm.",
                 },
                 "transcribeCaptions": {"type": "boolean"},
+                "transcriptionProvider": {
+                    "type": "string",
+                    "enum": ["fallback", "chutes", "openai"],
+                    "description": "Caption transcription provider. Use openai with OPENAI_API_KEY when Chutes Whisper is unavailable; include openai in providerAllowlist and never pass literal API keys.",
+                },
+                "openaiApiKeyEnv": {
+                    "type": "string",
+                    "description": "Server-side environment variable containing the OpenAI API key, normally OPENAI_API_KEY. Do not pass the key value.",
+                },
+                "openaiTranscriptionModel": {
+                    "type": "string",
+                    "description": "OpenAI transcription model, usually whisper-1 for timed captions.",
+                },
+                "openaiTranscriptionResponseFormat": {
+                    "type": "string",
+                    "description": "OpenAI transcription response format, usually verbose_json for timed segments.",
+                },
                 "maxCostUsd": {"type": "number"},
                 "maxCost": {"type": "object"},
                 "videoAllowed": {"type": "boolean"},
@@ -658,6 +697,10 @@ PLAN_RITUAL_TOOL_SCHEMA = _schema(
                 "musicSteps": {
                     "type": "integer",
                     "description": "Chutes DiffRhythm generation steps. Defaults to 32.",
+                },
+                "musicDurationSeconds": {
+                    "type": "integer",
+                    "description": "Chutes DiffRhythm duration in seconds. Defaults to the plan value.",
                 },
                 "videoImage": {
                     "type": "string",

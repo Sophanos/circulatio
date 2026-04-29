@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, cast
@@ -14,6 +13,8 @@ from .contracts import (
     RitualManifestSection,
     RitualRenderOptions,
 )
+from .env import token_from_env_or_file
+from .providers import openai as openai_provider
 from .providers.chutes import (
     ChutesAsset,
     ChutesProviderError,
@@ -22,7 +23,9 @@ from .providers.chutes import (
     generate_music,
     generate_video,
     synthesize_speech,
-    transcribe_audio,
+)
+from .providers.chutes import (
+    transcribe_audio as transcribe_chutes_audio,
 )
 
 RENDERER_VERSION = "ritual-renderer.v1"
@@ -323,7 +326,9 @@ class RitualRenderer:
         max_cost = float(self._options.get("maxCostUsd", 0) or 0)
         if max_cost <= 0:
             return {}, [], ["chutes_provider_blocked_by_zero_budget"]
-        token = os.environ.get(str(self._options.get("chutesTokenEnv") or "CHUTES_API_TOKEN"), "")
+        token = token_from_env_or_file(
+            str(self._options.get("chutesTokenEnv") or "CHUTES_API_TOKEN")
+        )
         if not token:
             return {}, [], ["chutes_provider_missing_api_token"]
         timeout = int(self._options.get("requestTimeoutSeconds", 180) or 180)
@@ -364,10 +369,11 @@ class RitualRenderer:
             selected.discard("cinema")
         if "music" in selected:
             self._try_render_chutes_music(
+                plan=plan,
                 output=output,
                 public_base=public_base,
                 token=token,
-                timeout=max(timeout, 240),
+                timeout=max(timeout, 900),
                 assets=assets,
                 warnings=warnings,
             )
@@ -399,11 +405,15 @@ class RitualRenderer:
         if not text:
             warnings.append("chutes_audio_skipped_empty_voice_script")
             return
+        voice_id = self._speech_voice_id(plan)
+        speed = self._speech_speed(plan)
         try:
             asset = synthesize_speech(
                 token=token,
                 text=text,
                 out_path=output / "audio.wav",
+                voice=voice_id,
+                speed=speed,
                 timeout_seconds=timeout,
             )
         except ChutesProviderError as exc:
@@ -412,19 +422,66 @@ class RitualRenderer:
 
         assets["audio"] = {
             **self._asset_ref(asset, public_base=public_base),
-            "voiceId": "chutes-kokoro",
+            "voiceId": voice_id,
+            "speed": speed,
         }
-        if not (
-            self._options.get("transcribeCaptions")
-            or "captions"
-            in self._selected_surfaces(str(self._options.get("providerProfile") or ""))
-        ):
+        if not self._transcription_requested():
+            return
+        self._try_transcribe_captions(
+            audio_path=asset["path"],
+            chutes_token=token,
+            timeout=timeout,
+            captions=captions,
+            warnings=warnings,
+        )
+
+    def _try_transcribe_captions(
+        self,
+        *,
+        audio_path: Path,
+        chutes_token: str,
+        timeout: int,
+        captions: list[CaptionSegment],
+        warnings: list[str],
+    ) -> None:
+        provider = self._transcription_provider()
+        if provider == "fallback":
+            warnings.append("transcription_skipped_using_fallback_captions")
+            return
+        if provider == "openai":
+            token_env = str(self._options.get("openaiApiKeyEnv") or "OPENAI_API_KEY")
+            token = openai_provider.token_from_env(token_env)
+            if not token:
+                warnings.append("openai_transcription_skipped_missing_api_token")
+                return
+            try:
+                transcription = openai_provider.transcribe_audio(
+                    token=token,
+                    audio_path=audio_path,
+                    model=str(self._options.get("openaiTranscriptionModel") or "whisper-1"),
+                    response_format=str(
+                        self._options.get("openaiTranscriptionResponseFormat")
+                        or "verbose_json"
+                    ),
+                    timeout_seconds=timeout,
+                )
+            except openai_provider.OpenAITranscriptionError as exc:
+                warnings.append(self._provider_warning("openai_transcription_failed", exc))
+                return
+            captions.extend(
+                cast(
+                    list[CaptionSegment],
+                    openai_provider.caption_segments_from_transcription(transcription),
+                )
+            )
+            if not captions:
+                warnings.append("openai_transcription_returned_no_timed_segments")
             return
 
         try:
-            transcription = transcribe_audio(
-                token=token,
-                audio_path=asset["path"],
+            transcription = transcribe_chutes_audio(
+                token=chutes_token,
+                audio_path=audio_path,
                 timeout_seconds=timeout,
             )
         except ChutesProviderError as exc:
@@ -439,6 +496,16 @@ class RitualRenderer:
         )
         if not captions:
             warnings.append("chutes_transcription_returned_no_timed_segments")
+
+    def _transcription_requested(self) -> bool:
+        profile_surfaces = self._selected_surfaces(str(self._options.get("providerProfile") or ""))
+        return bool(self._options.get("transcribeCaptions")) or "captions" in profile_surfaces
+
+    def _transcription_provider(self) -> str:
+        provider = str(self._options.get("transcriptionProvider") or "").strip().lower()
+        if provider in {"openai", "chutes", "fallback"}:
+            return provider
+        return "chutes" if self._transcription_requested() else "fallback"
 
     def _try_render_chutes_image(
         self,
@@ -472,6 +539,7 @@ class RitualRenderer:
     def _try_render_chutes_music(
         self,
         *,
+        plan: dict[str, object],
         output: Path,
         public_base: str,
         token: str,
@@ -479,15 +547,30 @@ class RitualRenderer:
         assets: dict[str, dict[str, object]],
         warnings: list[str],
     ) -> None:
-        steps = int(self._options.get("musicSteps", 32) or 32)
+        music = cast(dict[str, object], plan.get("music") or {})
+        style_prompt = self._music_style_prompt(plan)
+        if not style_prompt:
+            warnings.append("chutes_music_skipped_no_style_prompt")
+            return
+        plan_duration = self._int_value(music.get("musicDurationSeconds"), default=90)
+        configured_duration = self._int_value(self._options.get("musicDurationSeconds"), default=0)
+        steps = self._int_value(self._options.get("musicSteps"), default=32)
+        seed = self._int_value(music.get("seed"), default=42)
         try:
             asset = generate_music(
                 token=token,
                 out_path=output / "music.wav",
                 steps=steps,
+                style_prompt=style_prompt,
+                music_duration=configured_duration or plan_duration,
+                seed=seed,
                 timeout_seconds=timeout,
             )
-            assets["music"] = self._asset_ref(asset, public_base=public_base)
+            assets["music"] = {
+                **self._asset_ref(asset, public_base=public_base),
+                "loopPolicy": str(music.get("loopPolicy") or "loop"),
+                "styleIntent": str(music.get("styleIntent") or ""),
+            }
         except ChutesProviderError as exc:
             warnings.append(self._provider_warning("chutes_music_failed", exc))
 
@@ -594,6 +677,31 @@ class RitualRenderer:
                 lines.append(text)
         return "\n\n".join(lines)
 
+    def _speech_voice_id(self, plan: dict[str, object]) -> str:
+        speech = cast(dict[str, object], plan.get("speechMarkupPlan") or {})
+        voice_id = str(speech.get("voiceId") or "").strip()
+        return voice_id or "af_heart"
+
+    def _speech_speed(self, plan: dict[str, object]) -> float:
+        speech = cast(dict[str, object], plan.get("speechMarkupPlan") or {})
+        configured = speech.get("speed")
+        if not isinstance(configured, bool):
+            try:
+                return min(max(float(cast(str | int | float, configured)), 0.1), 3.0)
+            except (TypeError, ValueError):
+                pass
+        voice_script = cast(dict[str, object], plan.get("voiceScript") or {})
+        paces = [
+            str(segment.get("pace") or "")
+            for segment in cast(list[object], voice_script.get("segments") or [])
+            if isinstance(segment, dict)
+        ]
+        if "slow" in paces:
+            return 0.82
+        if paces and all(pace == "normal" for pace in paces):
+            return 1.0
+        return 0.9
+
     def _image_prompt(self, plan: dict[str, object]) -> str:
         visual = cast(dict[str, object], plan.get("visualPromptPlan") or {})
         image = cast(dict[str, object], visual.get("image") or {})
@@ -618,6 +726,14 @@ class RitualRenderer:
                 if prompt:
                     return prompt
         return ""
+
+    def _music_style_prompt(self, plan: dict[str, object]) -> str:
+        music = cast(dict[str, object], plan.get("music") or {})
+        if not music.get("enabled"):
+            return ""
+        if music.get("providerPromptPolicy") != "derived_user_facing_only":
+            return ""
+        return " ".join(str(music.get("stylePrompt") or "").split())
 
     def _video_image_payload(
         self,
@@ -718,7 +834,7 @@ class RitualRenderer:
                     "kind": "breath",
                     "preferredLens": "breath",
                     "skippable": True,
-                    "channels": {"voice": True, "breath": True, "pulse": True},
+                    "channels": {"voice": True, "breath": True, "pulse": True, **music_channel},
                 }
             )
 

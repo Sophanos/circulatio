@@ -33,6 +33,46 @@ bridge, and Hermes host-smoke tests remain authoritative for runtime behavior.
 
 Phase 1 of embodied presentation is also present as a plan-only ritual path: Hermes routes one `circulatio_plan_ritual` call, Circulatio returns a typed presentation plan without writing memory, the repo-local renderer CLI emits a static manifest with mock providers, and Hermes Rituals plays that manifest. Phase 7.6 scheduled ritual invitations are now modeled as consent-bound `ritual_invitation` rhythmic briefs that require manual acceptance before planning. Phase 7.7 completion sync is now an explicit idempotent persistence operation, while provider-backed audio/image/video remains renderer-owned, opt-in, budget-gated, and beta-gated for music/video.
 
+## Hermes Rituals Vision Path
+
+The target experience is an embodied Hermes-agent ritual layer: personal, memory-aware, and media-rich, closer to a guided companion experience than a static text response. It should feel like a guided session that understands the user's dream life, body state, recent events, symbolic threads, and current readiness, while still respecting consent and the hold-first boundary.
+
+The vision is not that Circulatio becomes the coach, frontend, or media generator. The vision is that each layer does its job cleanly enough for the full experience to feel alive:
+
+```text
+memory context
+-> Hermes-agent chooses the right ritual surface mix
+-> user accepts or asks directly
+-> Circulatio compiles a safe plan
+-> renderer creates the artifact
+-> Hermes Rituals plays it with breath/music/voice/meditation/image/cinema as needed
+-> completion writes only explicit outcomes back to Circulatio
+-> future live guidance attaches through guidanceSessionId
+```
+
+What must be done before this vision is real:
+
+1. Prove Hermes-agent tool choice end to end.
+   The agent must route from user message plus memory context into the correct `circulatio_plan_ritual` shape: only breath, breath plus music, spoken meditation, music without narration, image return, or cinema when explicitly requested.
+
+2. Finish the scheduled ritual path.
+   Scheduled rhythm must stop at invitation. Acceptance must be the only path into planning and rendering. Skip, dismiss, and expired invitations must not create plans or media.
+
+3. Make playback proof stronger than provider smoke tests.
+   Kokoro, DiffRhythm, and WAN smoke tests show provider contracts work. They do not prove the full user experience. We still need browser E2E over real artifacts: audio metadata, waveform, music channel, captions, breath pacer, meditation field, image/cinema lens, companion rail, and completion.
+
+4. Keep fallback captions as the baseline.
+   Whisper through the current Chutes path is not a working requirement. The ritual experience must stay functional with plan-derived or fallback caption segments until a reliable transcription provider is selected.
+
+5. Connect Journey CLI to ritual proof.
+   Journey CLI should verify invite-before-plan, accepted plan rendering, negative provider gates, selective surface choice, browser artifact checks, and completion sync. It should distinguish mock renders, live provider smoke, and browser playback success.
+
+6. Add the live guidance layer after artifact playback is stable.
+   The Apple Fitness-like direction belongs to a `guidanceSessionId` session with Hermes-agent companion state and optional sensor/coach tracks. It must attach to the presentation artifact without making the planner camera-aware or sensor-aware.
+
+7. Preserve the psyche boundary.
+   No raw dream/body/event text to providers, no hidden interpretation during ritual planning/rendering/completion, no deterministic symbolic routing tables, and no automatic practice escalation after playback.
+
 ---
 
 ## Who This Is For
@@ -628,19 +668,21 @@ Circulatio sits at the depth layer of the stack. Hermes handles the breadth: dai
 
 ### Phase 7.7: Completion Sync And Provider Hardening
 
-**Implementation status (April 2026):** Implemented for the local/backend path. Completion is recorded through an idempotent persistence operation keyed by user and idempotency key. The local renderer emits completion manifest fields, preserves fallback captions, and keeps music/video behind explicit beta flags. Provider hardening remains renderer-owned.
+**Implementation status (April 2026):** Implemented for the local/backend path. Completion is recorded through an idempotent persistence operation keyed by user and idempotency key. Hermes Rituals now has a quiet completion panel that can submit no-note completion, explicit body state, literal reflection text, and practice feedback through one completion route. The route forwards to a host endpoint when configured and falls back to the repo-local Circulatio completion bridge otherwise. The local renderer emits completion manifest fields, preserves fallback captions, and keeps music/video behind explicit beta flags. Provider hardening remains renderer-owned.
 
 ### Phase 7.8: Body And Emotion Follow-Up Capture
 
-**Implementation status (April 2026):** Partially implemented for artifact rituals. Hermes Rituals now has an explicit Body lens and body picker wired to completion capture, with body prompts driven by the active ritual section when available. Emotion follow-up capture, mid-session body marking, and guidance-session capture remain planned.
+**Implementation status (April 2026):** Partially implemented for artifact rituals. Hermes Rituals now has an explicit Body lens, a body picker composed inside the completion panel, literal reflection capture, practice-note capture, and no-note completion. The in-ritual companion receives phase and available track context and can be paused or minimized. The `/live/{guidanceSessionId}` route has a no-camera-first guidance shell with focus modes and explicit camera preflight. Emotion follow-up capture, mid-session body marking, production Hermes live coaching, and sensor guidance remain planned.
 
 **Goal:** Decide and implement how post-practice somatic and emotional check-ins should work after breathing, meditation, or a full ritual without turning the ritual player into a wellness tracker.
 
 **Current behavior:**
-- body capture appears naturally at closing/completion or when the user manually opens the Body lens/rail;
+- completion appears naturally at closing/completion or when the user manually opens the Body lens/rail;
+- completion can be submitted with no notes, body state, literal reflection text, practice feedback, or an explicit combination;
 - body capture is explicit and idempotent through ritual completion sync;
 - the current presentation frame can expose `hidden`, `inline_hint`, or `focused_capture` body prompt modes;
-- saved body data remains literal body-state/completion data and does not trigger interpretation.
+- companion guidance frames include phase and available track context;
+- saved body data and words remain literal completion data and do not trigger interpretation.
 
 **Open design decisions:**
 - whether emotion capture should be separate from body capture or folded into a minimal tone field;

@@ -70,6 +70,7 @@ class RequestedAudioSurface(TypedDict, total=False):
     voiceId: NotRequired[str]
     tone: NotRequired[Literal["neutral", "clear", "gentle", "holding", "steady"]]
     pace: NotRequired[Literal["normal", "measured", "slow"]]
+    speed: NotRequired[float]
 
 
 class RequestedCaptionSurface(TypedDict, total=False):
@@ -124,6 +125,16 @@ class RequestedCinemaSurface(TypedDict, total=False):
 class RequestedMusicSurface(TypedDict, total=False):
     enabled: Required[bool]
     allowExternalGeneration: NotRequired[bool]
+    styleIntent: NotRequired[
+        Literal[
+            "dream_integration",
+            "body_settling",
+            "threshold_crossing",
+            "quiet_reflection",
+            "mythic_motion",
+        ]
+    ]
+    musicDurationSeconds: NotRequired[int]
 
 
 class RequestedRitualSurfaces(TypedDict, total=False):
@@ -168,6 +179,7 @@ class RitualRenderPolicy(TypedDict, total=False):
     videoAllowed: NotRequired[bool]
     allowBetaMusic: NotRequired[bool]
     musicSteps: NotRequired[int]
+    musicDurationSeconds: NotRequired[int]
     maxCost: NotRequired[RitualMaxCost]
     cachePolicy: NotRequired[RitualCachePolicy]
     delivery: NotRequired[RitualDeliveryPolicy]
@@ -238,6 +250,8 @@ class PresentationSpeechMarkupPlan(TypedDict):
     format: Literal["structured_intent"]
     ssmlAllowed: bool
     pausePolicy: str
+    voiceId: NotRequired[str]
+    speed: NotRequired[float]
 
 
 class PresentationBreathSpec(TypedDict, total=False):
@@ -269,6 +283,10 @@ class PresentationMusicSpec(TypedDict, total=False):
     role: Required[Literal["ambient_bed"]]
     sourceRefs: Required[list[Id]]
     providerPromptPolicy: Required[ProviderPromptPolicy]
+    styleIntent: Required[str]
+    stylePrompt: Required[str]
+    musicDurationSeconds: Required[int]
+    seed: Required[int]
 
 
 class VisualPromptSurfacePlan(TypedDict, total=False):

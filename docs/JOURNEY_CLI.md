@@ -17,9 +17,22 @@ When we change ritual, media, or completion code, Journey CLI should answer:
 - Did consent block scheduled proactive ritual invitations?
 - Did skipped invitations avoid planning and rendering?
 - Did accepted invitations call `circulatio_plan_ritual` only after acceptance?
-- Did completion sync call only `circulatio_record_ritual_completion`?
+- Did completion sync call only `circulatio_record_ritual_completion`, including no-note, body-state, reflection, and practice-feedback variants?
+- Did companion and live-guidance flows avoid durable writes unless an explicit action is approved?
 - Did Chutes/token/budget/video gates avoid unintended provider calls?
 - Did each artifact expose the expected manifest, captions, breath, meditation, media, and completion fields?
+
+## Ritual Coverage
+
+Journey CLI is the local proof harness for the Hermes Rituals path. Current coverage includes:
+
+- `user message + memory context -> circulatio_plan_ritual` tool-choice cases for selective surfaces.
+- `ritual_invitation -> accept -> plan -> render -> artifact report` as an acceptance-gated path.
+- Negative scheduled cases: skipped, dismissed, decline, expired, or no-consent invitations must not plan or render.
+- Surface-selection cases: breath only, breath plus music, music without narration, full voice/music/image, image return, and cinema requested.
+- Browser artifact checks for real playback: narration metadata, music channel, captions, breath pacer, image/photo lens, cinema when enabled, completion POST, companion rail, and no-camera live continuation.
+- Provider distinction in reports: mock render, live provider smoke, and browser playback success are separate result categories.
+- Chutes Whisper is not a required pass condition. Fallback captions are the baseline; official OpenAI transcription is optional provider-backed caption refinement.
 
 ## Run
 
@@ -47,6 +60,35 @@ CHUTES_API_TOKEN=... \
   --ritual-eval \
   --ritual-live-providers \
   --ritual-provider-profile chutes_all \
+  --ritual-max-cost-usd 2.0 \
+  --strict
+```
+
+Provider-backed music is separately gated:
+
+```bash
+CHUTES_API_TOKEN=... \
+.venv/bin/python scripts/evaluate_journey_cli.py \
+  --ritual-eval \
+  --ritual-live-providers \
+  --ritual-provider-profile chutes_all \
+  --ritual-include-music \
+  --ritual-allow-beta-music \
+  --ritual-max-cost-usd 2.0 \
+  --strict
+```
+
+OpenAI transcription uses the official API key from the process environment or an ignored repo-local `.env`, and never accepts a literal key in eval data or render policy:
+
+```bash
+CHUTES_API_TOKEN=... OPENAI_API_KEY=... \
+.venv/bin/python scripts/evaluate_journey_cli.py \
+  --ritual-eval \
+  --ritual-live-providers \
+  --ritual-provider-profile chutes_all \
+  --ritual-transcription-provider openai \
+  --ritual-openai-api-key-env OPENAI_API_KEY \
+  --ritual-openai-transcription-model whisper-1 \
   --ritual-max-cost-usd 2.0 \
   --strict
 ```
@@ -80,7 +122,7 @@ artifacts/journey_cli_eval/runs/{runId}/
   screenshots/
 ```
 
-`tool_calls.json` redacts user-authored text fields. Provider tokens are never written.
+`tool_calls.json` redacts user-authored text fields. Provider tokens are never written. Reports include selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, and browser check result so `browser_checks.json` and `artifacts_checked.json` can be treated as pass/fail artifacts.
 
 ## Scorecard
 
@@ -88,8 +130,8 @@ The report groups checks into:
 
 - `proactivity`: consent, cadence, invite-before-plan, no background render
 - `ritual_quality`: source refs, intent, ritual sections, captions
-- `media`: real media or expected fallback, waveform readiness, transcript sections
+- `media`: real media or expected fallback, waveform readiness, music loop/sync, cinema readiness, transcript sections
 - `ui`: photo, breath, meditation, body completion, console/network contract
 - `negative_cases`: no consent, skipped invitation, missing token, zero budget, video blocked
 
-Skipped browser/media checks mean the default mock run did not produce that live asset. They should be promoted to pass/fail by running live providers or adding a browser driver over the generated report bundle.
+Skipped browser/media checks mean the default mock run did not produce that live asset. In provider-backed mode, missing requested live media is a failure, not a pass. Browser-driver checks should turn `browser_checks.json` and `artifacts_checked.json` into actionable pass/fail outputs.

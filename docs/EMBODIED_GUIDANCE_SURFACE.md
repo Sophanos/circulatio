@@ -1,9 +1,25 @@
 # Embodied Guidance Surface
 ## Live Body, Camera, Media, And Coach OS Contract
 
-> **Status:** Design contract. This is a future Hermes-owned live guidance surface after the connected artifact presentation layer. The presentation layer now owns static timeline/media/lens/body-capture orchestration; this document starts where live sensors, reference movement, and Hermes-agent coaching begin. It is not a Circulatio router, not medical diagnosis, and not part of `circulatio.presentation.plan_ritual`.
+> **Status:** Design contract with the first no-camera live continuation slice implemented in Hermes Rituals Web. The presentation layer owns static timeline/media/lens/body-capture orchestration; this document starts where live sensors, reference movement, and Hermes-agent coaching begin. It is not a Circulatio router, not medical diagnosis, and not part of `circulatio.presentation.plan_ritual`.
 
 The embodied guidance surface connects reference media, camera/body signals, movement practice, active imagination, and Coach OS. It should feel like a personal mirror: consent-bound, sparse, adaptive, and useful for yoga, qi gong, breathwork, meditation, and symbolic body inquiry.
+
+This is Phase 9 of the Hermes Rituals vision path. It should be planned only after Phases 1-6 prove static ritual routing/render/playback and Phase 7-8 stabilize completion plus the in-ritual Hermes companion. The architect and designer planning prompts for Phases 7-9 live in `docs/CONSOLIDATED_RITUAL_JOURNEY_PLAN.md`.
+
+Current implemented slice:
+
+```text
+/live/{guidanceSessionId}?artifactId=...
+-> no-camera live guidance shell
+-> focus mode selector: breath, meditation, image, movement, companion cue
+-> explicit camera preflight
+-> optional getUserMedia permission request only after user action
+-> stop, pause, and complete local live states
+-> companion remains one bounded track in the shell
+```
+
+Still not implemented: pose estimation, movement scoring, reference-video comparison, sensor event streaming, camera-derived persistence, or production Hermes live coaching.
 
 ---
 
@@ -346,14 +362,17 @@ This is host runtime state, not a new Circulatio durable object.
 
 ## Implementation Path
 
-1. Build local mirror mode with camera permission, pose confidence, and no persistence.
-2. Add typed body event stream in the frontend or mobile host.
-3. Add reference media as a separate track from user camera capture.
-4. Attach Hermes-agent to `guidanceSessionId` and `hostSessionId`.
-5. Load enriched `coachState` before live coaching.
-6. Add explicit write buttons for body state, practice outcome, and reflection.
-7. Add active imagination capture as a separate explicit mode.
-8. Add training loops through `PracticeSessionRecord`, journeys, goals, rhythmic briefs, and adaptation preferences.
+1. Implemented: no-camera live continuation shell under `/live/{guidanceSessionId}`.
+2. Implemented: one-focus-at-a-time live modes for breath, meditation, image, movement, and companion cue.
+3. Implemented: camera preflight and permission request are explicit user actions.
+4. Next: add typed live guidance event stream in the frontend or mobile host.
+5. Next: build local mirror mode with camera permission, pose confidence, and no persistence.
+6. Next: add reference media as a separate track from user camera capture.
+7. Next: attach production Hermes-agent live coaching to `guidanceSessionId` and `hostSessionId`.
+8. Next: load enriched `coachState` before live coaching.
+9. Next: add explicit write buttons for body state, practice outcome, and reflection.
+10. Later: add active imagination capture as a separate explicit mode.
+11. Later: add training loops through `PracticeSessionRecord`, journeys, goals, rhythmic briefs, and adaptation preferences.
 
 ---
 

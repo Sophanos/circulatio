@@ -331,6 +331,9 @@ class RhythmicRuntimeTests(unittest.TestCase):
                 invitation["acceptancePayload"]["renderPolicy"]["externalProvidersAllowed"]
             )
             self.assertFalse(invitation["acceptancePayload"]["renderPolicy"]["videoAllowed"])
+            self.assertFalse(
+                invitation["acceptancePayload"]["requestedSurfaces"]["music"]["enabled"]
+            )
             self.assertNotIn("text", invitation["sourceRefs"][0])
             self.assertEqual(await repository.list_interpretation_runs("user_1"), [])
             self.assertEqual(await repository.list_weekly_reviews("user_1"), [])

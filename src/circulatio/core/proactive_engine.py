@@ -1073,6 +1073,7 @@ class ProactiveEngine:
             "breath": {"enabled": True, "request": {"pattern": "steadying"}},
             "meditation": {"enabled": True, "request": {"fieldType": "coherence_convergence"}},
             "image": {"enabled": False},
+            "music": {"enabled": False},
             "cinema": {"enabled": False},
         }
         render_policy = {

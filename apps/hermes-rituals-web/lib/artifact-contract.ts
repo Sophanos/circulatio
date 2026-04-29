@@ -144,6 +144,8 @@ export type PresentationArtifact = {
   threadSummary?: string
   sessionId?: string
   journeyId?: string
+  ritualPlanId?: string
+  sourceRefs?: RitualArtifactSourceRef[]
   audioUrl?: string
   musicUrl?: string
   musicMimeType?: string | null
@@ -629,6 +631,8 @@ export function ritualArtifactFromManifest(
     summary: manifest.description,
     privacyClass: manifest.privacyClass,
     durationMs: manifest.durationMs,
+    ritualPlanId: manifest.planId,
+    sourceRefs: manifest.sourceRefs,
     completionPrompt: manifest.interaction.finishPrompt,
     completionEndpoint:
       manifest.interaction.completion?.endpoint ?? manifest.interaction.completionEndpoint,

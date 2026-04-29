@@ -74,6 +74,49 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 {"audio": True, "captions": True, "image": True, "cinema": False},
             )
 
+    def test_handoff_passes_openai_transcription_flags_when_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            handoff, plan = self._handoff(temp)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(
+                surfaces=["audio", "captions"],
+                provider_allowlist=["mock", "chutes", "openai"],
+                transcription_provider="openai",
+            )
+            policy["openaiApiKeyEnv"] = "OPENAI_API_KEY"
+            policy["openaiTranscriptionModel"] = "whisper-1"
+            policy["openaiTranscriptionResponseFormat"] = "verbose_json"
+
+            with patch.dict(
+                os.environ,
+                {"CHUTES_API_TOKEN": "test-token", "OPENAI_API_KEY": "test-openai-token"},
+            ):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                        provider="chutes",
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertIn("--transcription-provider", argv)
+            self.assertEqual(argv[argv.index("--transcription-provider") + 1], "openai")
+            self.assertEqual(argv[argv.index("--openai-api-key-env") + 1], "OPENAI_API_KEY")
+            self.assertEqual(argv[argv.index("--openai-transcription-model") + 1], "whisper-1")
+            self.assertEqual(
+                argv[argv.index("--openai-transcription-response-format") + 1],
+                "verbose_json",
+            )
+            self.assertNotIn(
+                "ritual_handoff_openai_transcription_skipped_provider_not_allowed",
+                result["warnings"],
+            )
+
     def test_handoff_passes_provider_backed_cinema_flags_when_all_gates_pass(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             temp = Path(tempdir)
@@ -119,6 +162,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 surfaces=["music"],
                 allow_beta_music=True,
                 music_steps=48,
+                music_duration_seconds=15,
             )
 
             with patch.dict(os.environ, {"CHUTES_API_TOKEN": "test-token"}):
@@ -137,6 +181,7 @@ class HermesRitualHandoffTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("--surfaces") + 1], "music")
             self.assertIn("--allow-beta-music", argv)
             self.assertEqual(argv[argv.index("--music-steps") + 1], "48")
+            self.assertEqual(argv[argv.index("--music-duration-seconds") + 1], "15")
             self.assertEqual(
                 result["artifact"]["surfaces"]["music"],
                 {"available": True, "provider": "chutes", "mimeType": "audio/wav"},
@@ -295,14 +340,53 @@ class HermesRitualHandoffTests(unittest.TestCase):
                         artifact_id=artifact_id, plan_id=str(plan["id"])
                     ),
                 ) as run:
-                    result = handoff.render_from_bridge_response(
-                        response,
-                        render_policy=self._chutes_policy(surfaces=["audio", "captions", "image"]),
-                    )
+                    policy = self._chutes_policy(surfaces=["audio", "captions", "image"])
+                    policy["chutesTokenEnv"] = "MISSING_CHUTES_API_TOKEN"
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
 
             argv = run.call_args.args[0]
             self.assertIn("--mock-providers", argv)
             self.assertIn("ritual_handoff_chutes_skipped_missing_api_token", result["warnings"])
+
+    def test_provider_tokens_can_be_read_from_repo_local_env_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            temp = Path(tempdir)
+            (temp / ".env").write_text(
+                "CHUTES_API_TOKEN=from-env-file\nOPENAI_API_KEY=from-env-file\n",
+                encoding="utf-8",
+            )
+            handoff, plan = self._handoff(temp)
+            response = self._response(plan)
+            artifact_id = artifact_id_for_plan(plan)
+            policy = self._chutes_policy(
+                surfaces=["audio", "captions"],
+                provider_allowlist=["mock", "chutes", "openai"],
+                transcription_provider="openai",
+            )
+            env = dict(os.environ)
+            env.pop("CHUTES_API_TOKEN", None)
+            env.pop("OPENAI_API_KEY", None)
+
+            with patch.dict(os.environ, env, clear=True):
+                with patch(
+                    "circulatio_hermes_plugin.ritual_handoff.subprocess.run",
+                    side_effect=self._fake_renderer(
+                        artifact_id=artifact_id,
+                        plan_id=str(plan["id"]),
+                        provider="chutes",
+                    ),
+                ) as run:
+                    result = handoff.render_from_bridge_response(response, render_policy=policy)
+
+            argv = run.call_args.args[0]
+            self.assertIn("--provider-profile", argv)
+            self.assertIn("--transcription-provider", argv)
+            self.assertEqual(argv[argv.index("--transcription-provider") + 1], "openai")
+            self.assertNotIn("ritual_handoff_chutes_skipped_missing_api_token", result["warnings"])
+            self.assertNotIn(
+                "ritual_handoff_openai_transcription_skipped_missing_api_token",
+                result["warnings"],
+            )
 
     def _handoff(
         self, temp: Path, *, cinema_enabled: bool = False, music_enabled: bool = False
@@ -352,12 +436,17 @@ class HermesRitualHandoffTests(unittest.TestCase):
         allow_beta_video: bool = False,
         allow_beta_music: bool = False,
         music_steps: int = 32,
+        music_duration_seconds: int = 0,
         video_image: str = "",
+        provider_allowlist: list[str] | None = None,
+        transcription_provider: str | None = None,
     ) -> dict[str, object]:
+        if provider_allowlist is None:
+            provider_allowlist = ["mock", "chutes"]
         policy: dict[str, object] = {
             "mode": "render_static",
             "externalProvidersAllowed": True,
-            "providerAllowlist": ["mock", "chutes"],
+            "providerAllowlist": provider_allowlist,
             "providerProfile": profile,
             "transcribeCaptions": True,
             "requestTimeoutSeconds": 180,
@@ -366,9 +455,12 @@ class HermesRitualHandoffTests(unittest.TestCase):
             "allowBetaVideo": allow_beta_video,
             "allowBetaMusic": allow_beta_music,
             "musicSteps": music_steps,
+            "musicDurationSeconds": music_duration_seconds,
         }
         if surfaces is not None:
             policy["surfaces"] = surfaces
+        if transcription_provider:
+            policy["transcriptionProvider"] = transcription_provider
         if video_image:
             policy["videoImage"] = video_image
         return policy
@@ -544,7 +636,11 @@ class HermesRitualHandoffTests(unittest.TestCase):
                 "enabled": True,
                 "role": "ambient_bed",
                 "sourceRefs": ["weekly_fixture"],
-                "providerPromptPolicy": "none",
+                "providerPromptPolicy": "derived_user_facing_only",
+                "styleIntent": "quiet_reflection",
+                "stylePrompt": "instrumental reflective ambient music, slow pulse, no vocals",
+                "musicDurationSeconds": 60,
+                "seed": 42,
             }
         return plan
 

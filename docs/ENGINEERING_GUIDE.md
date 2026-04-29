@@ -32,13 +32,13 @@ Circulatio is a **symbolic/individuation backend for Hermes**. It is not a gener
 - **Hermes owns:** session orchestration, gateway routing, LLM inference, cron scheduling, ritual delivery messages, and ritual-invitation acceptance
 - **Circulatio owns:** individuation state, memory, graph, symbolic interpretation logic, user adaptation profile, typed ritual plans, scheduled ritual-invitation brief payloads, and idempotent ritual-completion events
 - **Renderer CLI owns:** local/static artifact manifest generation, mock provider output, provider/cache boundaries, fallback WebVTT captions, raw-prompt provider guards, and beta gates for music/video
-- **Hermes Rituals frontend owns:** playback of artifact manifests, real-audio waveform decoding and scrub sync, photo-lens image rendering, breath pacers, meditation fields, caption-derived transcript sections, completion UI, idempotency-key generation, and completion POST validation
+- **Hermes Rituals frontend owns:** playback of artifact manifests, real-audio waveform decoding and scrub sync, photo-lens image rendering, breath pacers, meditation fields, caption-derived transcript sections, quiet completion UI, idempotency-key generation, completion POST validation, bounded companion UI, and the no-camera-first live guidance shell
 
 ### Ritual Runtime Boundaries
 - Scheduled cron may create `ritual_invitation` rhythmic briefs only after `proactive_briefing` consent.
 - Scheduled cron must not call `circulatio.presentation.plan_ritual`, run the renderer, or call external providers.
 - Manual acceptance is the boundary for planning: accept the brief, then call `circulatio_plan_ritual` with the safe `acceptancePayload`.
-- Completion sync is a separate persistence operation. It records playback state, optional literal reflection text, and explicit practice feedback only; it never triggers interpretation, review generation, proposal creation, or practice recommendation.
+- Completion sync is a separate persistence operation. It records playback state, optional body state, optional literal reflection text, and explicit practice feedback only; it never triggers interpretation, review generation, proposal creation, provider rendering, or practice recommendation.
 - Provider-backed rendering stays opt-in, budget-gated, renderer-owned, and disabled for music/video unless beta flags are present.
 - Mock/dry-run artifacts must not be treated as proof of live media. Check manifest provider fields and concrete `audio.wav`, `image.png`, and `captions.vtt` sources before debugging frontend playback.
 - The current Hermes Rituals player chrome is product-sensitive. Improve media accuracy underneath it; do not redesign the visible waveform/scrub/caption controls without explicit UI approval.
@@ -364,7 +364,22 @@ Standalone packaging is no longer Phase 7. Treat it as a later distribution conc
 
 ## Open Engineering Tasks
 
-### 1. Practice Delivery
+### 1. Hermes Ritual Experience Layer
+
+The next major product integration task is to connect the existing ritual pieces into one proofable path. This is not a new Circulatio domain phase; it is an orchestration and validation layer across Hermes-agent, the renderer, Hermes Rituals, and Journey CLI.
+
+Required work:
+
+- Add Hermes-agent routing evals that prove user message plus memory context becomes the correct `circulatio_plan_ritual` call and surface mix.
+- Add scheduled ritual E2E coverage for `ritual_invitation -> user acceptance -> plan -> renderer -> artifact URL`; skip/dismiss/expired invitations must not plan or render.
+- Add browser E2E checks over `/artifacts/{artifactId}` for narration, music, captions, breath, meditation, image/photo, cinema when enabled, companion rail, and completion POST.
+- Keep Chutes provider calls renderer-owned and opt-in. Kokoro, DiffRhythm, and WAN are live-smoke-tested contracts, not proof of full playback.
+- Treat Whisper as unresolved. Plan-derived or fallback caption segments remain the required caption baseline.
+- Attach live guidance through `guidanceSessionId`. The first no-camera shell exists; the planner must not become camera-aware, pose-aware, or live-coaching-aware.
+
+**Status:** Partially implemented. Backend planning, renderer contracts, provider smoke, local handoff, fixture browser playback, quiet completion capture, companion scaffolding, and a no-camera live shell exist; production Hermes-agent routing/subscription, scheduled acceptance E2E, provider-backed browser checks, and sensor guidance remain open.
+
+### 2. Practice Delivery
 
 Phase 6 now keeps practice generation LLM-first while giving the runtime an explicit lifecycle:
 - `PracticeEngine` is the deterministic boundary for consent, safety, lifecycle defaults, follow-up timing, and coarse outcome signals
@@ -374,7 +389,7 @@ Phase 6 now keeps practice generation LLM-first while giving the runtime an expl
 
 **Status:** Implemented. Further work should extend prompts and schemas, not add deterministic practice routing.
 
-### 2. User Adaptation Profile
+### 3. User Adaptation Profile
 
 Phase 6 also centralizes adaptation learning in `AdaptationEngine`. `UserAdaptationProfile` now tracks:
 - **Engagement patterns:** Which namespaces does the user log most? (dream-heavy vs. body-heavy vs. goal-heavy)

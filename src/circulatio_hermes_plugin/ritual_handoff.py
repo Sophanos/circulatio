@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import cast
 
 from circulatio.hermes.agent_bridge_contracts import BridgeResponseEnvelope
+from circulatio.ritual_renderer.env import token_from_env_or_file
 from circulatio.ritual_renderer.renderer import (
     MANIFEST_SCHEMA_VERSION,
     RENDERER_VERSION,
@@ -79,11 +80,16 @@ class HermesHandoffRenderOptions:
     surfaces: list[str]
     max_cost_usd: float
     transcribe_captions: bool
+    transcription_provider: str
+    openai_api_key_env: str
+    openai_transcription_model: str
+    openai_transcription_response_format: str
     request_timeout_seconds: int
     chutes_token_env: str
     allow_beta_video: bool
     allow_beta_music: bool
     music_steps: int
+    music_duration_seconds: int
     video_image: str
     provider_backed: bool
     warnings: list[str]
@@ -276,15 +282,36 @@ class HermesRitualArtifactHandoff:
             )
             if options.transcribe_captions:
                 argv.append("--transcribe-captions")
+            if options.transcription_provider:
+                argv.extend(["--transcription-provider", options.transcription_provider])
+            if options.openai_api_key_env:
+                argv.extend(["--openai-api-key-env", options.openai_api_key_env])
+            if options.openai_transcription_model:
+                argv.extend(
+                    ["--openai-transcription-model", options.openai_transcription_model]
+                )
+            if options.openai_transcription_response_format:
+                argv.extend(
+                    [
+                        "--openai-transcription-response-format",
+                        options.openai_transcription_response_format,
+                    ]
+                )
             if options.allow_beta_video and "cinema" in options.surfaces:
                 argv.append("--allow-beta-video")
             if "music" in options.surfaces:
                 argv.extend(["--music-steps", str(options.music_steps)])
+                if options.music_duration_seconds > 0:
+                    argv.extend(
+                        ["--music-duration-seconds", str(options.music_duration_seconds)]
+                    )
             if options.allow_beta_music and "music" in options.surfaces:
                 argv.append("--allow-beta-music")
             if options.video_image and "cinema" in options.surfaces:
                 argv.extend(["--video-image", options.video_image])
             timeout = max(timeout, 300, options.request_timeout_seconds * 3 + 30)
+            if "music" in options.surfaces:
+                timeout = max(timeout, 930)
         else:
             argv.extend(["--mock-providers", "--dry-run"])
         subprocess.run(
@@ -314,14 +341,27 @@ class HermesRitualArtifactHandoff:
         selected = [
             surface for surface in requested if surface in allowed and surface in _PROVIDER_SURFACES
         ]
+        provider_allowlist = self._provider_allowlist(policy.get("providerAllowlist"))
         max_cost = self._max_cost_usd(policy)
         timeout = self._positive_int(policy.get("requestTimeoutSeconds"), default=180)
         token_env = (
             str(policy.get("chutesTokenEnv") or "CHUTES_API_TOKEN").strip() or "CHUTES_API_TOKEN"
         )
+        openai_key_env = (
+            str(policy.get("openaiApiKeyEnv") or "OPENAI_API_KEY").strip() or "OPENAI_API_KEY"
+        )
+        transcription_provider = self._transcription_provider(policy)
+        openai_transcription_model = (
+            str(policy.get("openaiTranscriptionModel") or "whisper-1").strip() or "whisper-1"
+        )
+        openai_transcription_response_format = (
+            str(policy.get("openaiTranscriptionResponseFormat") or "verbose_json").strip()
+            or "verbose_json"
+        )
         allow_beta_video = bool(policy.get("allowBetaVideo"))
         allow_beta_music = bool(policy.get("allowBetaMusic"))
         music_steps = self._positive_int(policy.get("musicSteps"), default=32)
+        music_duration = self._positive_int(policy.get("musicDurationSeconds"), default=0)
         video_image = str(policy.get("videoImage") or "").strip()
         transcribe = bool(policy.get("transcribeCaptions")) or "captions" in selected
         provider_backed = False
@@ -334,11 +374,11 @@ class HermesRitualArtifactHandoff:
                 blocking_warnings.append(
                     "ritual_handoff_chutes_skipped_external_providers_disabled"
                 )
-            if "chutes" not in self._provider_allowlist(policy.get("providerAllowlist")):
+            if "chutes" not in provider_allowlist:
                 blocking_warnings.append("ritual_handoff_chutes_skipped_provider_not_allowed")
             if max_cost <= 0:
                 blocking_warnings.append("ritual_handoff_chutes_skipped_zero_budget")
-            if not os.environ.get(token_env):
+            if not token_from_env_or_file(token_env, cwd=self._config.repo_root):
                 blocking_warnings.append("ritual_handoff_chutes_skipped_missing_api_token")
             if not self._plan_allows_external_providers(plan):
                 blocking_warnings.append("ritual_handoff_chutes_skipped_by_plan_policy")
@@ -365,6 +405,25 @@ class HermesRitualArtifactHandoff:
                 if profile not in _MUSIC_PROVIDER_PROFILES:
                     warnings.append("ritual_handoff_music_skipped_provider_profile")
                     selected = [surface for surface in selected if surface != "music"]
+            if transcription_provider == "openai" and transcribe:
+                if "openai" not in provider_allowlist:
+                    warnings.append(
+                        "ritual_handoff_openai_transcription_skipped_provider_not_allowed"
+                    )
+                    transcription_provider = "fallback"
+                elif not bool(policy.get("externalProvidersAllowed")):
+                    warnings.append(
+                        "ritual_handoff_openai_transcription_skipped_external_providers_disabled"
+                    )
+                    transcription_provider = "fallback"
+                elif not token_from_env_or_file(openai_key_env, cwd=self._config.repo_root):
+                    warnings.append("ritual_handoff_openai_transcription_skipped_missing_api_token")
+                    transcription_provider = "fallback"
+                elif not self._plan_allows_external_providers(plan):
+                    warnings.append(
+                        "ritual_handoff_openai_transcription_skipped_by_plan_policy"
+                    )
+                    transcription_provider = "fallback"
             if not selected:
                 blocking_warnings.append("ritual_handoff_chutes_skipped_no_allowed_surfaces")
             warnings = list(dict.fromkeys([*blocking_warnings, *warnings]))
@@ -374,11 +433,16 @@ class HermesRitualArtifactHandoff:
             surfaces=selected,
             max_cost_usd=max_cost,
             transcribe_captions=transcribe,
+            transcription_provider=transcription_provider,
+            openai_api_key_env=openai_key_env,
+            openai_transcription_model=openai_transcription_model,
+            openai_transcription_response_format=openai_transcription_response_format,
             request_timeout_seconds=timeout,
             chutes_token_env=token_env,
             allow_beta_video=allow_beta_video,
             allow_beta_music=allow_beta_music,
             music_steps=music_steps,
+            music_duration_seconds=music_duration,
             video_image=video_image,
             provider_backed=provider_backed,
             warnings=warnings,
@@ -557,6 +621,12 @@ class HermesRitualArtifactHandoff:
                 "mimeType": music.get("mimeType") if isinstance(music, dict) else None,
             }
         return summary
+
+    def _transcription_provider(self, policy: dict[str, object]) -> str:
+        value = str(policy.get("transcriptionProvider") or "").strip().lower()
+        if value in {"openai", "chutes", "fallback"}:
+            return value
+        return "chutes"
 
     def _requested_provider_surfaces(self, value: object) -> list[str]:
         if not isinstance(value, list):

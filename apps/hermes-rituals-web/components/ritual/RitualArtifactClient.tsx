@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, ListMusic, MessageSquareText, Volume2, VolumeX } from "lucide-react"
+import { ArrowLeft, CheckCircle2, ListMusic, MessageSquareText, Volume2, VolumeX } from "lucide-react"
 import * as SliderPrimitive from "@radix-ui/react-slider"
 
 import { useRouter } from "next/navigation"
@@ -11,18 +11,23 @@ import {
   useRitualExperience,
   type RitualSessionEvent
 } from "@/hooks/use-ritual-experience"
+import { useRitualGuidanceSession } from "@/hooks/use-ritual-guidance-session"
 import {
   RitualPlayer,
   type RitualPlayerHandle,
   type RitualStageLens
 } from "@/components/ritual/RitualPlayer"
 import {
-  BodyPicker,
   EMPTY_BODY_STATE_DRAFT,
   type BodyCompletionStatus,
   type BodyStateDraft
 } from "@/components/ritual/BodyPicker"
+import {
+  RitualCompletionPanel,
+  type RitualCompletionSubmitPayload
+} from "@/components/ritual/completion/RitualCompletionPanel"
 import { RitualRail, type RailTab } from "@/components/ritual/RitualRail"
+import { RitualCompanionPanel } from "@/components/ritual/companion/RitualCompanionPanel"
 import {
   RitualTimelineProgress,
   type RitualTimelineCompletionStatus
@@ -36,6 +41,7 @@ import type {
   SessionShell
 } from "@/lib/artifact-contract"
 import type { RitualExperienceTrack } from "@/lib/ritual-experience"
+import { guidanceFrameFromExperienceFrame } from "@/lib/ritual-guidance-safety"
 
 const CHANNEL_ORDER = ["voice", "ambient", "breath", "pulse", "music"] as const
 const RITUAL_LENS_OPTIONS: RitualStageLens[] = ["cinema", "photo", "breath", "meditation", "body"]
@@ -132,7 +138,7 @@ function createCompletionId(artifactId: string) {
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return `${artifactId}:body:${randomId}`
+  return `${artifactId}:completion:${randomId}`
 }
 
 function buildBodyStatePayload(
@@ -162,6 +168,21 @@ function completedSectionIds(
     return sections.map((section) => section.id)
   }
   return sections.filter((section) => section.endMs <= currentMs).map((section) => section.id)
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
+    update()
+    media.addEventListener("change", update)
+    return () => media.removeEventListener("change", update)
+  }, [query])
+
+  return matches
 }
 
 function LiquidMixer({
@@ -366,6 +387,7 @@ function RitualLensSwitch({
           <button
             key={lens}
             type="button"
+            data-testid={`ritual-lens-${lens}`}
             onClick={() => onChange(lens)}
             className="relative flex items-center justify-center rounded-full px-2.5 py-1"
           >
@@ -442,6 +464,26 @@ export function RitualArtifactClient({
     completionId: null
   })
   const currentMsRef = useRef(currentMs)
+  const guidanceEventHandlerRef = useRef<((event: RitualSessionEvent) => void) | null>(null)
+  const pendingGuidanceEventsRef = useRef<RitualSessionEvent[]>([])
+  const hostSessionId = session?.id ?? artifact.sessionId ?? `artifact:${artifact.id}`
+  const guidanceSourceRefs = useMemo(() => artifact.sourceRefs ?? [], [artifact.sourceRefs])
+  const handleRitualSessionEvent = useCallback(
+    (event: RitualSessionEvent) => {
+      onSessionEvent?.(event)
+      const guidanceHandler = guidanceEventHandlerRef.current
+      if (guidanceHandler) {
+        guidanceHandler(event)
+        return
+      }
+      pendingGuidanceEventsRef.current.push(event)
+      if (pendingGuidanceEventsRef.current.length > 50) {
+        pendingGuidanceEventsRef.current.splice(0, pendingGuidanceEventsRef.current.length - 50)
+      }
+    },
+    [onSessionEvent]
+  )
+
   useEffect(() => {
     currentMsRef.current = currentMs
   }, [currentMs])
@@ -451,7 +493,7 @@ export function RitualArtifactClient({
     sections,
     currentMs,
     completionStatus: bodyCompletionStatus,
-    onSessionEvent
+    onSessionEvent: handleRitualSessionEvent
   })
   const ritualFrame = ritualExperience.frame
   const rawStageLens = ritualExperience.stageLens as RitualStageLens
@@ -469,9 +511,10 @@ export function RitualArtifactClient({
     () => availableStageLenses(ritualFrame.availableTracks, bodyCaptureAvailable),
     [bodyCaptureAvailable, ritualFrame.availableTracks]
   )
-  const stageLens = availableLenses.includes(rawStageLens)
+  const selectedStageLens = availableLenses.includes(rawStageLens)
     ? rawStageLens
     : availableLenses[0] ?? rawStageLens
+  const stageLens = playbackCompleted && bodyCaptureAvailable ? "body" : selectedStageLens
   const timelineStatus = timelineCompletionStatus(bodyCompletionStatus, playbackCompleted)
 
   // Immersive ritual state (breath or meditation)
@@ -488,16 +531,49 @@ export function RitualArtifactClient({
   const cinemaChromeGlass = cinemaImmersive && chromeVisible
   const backgroundImageUrl = artifact.stageVideo?.posterImageUrl ?? artifact.coverImageUrl
 
-  const durationMs = Math.max(
+  const declaredDurationMs = Math.max(
     artifact.durationMs ?? 0,
     artifact.captions?.at(-1)?.endMs ?? 0,
-    sections.at(-1)?.endMs ?? 0,
-    60000
+    sections.at(-1)?.endMs ?? 0
   )
+  const durationMs = declaredDurationMs > 0 ? declaredDurationMs : 60000
   const durationMsRef = useRef(durationMs)
   useEffect(() => {
     durationMsRef.current = durationMs
   }, [durationMs])
+
+  const currentGuidanceFrame = useMemo(
+    () =>
+      guidanceFrameFromExperienceFrame({
+        frame: ritualFrame,
+        currentMs,
+        durationMs,
+        lens: stageLens,
+        isPlaying,
+        playbackCompleted,
+        completionStatus: bodyCompletionStatus
+      }),
+    [bodyCompletionStatus, currentMs, durationMs, isPlaying, playbackCompleted, ritualFrame, stageLens]
+  )
+  const guidance = useRitualGuidanceSession({
+    artifactId: artifact.id,
+    ritualPlanId: artifact.ritualPlanId,
+    hostSessionId,
+    userId: "local-user",
+    privacyClass: artifact.privacyClass,
+    sourceRefs: guidanceSourceRefs,
+    currentFrame: currentGuidanceFrame
+  })
+  const recordGuidanceSessionEvent = guidance.recordSessionEvent
+
+  useEffect(() => {
+    guidanceEventHandlerRef.current = recordGuidanceSessionEvent
+    const pending = pendingGuidanceEventsRef.current.splice(0, pendingGuidanceEventsRef.current.length)
+    pending.forEach((event) => recordGuidanceSessionEvent(event))
+    return () => {
+      guidanceEventHandlerRef.current = null
+    }
+  }, [recordGuidanceSessionEvent])
 
   const handleTimeUpdate = useCallback((ms: number) => {
     setCurrentMs(ms)
@@ -506,7 +582,14 @@ export function RitualArtifactClient({
     }
   }, [setPlaybackCompleted])
 
-  const visibleRailTab = railTab === "body" && !bodyCaptureAvailable ? "sections" : railTab
+  const companionAvailable = Boolean(guidance.guidanceSessionId)
+  const visibleRailTab =
+    railTab === "body" && !bodyCaptureAvailable
+      ? "sections"
+      : railTab === "companion" && !companionAvailable
+        ? "sections"
+        : railTab
+  const desktopRail = useMediaQuery("(min-width: 768px)")
 
   // Auto-hide chrome in immersive modes
   useEffect(() => {
@@ -648,6 +731,30 @@ export function RitualArtifactClient({
     }
   }, [cinemaImmersive, stageLens])
 
+  const handleCompanionToggle = useCallback(() => {
+    if (railOpen && visibleRailTab === "companion") {
+      setRailOpen(false)
+      return
+    }
+    setRailTab(companionAvailable ? "companion" : "sections")
+    setRailOpen(true)
+    setShowChrome(true)
+  }, [companionAvailable, railOpen, visibleRailTab])
+
+  const handleBodyRailToggle = useCallback(() => {
+    if (!bodyCaptureAvailable) return
+    setRailTab("body")
+    setRailOpen(true)
+    setShowChrome(true)
+  }, [bodyCaptureAvailable])
+
+  const handleContinueLive = useCallback(() => {
+    const href = guidance.liveHref
+    if (!href) return
+    guidance.cacheForLiveRoute()
+    router.push(href)
+  }, [guidance, router])
+
   const setBodyCaptureStatus = useCallback(
     (completionStatus: BodyCompletionStatus, submitError: string | null = null) => {
       setBodyCapture((previous) => ({
@@ -671,9 +778,15 @@ export function RitualArtifactClient({
     })
   }, [artifact.privacyClass, bodyStateKey])
 
-  const handleSubmitBodyState = useCallback(async () => {
-    const bodyState = buildBodyStatePayload(bodyDraft, artifact.privacyClass)
-    if (!bodyState) {
+  const handleSubmitCompletion = useCallback(async ({
+    includeBodyState,
+    reflectionText,
+    practiceFeedback
+  }: RitualCompletionSubmitPayload) => {
+    const bodyState = includeBodyState
+      ? buildBodyStatePayload(bodyDraft, artifact.privacyClass)
+      : null
+    if (includeBodyState && !bodyState) {
       setBodyCaptureStatus("error", "Choose a sensation before holding this body note.")
       return
     }
@@ -714,9 +827,12 @@ export function RitualArtifactClient({
             currentMsRef.current,
             durationMsRef.current
           ),
-          bodyState,
+          ...(bodyState ? { bodyState } : {}),
+          ...(reflectionText ? { reflectionText } : {}),
+          ...(practiceFeedback ? { practiceFeedback } : {}),
           clientMetadata: {
             surface: "hermes-rituals-web",
+            completionPanelVersion: "v1_quiet_memory_loop",
             bodyPickerVersion: "v2_symbolic_body_map",
             bodyMapMode:
               stageLens === "body" ? "stage_full2d_rail_summary" : "rail_compact2d",
@@ -726,12 +842,14 @@ export function RitualArtifactClient({
       })
       const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
       if (!response.ok) {
-        throw new Error(typeof payload.error === "string" ? payload.error : "body_state_save_failed")
+        throw new Error(typeof payload.error === "string" ? payload.error : "completion_save_failed")
       }
       setBodyCaptureStatus("saved")
-      ritualExperience.recordSessionEvent({ type: "body_response_captured" })
+      if (bodyState) {
+        ritualExperience.recordSessionEvent({ type: "body_response_captured" })
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "body_state_save_failed"
+      const message = error instanceof Error ? error.message : "completion_save_failed"
       setBodyCaptureStatus("error", message.replaceAll("_", " "))
     }
   }, [
@@ -744,6 +862,24 @@ export function RitualArtifactClient({
     ritualExperience,
     setBodyCaptureStatus
   ])
+
+  const renderCompletionPanel = (testId?: string) => (
+    <RitualCompletionPanel
+      testId={testId}
+      bodyDraft={bodyDraft}
+      onBodyDraftChange={handleBodyDraftChange}
+      completionPrompt={ritualFrame.activeSection?.capturePrompt ?? artifact.completionPrompt}
+      completionStatus={bodyCompletionStatus}
+      submitError={bodySubmitError}
+      endpointAvailable={Boolean(artifact.completionEndpoint)}
+      mapMode={stageLens === "body" ? "summary" : "compact2d"}
+      disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
+      onSubmit={handleSubmitCompletion}
+    />
+  )
+
+  const bodyCompletionOverlayVisible =
+    stageLens === "body" && bodyCaptureAvailable && railOpen && visibleRailTab === "body"
 
   return (
     <div
@@ -910,22 +1046,49 @@ export function RitualArtifactClient({
             activeSection={ritualFrame.activeSection}
             bodyPromptMode={ritualFrame.bodyPromptMode}
             onBodyDraftChange={handleBodyDraftChange}
+            onBodySubmit={() => handleSubmitCompletion({ includeBodyState: true })}
             onComplete={handlePlayerComplete}
             onTimeUpdate={handleTimeUpdate}
             onPlayingChange={handlePlayingChange}
           />
+          {stageLens === "body" && bodyCaptureAvailable && !railOpen ? (
+            <motion.button
+              type="button"
+              data-testid="ritual-open-completion-panel"
+              aria-label="Open completion panel"
+              onClick={() => {
+                setRailTab("body")
+                setRailOpen(true)
+                setShowChrome(true)
+              }}
+              className="absolute bottom-5 right-5 z-30 inline-flex h-11 items-center gap-2 rounded-full border border-white/15 bg-white/12 px-4 text-sm font-medium text-silver-50 shadow-[0_18px_60px_rgba(0,0,0,0.34)] backdrop-blur-2xl hover:bg-white/18"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={MICRO_SPRING}
+            >
+              <CheckCircle2 className="size-4" />
+              <span>Save body detail</span>
+            </motion.button>
+          ) : null}
         </motion.section>
 
-        {/* Right panel — takes real space, spring width animation */}
+        {/* Right panel — desktop rail, mobile bottom sheet */}
         <motion.aside
           ref={railRef}
-          className="relative z-30 max-w-[100dvw] overflow-hidden border-l border-white/5"
+          className={[
+            "z-30 h-full max-w-[100dvw] shrink-0 overflow-hidden border-white/5 bg-black/35 backdrop-blur-2xl md:bg-transparent md:backdrop-blur-none",
+            desktopRail ? "relative border-l" : "fixed inset-x-0 bottom-0 border-t"
+          ].join(" ")}
           layout
           initial={false}
-          animate={{ width: railOpen ? 420 : 0 }}
+          animate={
+            desktopRail
+              ? { width: railOpen ? 420 : 0 }
+              : { width: "100dvw", height: railOpen ? "72dvh" : 0 }
+          }
           transition={PANEL_SPRING}
         >
-          <div className="flex h-full w-[min(100dvw,420px)] flex-col">
+          <div className="flex h-full w-full flex-col md:w-[min(100dvw,420px)]">
             {/* Rail content */}
             <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4">
               <RitualRail
@@ -941,18 +1104,19 @@ export function RitualArtifactClient({
                 onSeek={handleSeek}
                 showBodyTab={bodyCaptureAvailable}
                 bodyPanel={
-                  bodyCaptureAvailable ? (
-                    <BodyPicker
-                      value={bodyDraft}
-                      onChange={handleBodyDraftChange}
-                      variant="rail"
-                      completionPrompt={ritualFrame.activeSection?.capturePrompt ?? artifact.completionPrompt}
-                      completionStatus={bodyCompletionStatus}
-                      submitError={bodySubmitError}
-                      endpointAvailable={Boolean(artifact.completionEndpoint)}
-                      mapMode={stageLens === "body" ? "summary" : "compact2d"}
-                      disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
-                      onSubmit={handleSubmitBodyState}
+                  bodyCaptureAvailable ? renderCompletionPanel("ritual-completion-panel-rail") : undefined
+                }
+                showCompanionTab={companionAvailable}
+                companionPanel={
+                  companionAvailable ? (
+                    <RitualCompanionPanel
+                      guidanceSessionId={guidance.guidanceSessionId}
+                      guidanceStatus={guidance.status}
+                      guidanceError={guidance.error}
+                      playbackCompleted={playbackCompleted}
+                      liveHref={guidance.liveHref}
+                      getChatContext={guidance.getChatContext}
+                      onContinueLive={handleContinueLive}
                     />
                   ) : undefined
                 }
@@ -960,6 +1124,21 @@ export function RitualArtifactClient({
             </div>
           </div>
         </motion.aside>
+
+        <AnimatePresence>
+          {bodyCompletionOverlayVisible ? (
+            <motion.div
+              key="body-completion-overlay"
+              className="absolute bottom-4 right-4 top-4 z-40 w-[min(100dvw-2rem,420px)] overflow-y-auto rounded-2xl border border-white/10 bg-black/55 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={PANEL_SPRING}
+            >
+              {renderCompletionPanel()}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </motion.main>
 
       {/* Bottom-right toggle buttons — fade out in immersive */}
@@ -982,16 +1161,38 @@ export function RitualArtifactClient({
             chromeHidden ? "pointer-events-none" : "pointer-events-auto"
           ].join(" ")}
         >
+          {bodyCaptureAvailable ? (
+            <>
+              <motion.button
+                type="button"
+                data-testid="ritual-body-rail-toggle"
+                onClick={handleBodyRailToggle}
+                className={[
+                  "flex size-10 items-center justify-center rounded-full",
+                  railOpen && visibleRailTab === "body"
+                    ? "bg-white/20 text-white"
+                    : "bg-transparent text-silver-400 hover:text-silver-100"
+                ].join(" ")}
+                aria-label="Open completion"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.94 }}
+                transition={MICRO_SPRING}
+              >
+                <CheckCircle2 className="size-4.5" />
+              </motion.button>
+              <div className="h-5 w-px bg-white/15" />
+            </>
+          ) : null}
           <motion.button
             type="button"
-            onClick={() => setRailOpen(!railOpen)}
+            onClick={handleCompanionToggle}
             className={[
               "flex size-10 items-center justify-center rounded-full",
-              railOpen
+              railOpen && visibleRailTab === "companion"
                 ? "bg-white/20 text-white"
                 : "bg-transparent text-silver-400 hover:text-silver-100"
             ].join(" ")}
-            aria-label="Toggle transcript and sections"
+            aria-label="Open companion"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.94 }}
             transition={MICRO_SPRING}

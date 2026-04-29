@@ -627,6 +627,12 @@ class CirculatioCore:
             requested["music"] = {**requested.get("music", {}), "enabled": False}
             blocked_surfaces.append("music")
             warnings.append("music_disabled_without_external_providers")
+        elif music_requested and not bool(
+            requested.get("music", {}).get("allowExternalGeneration")
+        ):
+            requested["music"] = {**requested.get("music", {}), "enabled": False}
+            blocked_surfaces.append("music")
+            warnings.append("music_disabled_without_surface_external_generation")
         duration = self._presentation_duration(render_policy)
         source_digest = input_data["sourceDigest"]
         source_refs = input_data.get("sourceRefs", [])
@@ -648,6 +654,7 @@ class CirculatioCore:
             source_ref_ids=source_ref_ids,
             requested=requested,
             grounding_only=grounding_only,
+            narrative_mode=input_data["narrativeMode"],
         )
         body = "\n\n".join(segment["text"] for segment in segments if segment.get("text"))
         plan_id = create_id("ritual_plan")
@@ -669,7 +676,12 @@ class CirculatioCore:
             source_digest=source_digest,
             source_ref_ids=source_ref_ids,
         )
-        music_spec = self._presentation_music_spec(requested, source_ref_ids=source_ref_ids)
+        music_spec = self._presentation_music_spec(
+            requested,
+            source_digest=source_digest,
+            source_ref_ids=source_ref_ids,
+            target_seconds=duration["targetSeconds"],
+        )
         render_mode = cast(str, render_policy.get("mode", "dry_run_manifest"))
         frontend_route = "/artifacts/{artifactId}"
         evidence_ids = [str(item) for item in source_digest.get("evidenceIds", []) if str(item)]
@@ -714,6 +726,11 @@ class CirculatioCore:
                 "format": "structured_intent",
                 "ssmlAllowed": False,
                 "pausePolicy": "renderer_may_render_pauses",
+                "voiceId": self._presentation_voice_id(requested),
+                "speed": self._presentation_voice_speed(
+                    requested,
+                    narrative_mode=input_data["narrativeMode"],
+                ),
             },
             "breath": breath,
             "meditation": meditation,
@@ -850,9 +867,13 @@ class CirculatioCore:
         source_ref_ids: list[str],
         requested: RequestedRitualSurfaces,
         grounding_only: bool,
+        narrative_mode: str,
     ) -> list[VoiceScriptSegment]:
-        tone = "steady"
-        pace = "measured"
+        audio = requested.get("audio", {})
+        tone = str(audio.get("tone") or "steady")
+        pace = str(
+            audio.get("pace") or self._presentation_default_voice_pace(narrative_mode)
+        )
         segments: list[VoiceScriptSegment] = [
             {
                 "id": "seg_opening",
@@ -925,6 +946,37 @@ class CirculatioCore:
             }
         )
         return segments
+
+    def _presentation_voice_id(self, requested: RequestedRitualSurfaces) -> str:
+        audio = requested.get("audio", {})
+        candidate = str(audio.get("voiceId") or "").strip()
+        return candidate or "af_heart"
+
+    def _presentation_voice_speed(
+        self,
+        requested: RequestedRitualSurfaces,
+        *,
+        narrative_mode: str,
+    ) -> float:
+        audio = requested.get("audio", {})
+        configured = audio.get("speed")
+        if isinstance(configured, bool):
+            configured = None
+        if isinstance(configured, int | float):
+            return min(max(float(configured), 0.1), 3.0)
+        if isinstance(configured, str):
+            try:
+                return min(max(float(configured.strip()), 0.1), 3.0)
+            except ValueError:
+                pass
+        pace = str(audio.get("pace") or self._presentation_default_voice_pace(narrative_mode))
+        speed_by_pace = {"normal": 1.0, "measured": 0.9, "slow": 0.82}
+        return speed_by_pace.get(pace, 0.9)
+
+    def _presentation_default_voice_pace(self, narrative_mode: str) -> str:
+        if narrative_mode in {"breath_only", "meditation_only"}:
+            return "slow"
+        return "measured"
 
     def _presentation_breath_spec(
         self,
@@ -1068,15 +1120,126 @@ class CirculatioCore:
         self,
         requested: RequestedRitualSurfaces,
         *,
+        source_digest: dict[str, object],
         source_ref_ids: list[str],
+        target_seconds: int,
     ) -> dict[str, object]:
-        enabled = bool(requested.get("music", {}).get("enabled"))
+        music = requested.get("music", {})
+        enabled = bool(music.get("enabled"))
+        style_intent = str(
+            music.get("styleIntent") or self._presentation_music_style_intent(source_digest)
+        )
+        duration = self._presentation_music_duration(
+            music.get("musicDurationSeconds"),
+            target_seconds=target_seconds,
+        )
+        style_prompt = (
+            self._presentation_music_style_prompt(
+                source_digest=source_digest,
+                style_intent=style_intent,
+            )
+            if enabled
+            else ""
+        )
         return {
             "enabled": enabled,
             "role": "ambient_bed",
             "sourceRefs": source_ref_ids,
-            "providerPromptPolicy": "none",
+            "providerPromptPolicy": "derived_user_facing_only" if enabled else "none",
+            "styleIntent": style_intent,
+            "stylePrompt": style_prompt,
+            "musicDurationSeconds": duration,
+            "seed": self._presentation_music_seed(
+                style_prompt=style_prompt,
+                source_ref_ids=source_ref_ids,
+            ),
         }
+
+    def _presentation_music_style_intent(self, source_digest: dict[str, object]) -> str:
+        source_type = str(source_digest.get("sourceType") or "")
+        themes = " ".join(str(item).lower() for item in source_digest.get("activeThemes", []))
+        symbols = " ".join(str(item).lower() for item in source_digest.get("recurringSymbols", []))
+        field = f"{source_type} {themes} {symbols}"
+        if "dream" in field:
+            return "dream_integration"
+        if "threshold" in field:
+            return "threshold_crossing"
+        if any(token in field for token in ("body", "soma", "activation", "breath")):
+            return "body_settling"
+        if any(token in field for token in ("myth", "symbol", "archetype")):
+            return "mythic_motion"
+        return "quiet_reflection"
+
+    def _presentation_music_duration(self, value: object, *, target_seconds: int) -> int:
+        if isinstance(value, bool):
+            candidate = None
+        elif isinstance(value, int):
+            candidate = value
+        elif isinstance(value, str) and value.strip().isdecimal():
+            candidate = int(value.strip())
+        else:
+            candidate = min(max(target_seconds, 45), 90)
+        return min(max(candidate or 45, 15), 285)
+
+    def _presentation_music_style_prompt(
+        self,
+        *,
+        source_digest: dict[str, object],
+        style_intent: str,
+    ) -> str:
+        bases = {
+            "dream_integration": (
+                "instrumental ambient electronic ritual music, dreamlike but grounded, "
+                "warm synth texture, slow pulse, minimal percussion, no vocals"
+            ),
+            "body_settling": (
+                "instrumental somatic ambient music, steady low pulse, soft breath-like pads, "
+                "minimal percussion, calming dynamics, no vocals"
+            ),
+            "threshold_crossing": (
+                "instrumental threshold ritual music, slow evolving pulse, dark-to-warm harmonic "
+                "movement, restrained percussion, no vocals"
+            ),
+            "mythic_motion": (
+                "instrumental mythic ambient music, spacious drones, low ceremonial pulse, "
+                "subtle shimmer, restrained dynamics, no vocals"
+            ),
+            "quiet_reflection": (
+                "instrumental reflective ambient music, warm synth bed, slow pulse, minimal "
+                "percussion, intimate and steady, no vocals"
+            ),
+        }
+        parts = [bases.get(style_intent, bases["quiet_reflection"])]
+        summary = str(source_digest.get("summary") or "").strip()
+        if summary:
+            parts.append(
+                "derived from a user-facing ritual summary: "
+                + self._presentation_compact_text(summary, limit=150)
+            )
+        themes = [
+            str(item).strip()
+            for item in source_digest.get("activeThemes", [])
+            if str(item).strip()
+        ][:4]
+        if themes:
+            parts.append("emotional colors: " + ", ".join(themes))
+        symbols = [
+            str(item).strip()
+            for item in source_digest.get("recurringSymbols", [])
+            if str(item).strip()
+        ][:3]
+        if symbols:
+            parts.append("symbolic images: " + ", ".join(symbols))
+        parts.append("suited for breath, meditation, and reflective ritual playback")
+        return self._presentation_compact_text(". ".join(parts), limit=420)
+
+    def _presentation_music_seed(self, *, style_prompt: str, source_ref_ids: list[str]) -> int:
+        seed_material = json.dumps(
+            {"prompt": style_prompt, "sourceRefIds": source_ref_ids},
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+        return int(hashlib.sha256(seed_material).hexdigest()[:8], 16)
 
     def _presentation_source_ref_ids(self, refs: list[PresentationSourceRef]) -> list[str]:
         result: list[str] = []

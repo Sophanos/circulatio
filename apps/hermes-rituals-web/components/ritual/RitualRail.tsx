@@ -13,7 +13,7 @@ import type {
   RitualSection
 } from "@/lib/artifact-contract"
 
-export type RailTab = "sections" | "transcript" | "channels" | "body"
+export type RailTab = "sections" | "transcript" | "channels" | "body" | "companion"
 
 const TAB_CONTENT = {
   initial: { opacity: 0 },
@@ -34,7 +34,9 @@ export function RitualRail({
   onChannelGainChange,
   onSeek,
   bodyPanel,
-  showBodyTab
+  showBodyTab,
+  companionPanel,
+  showCompanionTab
 }: {
   artifact: PresentationArtifact
   currentMs: number
@@ -48,29 +50,61 @@ export function RitualRail({
   onSeek?: (ms: number) => void
   bodyPanel?: ReactNode
   showBodyTab?: boolean
+  companionPanel?: ReactNode
+  showCompanionTab?: boolean
 }) {
   const [internalTab, setInternalTab] = useState<RailTab>("sections")
   const tab = activeTab ?? internalTab
   const setTab = onTabChange ?? setInternalTab
   const bodyTabVisible = Boolean(showBodyTab && bodyPanel)
-  const visibleTab = tab === "body" && !bodyTabVisible ? "sections" : tab
+  const companionTabVisible = Boolean(showCompanionTab && companionPanel)
+  const transcriptTabVisible = Boolean(
+    artifact.transcript?.trim() || (artifact.captions?.length ?? 0) > 0
+  )
+  const visibleTab =
+    (tab === "body" && !bodyTabVisible) || (tab === "companion" && !companionTabVisible)
+      ? "sections"
+      : tab
 
   return (
     <div className="flex h-full flex-col">
       {/* Tabs */}
       <div className="mb-3 flex items-center gap-1 rounded-2xl p-1">
-        <TabButton active={visibleTab === "sections"} onClick={() => setTab("sections")}>
+        <TabButton
+          active={visibleTab === "sections"}
+          testId="ritual-rail-tab-sections"
+          onClick={() => setTab("sections")}
+        >
           Sections
         </TabButton>
-        <TabButton active={visibleTab === "transcript"} onClick={() => setTab("transcript")}>
-          Transcript
-        </TabButton>
-        <TabButton active={visibleTab === "channels"} onClick={() => setTab("channels")}>
+        {transcriptTabVisible ? (
+          <TabButton
+            active={visibleTab === "transcript"}
+            testId="ritual-rail-tab-transcript"
+            onClick={() => setTab("transcript")}
+          >
+            Transcript
+          </TabButton>
+        ) : null}
+        <TabButton
+          active={visibleTab === "channels"}
+          testId="ritual-rail-tab-channels"
+          onClick={() => setTab("channels")}
+        >
           Channels
         </TabButton>
         {bodyTabVisible ? (
-          <TabButton active={visibleTab === "body"} onClick={() => setTab("body")}>
+          <TabButton
+            active={visibleTab === "body"}
+            testId="ritual-rail-tab-body"
+            onClick={() => setTab("body")}
+          >
             Body
+          </TabButton>
+        ) : null}
+        {companionTabVisible ? (
+          <TabButton active={visibleTab === "companion"} onClick={() => setTab("companion")}>
+            Companion
           </TabButton>
         ) : null}
       </div>
@@ -88,7 +122,7 @@ export function RitualRail({
               />
             </motion.div>
           )}
-          {visibleTab === "transcript" && (
+          {visibleTab === "transcript" && transcriptTabVisible && (
             <motion.div key="transcript" {...TAB_CONTENT}>
               <RitualTranscript
                 artifact={artifact}
@@ -112,6 +146,11 @@ export function RitualRail({
               {bodyPanel}
             </motion.div>
           ) : null}
+          {visibleTab === "companion" && companionPanel ? (
+            <motion.div key="companion" className="h-full" {...TAB_CONTENT}>
+              {companionPanel}
+            </motion.div>
+          ) : null}
         </AnimatePresence>
       </div>
     </div>
@@ -121,15 +160,18 @@ export function RitualRail({
 function TabButton({
   active,
   onClick,
-  children
+  children,
+  testId
 }: {
   active: boolean
   onClick: () => void
   children: React.ReactNode
+  testId?: string
 }) {
   return (
     <motion.button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       className={[
         "relative flex-1 overflow-hidden rounded-xl px-3 py-2 text-xs font-semibold",

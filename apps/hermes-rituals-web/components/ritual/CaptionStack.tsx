@@ -23,7 +23,7 @@ export function CaptionStack({
   const visible = captions.slice(start, start + 2)
 
   return (
-    <div className="flex w-full flex-col items-center">
+    <div data-testid="ritual-caption-stack" className="flex w-full flex-col items-center">
       <div className="flex flex-col items-center gap-1 px-5 py-2">
         {visible.map((cue, offset) => {
           const isCurrent = offset === 0
@@ -34,6 +34,7 @@ export function CaptionStack({
           return (
             <motion.p
               key={`${cue.startMs}-${cue.endMs}`}
+              data-testid="ritual-caption-cue"
               initial={false}
               animate={{
                 opacity: muted ? baseOpacity * 0.4 : baseOpacity,

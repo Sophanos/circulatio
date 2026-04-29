@@ -229,7 +229,8 @@ function VisualStage({
   bodySubmitError,
   activeSection,
   bodyPromptMode = "hidden",
-  onBodyDraftChange
+  onBodyDraftChange,
+  onBodySubmit
 }: {
   artifact: PresentationArtifact
   currentMs: number
@@ -242,6 +243,7 @@ function VisualStage({
   activeSection?: RitualSection | null
   bodyPromptMode?: RitualBodyPromptMode
   onBodyDraftChange: (value: BodyStateDraft) => void
+  onBodySubmit?: () => void
 }) {
   const scenes = artifact.scenes ?? []
   const activeScene = scenes.find(
@@ -310,6 +312,7 @@ function VisualStage({
     return (
       <motion.div
         key="body-picker-stage"
+        data-testid="ritual-body-capture"
         className="relative h-full w-full overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl"
         layout
         initial={{ opacity: 0, scale: 0.985 }}
@@ -329,6 +332,7 @@ function VisualStage({
             disabled={bodyCompletionStatus === "submitting" || bodyCompletionStatus === "saved"}
             mapMode="full2d"
             showVoiceNote={bodyPromptMode === "focused_capture" ? false : undefined}
+            onSubmit={onBodySubmit}
           />
         </div>
       </motion.div>
@@ -341,6 +345,7 @@ function VisualStage({
     return (
       <motion.div
         key="cinema-video"
+        data-testid="ritual-cinema-stage"
         className={[
           "relative h-full w-full overflow-hidden bg-black/60",
           fullStageVideo ? "rounded-none border-0 shadow-none" : "rounded-3xl shadow-2xl"
@@ -368,6 +373,7 @@ function VisualStage({
         ) : (
           <video
             ref={directVideoRef}
+            data-testid="ritual-cinema-video"
             src={directVideoSource?.url}
             poster={directVideoSource?.posterImageUrl ?? artifact.coverImageUrl}
             className="h-full w-full object-cover"
@@ -554,6 +560,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   activeSection?: RitualSection | null
   bodyPromptMode?: RitualBodyPromptMode
   onBodyDraftChange: (value: BodyStateDraft) => void
+  onBodySubmit?: () => void
   onComplete?: () => void
   onTimeUpdate?: (ms: number) => void
   onPlayingChange?: (playing: boolean) => void
@@ -572,6 +579,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   activeSection: frameActiveSection,
   bodyPromptMode,
   onBodyDraftChange,
+  onBodySubmit,
   onComplete,
   onTimeUpdate,
   onPlayingChange
@@ -732,7 +740,10 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
   }, [onPlayingChange, pauseMusic])
 
   const startSyntheticClock = useCallback(() => {
-    const startSeconds = Math.min(Math.max(currentTime, 0), durationSecondsRef.current)
+    const durationSeconds = durationSecondsRef.current
+    const startSeconds = currentTime >= durationSeconds - 0.05
+      ? 0
+      : Math.min(Math.max(currentTime, 0), durationSeconds)
     playbackAnchorRef.current = {
       audioSeconds: startSeconds,
       startedAtMs: performance.now()
@@ -766,11 +777,12 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
           window.clearInterval(syntheticClockRef.current)
           syntheticClockRef.current = null
         }
+        const endSeconds = durationSecondsRef.current
         setIsPlaying(false)
         onPlayingChange?.(false)
         resetMusic()
-        setCurrentTime(0)
-        onTimeUpdate?.(0)
+        setCurrentTime(endSeconds)
+        onTimeUpdate?.(endSeconds * 1000)
         onComplete?.()
         return
       }
@@ -963,19 +975,29 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
     const finishPlayback = () => {
       playbackAnchorRef.current = null
       stopFrameClock()
+      audio.pause()
       setIsPlaying(false)
       onPlayingChange?.(false)
+      const endSeconds = durationSecondsRef.current
       resetMusic()
-      setCurrentTime(0)
-      onTimeUpdate?.(0)
+      try {
+        audio.currentTime = Math.min(
+          endSeconds,
+          Number.isFinite(audio.duration) ? audio.duration : endSeconds
+        )
+      } catch {}
+      setCurrentTime(endSeconds)
+      onTimeUpdate?.(endSeconds * 1000)
       onComplete?.()
     }
 
     const tick = () => {
       const nextSeconds = syncTime()
-      if (nextSeconds >= durationSecondsRef.current) {
+      const mediaDuration = Number.isFinite(audio.duration) ? audio.duration : 0
+      const mediaEnded =
+        audio.ended || (mediaDuration > 0 && audio.currentTime >= mediaDuration - 0.05)
+      if (nextSeconds >= durationSecondsRef.current || mediaEnded) {
         audio.pause()
-        audio.currentTime = 0
         finishPlayback()
         return
       }
@@ -1060,6 +1082,13 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
     if (audio.paused) {
       if (!ensureAudioSource()) return
+      if (audio.ended || currentTime >= durationSecondsRef.current - 0.05) {
+        try {
+          audio.currentTime = 0
+        } catch {}
+        setCurrentTime(0)
+        onTimeUpdate?.(0)
+      }
       try {
         await audio.play()
       } catch {
@@ -1112,6 +1141,8 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
 
   return (
     <div
+      data-testid="ritual-player"
+      data-current-ms={Math.round(currentTimeMs)}
       data-cinema-fullstage={fullStageVideo ? "true" : undefined}
       className={[
         "relative flex h-full flex-col items-center",
@@ -1121,6 +1152,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
       <audio
         key={audioStateKey}
         ref={audioRef}
+        data-testid="ritual-narration-audio"
         src={audioUrl || undefined}
         preload="metadata"
         onLoadedMetadata={handleLoadedMetadata}
@@ -1129,6 +1161,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
         <audio
           key={`${artifact.id}:music:${artifact.musicUrl}`}
           ref={musicAudioRef}
+          data-testid="ritual-music-audio"
           src={artifact.musicUrl}
           preload="metadata"
           loop
@@ -1160,6 +1193,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
             activeSection={activeSection}
             bodyPromptMode={bodyPromptMode}
             onBodyDraftChange={onBodyDraftChange}
+            onBodySubmit={onBodySubmit}
           />
         </AnimatePresence>
       </motion.div>
@@ -1254,6 +1288,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                   <div className="flex w-full items-center justify-center">
                     <motion.button
                       type="button"
+                      data-testid="ritual-play-toggle"
                       aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                       onClick={handleTogglePlay}
                       className={[
@@ -1280,7 +1315,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                     onScrub={handleScrub}
                   >
                     <div className="relative w-full">
-                      <ScrubBarTrack className="h-1.5 bg-white/20 md:h-2">
+                      <ScrubBarTrack data-testid="ritual-scrub-track" className="h-1.5 bg-white/20 md:h-2">
                         <ScrubBarProgress className="[&>div]:bg-white" />
                         <ScrubBarThumb className="size-4 bg-white shadow-lg md:size-5" />
                       </ScrubBarTrack>
@@ -1296,7 +1331,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                     onScrub={handleScrub}
                   >
                     <div className="relative w-full">
-                      <ScrubBarTrack className="h-1.5 bg-white/10">
+                      <ScrubBarTrack data-testid="ritual-scrub-track" className="h-1.5 bg-white/10">
                         <ScrubBarProgress className="[&>div]:bg-white" />
                         <ScrubBarThumb className="size-3.5 bg-white shadow-lg" />
                       </ScrubBarTrack>
@@ -1313,6 +1348,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                   {/* Play button — compact */}
                   <motion.button
                     type="button"
+                    data-testid="ritual-play-toggle"
                     aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                     onClick={handleTogglePlay}
                     className={[
@@ -1377,7 +1413,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                       value={currentTime}
                       onScrub={handleScrub}
                     >
-                      <ScrubBarTrack className="h-1 bg-white/10">
+                      <ScrubBarTrack data-testid="ritual-scrub-track" className="h-1 bg-white/10">
                         <ScrubBarProgress className="[&>div]:bg-white/60" />
                       </ScrubBarTrack>
                     </ScrubBarContainer>
@@ -1386,6 +1422,7 @@ export const RitualPlayer = forwardRef<RitualPlayerHandle, {
                   {/* Compact play */}
                   <motion.button
                     type="button"
+                    data-testid="ritual-play-toggle"
                     aria-label={isPlaying ? "Pause ritual" : "Play ritual"}
                     onClick={handleTogglePlay}
                     className={[

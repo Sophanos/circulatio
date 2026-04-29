@@ -28,6 +28,63 @@ DIFFRHYTHM_GENERATE_URL = "https://chutes-diffrhythm.chutes.ai/generate"
 WAN_I2V_GENERATE_URL = "https://chutes-wan-2-2-i2v-14b-fast.chutes.ai/generate"
 Z_IMAGE_GENERATE_URL = "https://chutes-z-image-turbo.chutes.ai/generate"
 
+KOKORO_VOICES = {
+    "af_heart",
+    "af_alloy",
+    "af_aoede",
+    "af_bella",
+    "af_jessica",
+    "af_kore",
+    "af_nicole",
+    "af_nova",
+    "af_river",
+    "af_sarah",
+    "af_sky",
+    "am_adam",
+    "am_echo",
+    "am_eric",
+    "am_fenrir",
+    "am_liam",
+    "am_michael",
+    "am_onyx",
+    "am_puck",
+    "am_santa",
+    "bf_alice",
+    "bf_emma",
+    "bf_isabella",
+    "bf_lily",
+    "bm_daniel",
+    "bm_fable",
+    "bm_george",
+    "bm_lewis",
+    "ef_dora",
+    "em_alex",
+    "em_santa",
+    "ff_siwis",
+    "hf_alpha",
+    "hf_beta",
+    "hm_omega",
+    "hm_psi",
+    "if_sara",
+    "im_nicola",
+    "jf_alpha",
+    "jf_gongitsune",
+    "jf_nezumi",
+    "jf_tebukuro",
+    "jm_kumo",
+    "pf_dora",
+    "pm_alex",
+    "pm_santa",
+    "zf_xiaobei",
+    "zf_xiaoni",
+    "zf_xiaoxiao",
+    "zf_xiaoyi",
+    "zm_yunjian",
+    "zm_yunxi",
+    "zm_yunxia",
+    "zm_yunyang",
+}
+
 _AUDIO_KEYS = (
     "audio_b64",
     "audioBase64",
@@ -75,12 +132,20 @@ def synthesize_speech(
     token: str,
     text: str,
     out_path: Path,
+    voice: str = "af_heart",
+    speed: float = 1.0,
     timeout_seconds: int = 180,
 ) -> ChutesAsset:
+    clean_voice = voice if voice in KOKORO_VOICES else "af_heart"
+    try:
+        speed_value = float(speed)
+    except (TypeError, ValueError):
+        speed_value = 1.0
+    clean_speed = min(max(speed_value, 0.1), 3.0)
     return _post_asset(
         token=token,
         url=KOKORO_SPEAK_URL,
-        payload={"text": text},
+        payload={"text": text, "voice": clean_voice, "speed": clean_speed},
         out_path=out_path,
         default_mime="audio/wav",
         model="chutes-kokoro",
@@ -132,17 +197,38 @@ def generate_music(
     token: str,
     out_path: Path,
     steps: int = 32,
+    style_prompt: str | None = None,
+    music_duration: int | None = None,
+    scheduler: str = "euler",
+    cfg_strength: float = 4.0,
     audio_b64: str | None = None,
     timeout_seconds: int = 240,
     seed: int | None = None,
     lyrics: str | None = None,
     batch_size: int = 1,
 ) -> ChutesAsset:
-    del audio_b64
+    clean_style = " ".join(str(style_prompt or "").split())
+    clean_audio = " ".join(str(audio_b64 or "").split())
+    if not clean_style and not clean_audio:
+        raise ChutesProviderError("Chutes DiffRhythm requires style_prompt or audio_b64.")
+    clean_scheduler = scheduler if scheduler in {"euler", "midpoint", "rk4"} else "euler"
+    duration = min(max(int(music_duration or 90), 15), 285)
+    payload: dict[str, object] = {
+        "seed": seed,
+        "steps": min(max(int(steps), 1), 100),
+        "lyrics": lyrics,
+        "scheduler": clean_scheduler,
+        "batch_size": min(max(int(batch_size), 1), 4),
+        "cfg_strength": min(max(float(cfg_strength), 1.0), 20.0),
+        "style_prompt": clean_style or None,
+        "music_duration": duration,
+    }
+    if clean_audio:
+        payload["audio_b64"] = clean_audio
     return _post_asset(
         token=token,
         url=DIFFRHYTHM_GENERATE_URL,
-        payload={"seed": seed, "steps": steps, "lyrics": lyrics, "batch_size": batch_size},
+        payload=payload,
         out_path=out_path,
         default_mime="audio/wav",
         model="chutes-diffrhythm",
