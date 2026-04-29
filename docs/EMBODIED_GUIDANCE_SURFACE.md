@@ -27,7 +27,7 @@ Still not implemented: pose estimation, movement scoring, reference-video compar
 
 This is not exactly "agent-browser for camera."
 
-`agent-browser` can test the browser UI. Camera guidance needs a separate **body sensor runtime**:
+`agent-browser` or OpenAI Browser Use can test the browser UI. Camera guidance needs a separate **body sensor runtime**:
 - camera or mobile camera access;
 - local pose/body estimation;
 - confidence scoring;

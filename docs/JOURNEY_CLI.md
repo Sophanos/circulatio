@@ -30,8 +30,8 @@ Journey CLI is the local proof harness for the Hermes Rituals path. Current cove
 - `ritual_invitation -> accept -> plan -> render -> artifact report` as an acceptance-gated path.
 - Negative scheduled cases: skipped, dismissed, decline, expired, or no-consent invitations must not plan or render.
 - Surface-selection cases: breath only, breath plus music, music without narration, full voice/music/image, image return, and cinema requested.
-- Browser artifact checks for real playback are performed with `agent-browser` only: narration metadata, music channel, captions, breath pacer, image/photo lens, cinema when enabled, completion POST, companion rail, and no-camera live continuation.
-- Provider distinction in reports: mock render, live provider smoke, and `agent-browser` playback success are separate result categories.
+- Browser artifact checks for real playback may use `agent-browser` or OpenAI Browser Use: narration metadata, music channel, captions, breath pacer, image/photo lens, cinema when enabled, completion POST, companion rail, and no-camera live continuation.
+- Provider distinction in reports: mock render, live provider smoke, and browser-driver playback success are separate result categories.
 - Chutes Whisper is not a required pass condition. Fallback captions are the baseline; official OpenAI transcription is optional provider-backed caption refinement.
 
 ## Run
@@ -122,7 +122,7 @@ artifacts/journey_cli_eval/runs/{runId}/
   screenshots/
 ```
 
-`tool_calls.json` redacts user-authored text fields. Provider tokens are never written. Reports include selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, and `agent-browser` check result so `browser_checks.json` and `artifacts_checked.json` can be treated as pass/fail artifacts.
+`tool_calls.json` redacts user-authored text fields. Provider tokens are never written. Reports include selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, browser driver used (`agent-browser` or OpenAI Browser Use), and check result so `browser_checks.json` and `artifacts_checked.json` can be treated as pass/fail artifacts.
 
 ## Scorecard
 
@@ -134,4 +134,4 @@ The report groups checks into:
 - `ui`: photo, breath, meditation, body completion, console/network contract
 - `negative_cases`: no consent, skipped invitation, missing token, zero budget, video blocked
 
-Skipped browser/media checks mean the default mock run did not produce that live asset. In provider-backed mode, missing requested live media is a failure, not a pass. `agent-browser` checks should turn `browser_checks.json` and `artifacts_checked.json` into actionable pass/fail outputs.
+Skipped browser/media checks mean the default mock run did not produce that live asset. In provider-backed mode, missing requested live media is a failure, not a pass. `agent-browser` or OpenAI Browser Use checks should turn `browser_checks.json` and `artifacts_checked.json` into actionable pass/fail outputs.

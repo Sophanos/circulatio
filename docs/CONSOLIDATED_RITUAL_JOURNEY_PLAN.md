@@ -134,7 +134,7 @@ The current tests cover backend planner contracts, renderer/provider payloads, l
    - OpenAI transcription requires provider allowlist, env-key lookup, and failure-tolerant fallback captions.
    - Failure returns warnings and fallback manifest where possible.
 
-4. `agent-browser` playback path
+4. Browser playback path (`agent-browser` or OpenAI Browser Use)
    - Load `/artifacts/{artifactId}`.
    - Verify manifest, audio, music, image, captions, and video URLs return expected statuses.
    - Verify narration metadata, music loop/sync, captions, breath pacer, image/photo lens, cinema lens, body capture at completion, and completion POST.
@@ -142,7 +142,7 @@ The current tests cover backend planner contracts, renderer/provider payloads, l
 5. Journey CLI integration
    - Ritual-specific tool-choice cases live in method eval datasets.
    - Accepted invitation -> plan -> render -> artifact report checks are in compound journey cases.
-   - Reports include selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, and `agent-browser` check result.
+   - Reports include selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, browser driver used (`agent-browser` or OpenAI Browser Use), and check result.
    - Provider tokens stay redacted and user-authored text stays out of `tool_calls.json`.
 
 ---
@@ -240,7 +240,7 @@ This pass does not implement pose estimation, reference movement comparison, cam
 
 - Production Hermes-agent subscription to guidance events and action execution.
 - Journey CLI proof for selective ritual tool choice and accepted invitation rendering.
-- `agent-browser` checks over provider-backed artifacts, not only fixture manifests.
+- `agent-browser` or OpenAI Browser Use checks over provider-backed artifacts, not only fixture manifests.
 - Local sensor runtime, pose confidence, reference media comparison, and bounded live body events.
 - Explicit practice-session IDs in completion feedback when a rendered artifact is attached to an accepted practice.
 
@@ -265,7 +265,7 @@ Use RepoPrompt MCP for all repo reading, searching, and documentation edits. Sta
 - src/circulatio_hermes_plugin/skills/circulation/SKILL.md
 
 Context:
-Phases 1-6 are focused on ritual contract, Hermes-agent tool choice, scheduled invitation, renderer/provider hardening, `agent-browser` playback checks, and Journey CLI proof. Your task is to produce a detailed implementation plan for Phases 7-9:
+Phases 1-6 are focused on ritual contract, Hermes-agent tool choice, scheduled invitation, renderer/provider hardening, browser playback checks through `agent-browser` or OpenAI Browser Use, and Journey CLI proof. Your task is to produce a detailed implementation plan for Phases 7-9:
 
 Phase 7: Completion And Memory Loop
 - Explicit completion writes only.
@@ -350,7 +350,7 @@ Deliver a detailed design implementation plan that includes:
 - Interaction rules for companion visibility, approval prompts, completion capture, and live guidance consent.
 - Required UI states: loading, provider fallback, no captions, no music, companion unavailable, completion replay, sensor unavailable, low confidence, user stops session.
 - Accessibility expectations for audio, captions, reduced motion, keyboard control, and non-camera fallback.
-- `agent-browser` acceptance criteria for the designer-facing experience.
+- Browser acceptance criteria for the designer-facing experience using `agent-browser` or OpenAI Browser Use.
 - What must stay visually stable from the current artifact player.
 - What docs need to be updated after design decisions.
 

@@ -59,13 +59,13 @@ What must be done before this vision is real:
    Scheduled rhythm must stop at invitation. Acceptance must be the only path into planning and rendering. Skip, dismiss, and expired invitations must not create plans or media.
 
 3. Make playback proof stronger than provider smoke tests.
-   Kokoro, DiffRhythm, and WAN smoke tests show provider contracts work. They do not prove the full user experience. We still need `agent-browser` verification over real artifacts: audio metadata, waveform, music channel, captions, breath pacer, meditation field, image/cinema lens, companion rail, and completion.
+   Kokoro, DiffRhythm, and WAN smoke tests show provider contracts work. They do not prove the full user experience. We still need browser verification through `agent-browser` or OpenAI Browser Use over real artifacts: audio metadata, waveform, music channel, captions, breath pacer, meditation field, image/cinema lens, companion rail, and completion.
 
 4. Keep fallback captions as the baseline.
    Whisper through the current Chutes path is not a working requirement. The ritual experience must stay functional with plan-derived or fallback caption segments until a reliable transcription provider is selected.
 
 5. Connect Journey CLI to ritual proof.
-   Journey CLI should verify invite-before-plan, accepted plan rendering, negative provider gates, selective surface choice, `agent-browser` artifact checks, and completion sync. It should distinguish mock renders, live provider smoke, and browser playback success.
+   Journey CLI should verify invite-before-plan, accepted plan rendering, negative provider gates, selective surface choice, artifact checks through `agent-browser` or OpenAI Browser Use, and completion sync. It should distinguish mock renders, live provider smoke, and browser playback success.
 
 6. Add the live guidance layer after artifact playback is stable.
    The Apple Fitness-like direction belongs to a `guidanceSessionId` session with Hermes-agent companion state and optional sensor/coach tracks. It must attach to the presentation artifact without making the planner camera-aware or sensor-aware.
