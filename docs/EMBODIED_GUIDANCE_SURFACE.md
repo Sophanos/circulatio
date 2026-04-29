@@ -17,6 +17,10 @@ Current implemented slice:
 -> optional getUserMedia permission request only after user action
 -> stop, pause, and complete local live states
 -> companion remains one bounded track in the shell
+-> companion rail handoff into live route
+-> local preview approve/reject action proof stays non-durable
+-> Journey CLI agent-browser pass/fail/skip evidence
+-> completion route idempotency proof with raw/sensor fields stripped
 ```
 
 Still not implemented: pose estimation, movement scoring, reference-video comparison, sensor event streaming, camera-derived persistence, or production Hermes live coaching.
@@ -365,14 +369,18 @@ This is host runtime state, not a new Circulatio durable object.
 1. Implemented: no-camera live continuation shell under `/live/{guidanceSessionId}`.
 2. Implemented: one-focus-at-a-time live modes for breath, meditation, image, movement, and companion cue.
 3. Implemented: camera preflight and permission request are explicit user actions.
-4. Next: add typed live guidance event stream in the frontend or mobile host.
-5. Next: build local mirror mode with camera permission, pose confidence, and no persistence.
-6. Next: add reference media as a separate track from user camera capture.
-7. Next: attach production Hermes-agent live coaching to `guidanceSessionId` and `hostSessionId`.
-8. Next: load enriched `coachState` before live coaching.
-9. Next: add explicit write buttons for body state, practice outcome, and reflection.
-10. Later: add active imagination capture as a separate explicit mode.
-11. Later: add training loops through `PracticeSessionRecord`, journeys, goals, rhythmic briefs, and adaptation preferences.
+4. Implemented: companion rail can hand off to the live route once a guidance session exists.
+5. Implemented: local preview approve/reject action proof remains non-durable.
+6. Implemented: Journey CLI can emit `agent-browser` pass/fail/skip artifacts for the local E2E path.
+7. Implemented: completion route accepts repeated idempotency keys and strips raw/sensor fields from loose records.
+8. Next: add typed live guidance event stream in the frontend or mobile host.
+9. Next: build local mirror mode with camera permission, pose confidence, and no persistence.
+10. Next: add reference media as a separate track from user camera capture.
+11. Next: attach production Hermes-agent live coaching to `guidanceSessionId` and `hostSessionId`.
+12. Next: load enriched `coachState` before live coaching.
+13. Next: add explicit write buttons for body state, practice outcome, and reflection.
+14. Later: add active imagination capture as a separate explicit mode.
+15. Later: add training loops through `PracticeSessionRecord`, journeys, goals, rhythmic briefs, and adaptation preferences.
 
 ---
 

@@ -30,6 +30,7 @@ export async function POST(
         executed: false,
         mode: "local_stub",
         durableWritesEnabled: false,
+        persistence: "not_persisted",
         action
       },
       { status: decision.decision === "reject" ? 200 : 202 }

@@ -3,9 +3,12 @@ import test from "node:test"
 
 import type { RitualSection } from "../artifact-contract"
 import type { RitualExperienceFrame } from "../ritual-experience"
+import type { RitualChatRequest } from "../ritual-guidance-contract"
 import { ritualSessionEventDedupeKey } from "../ritual-guidance-events"
+import { buildLocalPreviewCompanionAction } from "../ritual-guidance-local-preview"
 import {
   buildLocalGuidanceSession,
+  emptyGuidanceFrame,
   guidanceFrameFromExperienceFrame,
   sanitizeRitualChatRequest,
   stableGuidanceSessionId,
@@ -167,6 +170,101 @@ test("chat request sanitization keeps messages and bounded frame but drops raw a
   assert.equal(request.currentFrame.phase, "ritual")
   assert.deepEqual(request.currentFrame.availableTracks, ["meditation"])
   assert.equal(JSON.stringify(request).includes("do not forward"), false)
+})
+
+function chatRequest(text: string, allowedWrites = ["reflection"]): RitualChatRequest {
+  return {
+    guidanceSessionId: "guidance-1",
+    hostSessionId: "host-1",
+    artifactId: "artifact-1",
+    privacyClass: "private",
+    sourceRefs: [
+      {
+        sourceType: "dream",
+        recordId: "dream-1",
+        role: "primary",
+        label: "River gate",
+        evidenceIds: ["evidence-1"]
+      }
+    ],
+    currentFrame: emptyGuidanceFrame({
+      allowedWrites: allowedWrites as RitualChatRequest["currentFrame"]["allowedWrites"]
+    }),
+    messages: [
+      {
+        id: "message-1",
+        role: "user",
+        parts: [{ type: "text", text }]
+      }
+    ]
+  }
+}
+
+test("local preview builds reflection actions only for explicit write intent", () => {
+  const reflective = buildLocalPreviewCompanionAction(
+    chatRequest("What should I stay with?")
+  )
+  assert.equal(reflective.action, null)
+  assert.equal(reflective.reason, "no_storage_intent")
+
+  const write = buildLocalPreviewCompanionAction(
+    chatRequest("save this reflection: the breath felt softer."),
+    "2026-04-29T00:00:00.000Z"
+  )
+  assert.equal(write.reason, "built")
+  assert.ok(write.action)
+  assert.equal(write.action.type, "store_reflection")
+  assert.equal(write.action.payload.type, "store_reflection")
+  assert.equal(write.action.payload.text, "the breath felt softer.")
+  assert.equal(write.action.approvalState, "proposed")
+})
+
+test("local preview honors allowed writes", () => {
+  const result = buildLocalPreviewCompanionAction(
+    chatRequest("save this reflection: the gate stayed closed.", ["body_state"])
+  )
+
+  assert.equal(result.action, null)
+  assert.equal(result.reason, "write_not_allowed")
+})
+
+test("local preview action ids and idempotency keys are deterministic", () => {
+  const first = buildLocalPreviewCompanionAction(
+    chatRequest("save this reflection: repeatable."),
+    "2026-04-29T00:00:00.000Z"
+  )
+  const second = buildLocalPreviewCompanionAction(
+    chatRequest("save this reflection: repeatable."),
+    "2026-04-30T00:00:00.000Z"
+  )
+
+  assert.ok(first.action)
+  assert.ok(second.action)
+  assert.equal(first.action.actionId, second.action.actionId)
+  assert.equal(first.action.idempotencyKey, `guidance-1:${first.action.actionId}`)
+})
+
+test("local preview sanitizes source refs and bounds payload text", () => {
+  const longText = `save this reflection: ${"soft ".repeat(1200)}`
+  const result = buildLocalPreviewCompanionAction({
+    ...chatRequest(longText),
+    sourceRefs: [
+      {
+        sourceType: "dream",
+        recordId: "dream-1",
+        role: "primary",
+        label: "River gate",
+        evidenceIds: Array.from({ length: 30 }, (_, index) => `evidence-${index}`),
+        rawMaterialText: "hidden"
+      } as RitualChatRequest["sourceRefs"][number]
+    ]
+  })
+
+  assert.ok(result.action)
+  assert.equal(result.action.payload.type, "store_reflection")
+  assert.ok(result.action.payload.text.length <= 4000)
+  assert.equal(result.action.sourceRefs[0].evidenceIds?.length, 20)
+  assert.equal(JSON.stringify(result.action).includes("hidden"), false)
 })
 
 test("event dedupe keys collapse repeated section entries but allow later lens changes", () => {

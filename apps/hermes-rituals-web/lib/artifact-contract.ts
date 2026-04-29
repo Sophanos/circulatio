@@ -188,6 +188,7 @@ export type RitualCaptionSegment = CaptionCue & {
 export type RitualCompletionContract = {
   enabled: boolean
   endpoint: string
+  prompt?: string
   idempotencyRequired: true
   captureReflection: boolean
   capturePracticeFeedback: boolean
@@ -633,7 +634,7 @@ export function ritualArtifactFromManifest(
     durationMs: manifest.durationMs,
     ritualPlanId: manifest.planId,
     sourceRefs: manifest.sourceRefs,
-    completionPrompt: manifest.interaction.finishPrompt,
+    completionPrompt: manifest.interaction.completion?.prompt ?? manifest.interaction.finishPrompt,
     completionEndpoint:
       manifest.interaction.completion?.endpoint ?? manifest.interaction.completionEndpoint,
     captureBodyResponse: manifest.interaction.captureBodyResponse,

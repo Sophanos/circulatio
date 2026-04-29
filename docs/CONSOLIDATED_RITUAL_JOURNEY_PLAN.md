@@ -205,7 +205,7 @@ current ritual frame
 -> Hermes owns any durable Circulatio tool execution
 ```
 
-`RitualGuidanceFrame` now carries phase and available tracks directly, so Hermes does not need to infer live context from lens alone. The companion can be paused or minimized, local preview stays non-durable, and approval cards show user-facing persistence summaries instead of idempotency-key fragments.
+`RitualGuidanceFrame` now carries phase and available tracks directly, so Hermes does not need to infer live context from lens alone. The companion can be paused or minimized, local preview stays non-durable, approval cards show user-facing persistence summaries instead of idempotency-key fragments, and the local E2E path can propose approve/reject action cards without Hermes executing durable writes.
 
 ### Phase 9: No-Camera Live Guidance First Slice
 
@@ -221,7 +221,7 @@ artifact completion or companion rail
 -> companion remains a bounded track, not the live guidance system itself
 ```
 
-This pass does not implement pose estimation, reference movement comparison, camera telemetry, movement scoring, or live sensor persistence. It creates the safe host-owned shell those tracks can attach to later.
+This pass does not implement pose estimation, reference movement comparison, camera telemetry, movement scoring, or live sensor persistence. It creates the safe host-owned shell those tracks can attach to later, with Journey CLI browser-driver artifacts proving the local handoff and completion boundaries when `agent-browser` is installed.
 
 ### Enabled Use Cases
 
@@ -232,15 +232,17 @@ This pass does not implement pose estimation, reference movement comparison, cam
 - Use the in-ritual companion with phase, section, lens, available track, completion, and source-reference context.
 - Pause or minimize the companion without stopping playback.
 - Approve or reject proposed durable actions through a card that avoids internal backend identifiers.
-- Continue into `/live/{guidanceSessionId}` as a no-camera guided session.
+- Continue into `/live/{guidanceSessionId}` as a no-camera guided session from completion or the companion rail.
 - Select a live focus mode and complete/stop/pause the live continuation.
 - Enter camera preflight explicitly while keeping no-camera guidance available.
+- Exercise local preview action proposal, approve/reject, and non-durable approval evidence without Hermes.
+- Capture Journey CLI `agent-browser` pass/fail/skip artifacts for artifact page, companion action, live handoff, camera preflight, and completion route idempotency.
 
 ### Remaining Work
 
 - Production Hermes-agent subscription to guidance events and action execution.
-- Journey CLI proof for selective ritual tool choice and accepted invitation rendering.
-- `agent-browser` or OpenAI Browser Use checks over provider-backed artifacts, not only fixture manifests.
+- Production Hermes live coaching attached to `guidanceSessionId` and `hostSessionId`.
+- Provider-backed browser-driver checks with live audio/image/video artifacts, beyond local mock artifacts.
 - Local sensor runtime, pose confidence, reference media comparison, and bounded live body events.
 - Explicit practice-session IDs in completion feedback when a rendered artifact is attached to an accepted practice.
 

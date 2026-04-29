@@ -94,6 +94,9 @@ export function LiveGuidanceShell({
   return (
     <main
       data-testid="live-guidance-shell"
+      data-guidance-session-id={chatContext.guidanceSessionId}
+      data-artifact-id={chatContext.artifactId}
+      data-live-status={status}
       className="flex min-h-[100dvh] flex-col bg-graphite-950 text-silver-50"
     >
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-5 md:px-8 md:py-8">
@@ -136,6 +139,8 @@ export function LiveGuidanceShell({
                   <motion.button
                     key={mode.id}
                     type="button"
+                    data-testid={`live-focus-${mode.id}`}
+                    aria-pressed={active}
                     disabled={stopped}
                     onClick={() => setFocusMode(mode.id)}
                     className={cn(
@@ -160,10 +165,17 @@ export function LiveGuidanceShell({
                 <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-silver-500">
                   Current focus
                 </div>
-                <div className="mt-2 text-3xl font-medium capitalize text-silver-50">
+                <div
+                  data-testid="live-current-focus"
+                  className="mt-2 text-3xl font-medium capitalize text-silver-50"
+                >
                   {focusMode.replace("_", " ")}
                 </div>
-                <p className="mt-3 max-w-xl text-sm leading-6 text-silver-400">
+                <p
+                  data-testid="live-sensor-state"
+                  data-sensor-state={sensorState}
+                  className="mt-3 max-w-xl text-sm leading-6 text-silver-400"
+                >
                   {sensorCopy(sensorState)}
                 </p>
               </div>
@@ -171,6 +183,7 @@ export function LiveGuidanceShell({
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 <motion.button
                   type="button"
+                  data-testid="live-camera-preflight"
                   disabled={stopped}
                   onClick={() => setSensorState("camera_preflight")}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-medium text-silver-100 disabled:pointer-events-none disabled:opacity-40"
@@ -183,6 +196,7 @@ export function LiveGuidanceShell({
                 </motion.button>
                 <motion.button
                   type="button"
+                  data-testid="live-no-camera"
                   disabled={stopped}
                   onClick={() => setSensorState("live_no_camera")}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-medium text-silver-100 disabled:pointer-events-none disabled:opacity-40"
@@ -201,6 +215,7 @@ export function LiveGuidanceShell({
                     <span>Camera is optional and local-first.</span>
                     <motion.button
                       type="button"
+                      data-testid="live-camera-enable"
                       onClick={requestCamera}
                       className="h-9 rounded-full bg-white px-4 text-xs font-semibold text-graphite-950"
                       whileHover={{ scale: 1.02 }}
@@ -216,6 +231,7 @@ export function LiveGuidanceShell({
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <motion.button
                   type="button"
+                  data-testid="live-pause"
                   disabled={stopped}
                   onClick={() => setSensorState("guidance_paused")}
                   className="inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-silver-300 disabled:pointer-events-none disabled:opacity-40"
@@ -228,6 +244,7 @@ export function LiveGuidanceShell({
                 </motion.button>
                 <motion.button
                   type="button"
+                  data-testid="live-stop"
                   disabled={stopped}
                   onClick={() => setSensorState("user_stopped")}
                   className="inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-silver-300 disabled:pointer-events-none disabled:opacity-40"
@@ -240,6 +257,7 @@ export function LiveGuidanceShell({
                 </motion.button>
                 <motion.button
                   type="button"
+                  data-testid="live-complete"
                   disabled={stopped}
                   onClick={() => setSensorState("live_completed")}
                   className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-graphite-950 disabled:pointer-events-none disabled:opacity-40"
@@ -254,7 +272,10 @@ export function LiveGuidanceShell({
             </div>
           </motion.div>
 
-          <section className="min-h-[420px] rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-2xl md:p-5">
+          <section
+            data-testid="live-companion-section"
+            className="min-h-[420px] rounded-3xl border border-white/10 bg-black/30 p-4 backdrop-blur-2xl md:p-5"
+          >
             <RitualCompanionPanel
               variant="live"
               guidanceSessionId={chatContext.guidanceSessionId}

@@ -235,6 +235,28 @@ def parse_args() -> argparse.Namespace:
         help="Fetch artifact page URLs during the browser audit.",
     )
     parser.add_argument(
+        "--ritual-browser-driver",
+        choices=["off", "agent-browser"],
+        default="agent-browser",
+        help="Run repo-approved browser-driver checks for ritual E2E proof.",
+    )
+    parser.add_argument(
+        "--ritual-browser-driver-command",
+        default="agent-browser",
+        help="Command used for the agent-browser CLI.",
+    )
+    parser.add_argument(
+        "--require-ritual-browser-driver",
+        action="store_true",
+        help="Fail the ritual eval when browser-driver checks are skipped or fail.",
+    )
+    parser.add_argument(
+        "--ritual-browser-timeout-seconds",
+        type=int,
+        default=180,
+        help="Timeout for each browser-driver artifact flow.",
+    )
+    parser.add_argument(
         "--ritual-request-timeout-seconds",
         type=int,
         default=180,
@@ -277,6 +299,18 @@ def _print_summary(summary: dict[str, object]) -> None:
 def _print_ritual_summary(report: dict[str, object]) -> None:
     print(f"run={report.get('runId')} mode=ritual_eval passed={report.get('passed')}")
     print(f"report={report.get('runDir')}/report.md")
+    browser_driver = (
+        report.get("browserDriver") if isinstance(report.get("browserDriver"), dict) else {}
+    )
+    summary = browser_driver.get("summary", []) if isinstance(browser_driver, dict) else []
+    statuses = (
+        ", ".join(str(item.get("status")) for item in summary if isinstance(item, dict))
+        or "not_run"
+    )
+    print(
+        f"Browser driver: {browser_driver.get('driver', 'off')} {statuses}; "
+        f"Browser artifacts: {report.get('runDir')}/browser_driver_results.json"
+    )
     for finding in list(report.get("findings", [])):
         print(f"  - {finding}")
 
@@ -304,6 +338,10 @@ def main() -> int:
             openai_transcription_model=args.ritual_openai_transcription_model,
             http_check=args.ritual_http_check,
             request_timeout_seconds=args.ritual_request_timeout_seconds,
+            browser_driver=args.ritual_browser_driver,
+            browser_driver_command=args.ritual_browser_driver_command,
+            require_browser_driver=args.require_ritual_browser_driver,
+            browser_timeout_seconds=args.ritual_browser_timeout_seconds,
             run_id=args.ritual_run_id,
         )
         _print_ritual_summary(report)

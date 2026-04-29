@@ -189,7 +189,13 @@ export function RitualCompanionPanel({
           updateAction(
             payload.executed === true
               ? { ...returnedAction, approvalState: "executed" }
-              : returnedAction
+              : {
+                  ...returnedAction,
+                  error:
+                    payload.persistence === "not_persisted"
+                      ? "Local preview: no durable write executed"
+                      : returnedAction.error
+                }
           )
           return
         }
@@ -228,13 +234,22 @@ export function RitualCompanionPanel({
   const lastResponseText = assistantText(messages)
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div
+      data-testid="ritual-companion-panel"
+      data-variant={variant}
+      data-guidance-session-id={guidanceSessionId ?? ""}
+      data-guidance-status={guidanceStatus ?? ""}
+      className="flex h-full min-h-0 flex-col gap-3"
+    >
       <div className="flex shrink-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-silver-500">
             Companion
           </div>
-          <div className="mt-1 text-sm font-medium text-silver-100">
+          <div
+            data-testid="ritual-companion-status"
+            className="mt-1 text-sm font-medium text-silver-100"
+          >
             {paused ? "Paused" : statusCopy(normalizedStatus, guidanceStatus)}
           </div>
           {guidanceError ? (
@@ -244,6 +259,7 @@ export function RitualCompanionPanel({
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <motion.button
             type="button"
+            data-testid="ritual-companion-pause"
             aria-pressed={paused}
             onClick={() => setPaused((next) => !next)}
             className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-medium text-silver-200"
@@ -256,6 +272,7 @@ export function RitualCompanionPanel({
           </motion.button>
           <motion.button
             type="button"
+            data-testid="ritual-companion-minimize"
             aria-pressed={minimized}
             onClick={() => setMinimized((next) => !next)}
             className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 text-xs font-medium text-silver-200"
@@ -266,17 +283,19 @@ export function RitualCompanionPanel({
             <Minimize2 className="size-4" />
             <span>{minimized ? "Open" : "Minimize"}</span>
           </motion.button>
-          {variant === "rail" && playbackCompleted && liveHref ? (
+          {variant === "rail" && liveHref && onContinueLive ? (
             <motion.button
               type="button"
+              data-testid="ritual-continue-live"
+              disabled={guidanceStatus === "creating"}
               onClick={onContinueLive}
-              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-white px-3 text-xs font-semibold text-graphite-950"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full bg-white px-3 text-xs font-semibold text-graphite-950 disabled:pointer-events-none disabled:opacity-40"
+              whileHover={guidanceStatus === "creating" ? undefined : { scale: 1.03 }}
+              whileTap={guidanceStatus === "creating" ? undefined : { scale: 0.97 }}
               transition={MICRO_SPRING}
             >
               <Maximize2 className="size-4" />
-              <span>Continue live</span>
+              <span>{playbackCompleted ? "Continue live" : "Open live"}</span>
             </motion.button>
           ) : null}
         </div>
@@ -367,6 +386,7 @@ export function RitualCompanionPanel({
           {canSpeak && lastResponseText ? (
             <motion.button
               type="button"
+              data-testid="ritual-companion-read"
               onClick={readLastResponse}
               className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 text-sm font-medium text-silver-100"
               whileHover={{ scale: 1.02 }}
@@ -382,6 +402,7 @@ export function RitualCompanionPanel({
           {status === "streaming" ? (
             <motion.button
               type="button"
+              data-testid="ritual-companion-stop"
               onClick={stop}
               className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-silver-100"
               whileHover={{ scale: 1.02 }}
@@ -394,6 +415,7 @@ export function RitualCompanionPanel({
           ) : error ? (
             <motion.button
               type="button"
+              data-testid="ritual-companion-retry"
               onClick={() => void regenerate()}
               className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-silver-100"
               whileHover={{ scale: 1.02 }}
@@ -406,6 +428,7 @@ export function RitualCompanionPanel({
           ) : (
             <motion.button
               type="submit"
+              data-testid="ritual-companion-send"
               disabled={busy || input.trim().length === 0}
               className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-graphite-950 disabled:pointer-events-none disabled:opacity-40"
               whileHover={busy ? undefined : { scale: 1.02 }}

@@ -883,6 +883,8 @@ export function RitualArtifactClient({
 
   return (
     <div
+      data-testid="ritual-artifact-client"
+      data-artifact-id={artifact.id}
       className={[
         "relative flex h-[100dvh] flex-col overflow-hidden bg-graphite-950 text-silver-50",
         cinemaImmersive ? "" : "page-shell"
@@ -1104,7 +1106,9 @@ export function RitualArtifactClient({
                 onSeek={handleSeek}
                 showBodyTab={bodyCaptureAvailable}
                 bodyPanel={
-                  bodyCaptureAvailable ? renderCompletionPanel("ritual-completion-panel-rail") : undefined
+                  bodyCaptureAvailable
+                    ? renderCompletionPanel("ritual-completion-panel-rail")
+                    : undefined
                 }
                 showCompanionTab={companionAvailable}
                 companionPanel={
@@ -1135,7 +1139,7 @@ export function RitualArtifactClient({
               exit={{ opacity: 0, x: 16 }}
               transition={PANEL_SPRING}
             >
-              {renderCompletionPanel()}
+              {renderCompletionPanel("ritual-completion-panel-overlay")}
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -1185,6 +1189,7 @@ export function RitualArtifactClient({
           ) : null}
           <motion.button
             type="button"
+            data-testid="ritual-companion-toggle"
             onClick={handleCompanionToggle}
             className={[
               "flex size-10 items-center justify-center rounded-full",

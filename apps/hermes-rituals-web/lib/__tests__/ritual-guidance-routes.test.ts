@@ -192,6 +192,71 @@ test("chat route returns local preview stream with no chat env", async () => {
 
   assert.equal(response.status, 200)
   assert.ok(text.includes("Companion unavailable in local preview"))
+  assert.equal(text.includes("data-ritual-companion-action"), false)
+})
+
+test("chat route proposes local preview action only for explicit write intent", async () => {
+  delete process.env.HERMES_RITUAL_CHAT_URL
+  const response = await postRitualChat(jsonRequest({
+    guidanceSessionId: "guidance-1",
+    hostSessionId: "host-1",
+    artifactId: "artifact-1",
+    sourceRefs: [
+      {
+        sourceType: "dream",
+        recordId: "dream-1",
+        role: "primary",
+        label: "River gate",
+        rawMaterialText: "hidden raw"
+      }
+    ],
+    currentFrame: emptyGuidanceFrame({ allowedWrites: ["reflection"] }),
+    messages: [
+      {
+        id: "message-1",
+        role: "user",
+        parts: [
+          {
+            type: "text",
+            text: "save this reflection: the breath felt softer."
+          }
+        ]
+      }
+    ]
+  }))
+  const text = await response.text()
+
+  assert.equal(response.status, 200)
+  assert.ok(text.includes("data-ritual-companion-action"))
+  assert.ok(text.includes("store_reflection"))
+  assert.ok(text.includes("Awaiting approval") || text.includes("proposed"))
+  assert.equal(text.includes("hidden raw"), false)
+})
+
+test("local action approval and rejection never execute durable writes", async () => {
+  delete process.env.HERMES_GUIDANCE_SESSIONS_URL
+  const approved = await postGuidanceAction(jsonRequest({ action: action(), decision: "approve" }), {
+    params: Promise.resolve({ guidanceSessionId: "guidance-1" })
+  })
+  const approvedBody = await approved.json()
+
+  assert.equal(approved.status, 202)
+  assert.equal(approvedBody.executed, false)
+  assert.equal(approvedBody.mode, "local_stub")
+  assert.equal(approvedBody.durableWritesEnabled, false)
+  assert.equal(approvedBody.persistence, "not_persisted")
+  assert.equal(approvedBody.action.approvalState, "approved")
+
+  const rejected = await postGuidanceAction(jsonRequest({ action: action(), decision: "reject" }), {
+    params: Promise.resolve({ guidanceSessionId: "guidance-1" })
+  })
+  const rejectedBody = await rejected.json()
+
+  assert.equal(rejected.status, 200)
+  assert.equal(rejectedBody.executed, false)
+  assert.equal(rejectedBody.persistence, "not_persisted")
+  assert.equal(rejectedBody.action.approvalState, "rejected")
+  assert.equal(rejectedBody.action.rejectionFinal, true)
 })
 
 test("chat route falls back when Hermes stream fails without exposing internals", async () => {

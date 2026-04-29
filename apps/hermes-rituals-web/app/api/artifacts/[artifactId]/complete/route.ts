@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { forwardRitualCompletion } from "@/lib/hermes-completion-adapter"
 import type { RitualCompletionBodyStatePayload } from "@/lib/artifact-contract"
 import { loadArtifactManifest } from "@/lib/load-artifact-manifest"
+import { stripBlockedFields } from "@/lib/ritual-guidance-safety"
 
 const BODY_ACTIVATIONS = new Set(["low", "moderate", "high", "overwhelming"])
 const PLAYBACK_STATES = new Set(["completed", "partial", "abandoned"])
@@ -12,21 +13,13 @@ function stringArray(value: unknown) {
   return value.map((item) => String(item).trim()).filter(Boolean)
 }
 
-function cleanMetadata(value: unknown) {
+function cleanLooseRecord(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
-  const blocked = new Set([
-    "transcript",
-    "captions",
-    "rawMaterialText",
-    "providerPrompt",
-    "cameraData",
-    "videoFrame",
-    "poseLandmarks",
-    "sensorTelemetry"
-  ])
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter(([key]) => !blocked.has(key))
-  )
+  const cleaned = stripBlockedFields(value)
+  if (!cleaned || typeof cleaned !== "object" || Array.isArray(cleaned)) return undefined
+  const entries = Object.entries(cleaned as Record<string, unknown>)
+  if (entries.length === 0) return undefined
+  return Object.fromEntries(entries)
 }
 
 function optionalString(value: unknown) {
@@ -108,12 +101,9 @@ export async function POST(
     durationMs: typeof body.durationMs === "number" ? body.durationMs : manifest.durationMs,
     completedSections: stringArray(body.completedSections),
     reflectionText: typeof body.reflectionText === "string" ? body.reflectionText : undefined,
-    practiceFeedback:
-      body.practiceFeedback && typeof body.practiceFeedback === "object" && !Array.isArray(body.practiceFeedback)
-        ? (body.practiceFeedback as Record<string, unknown>)
-        : undefined,
+    practiceFeedback: cleanLooseRecord(body.practiceFeedback),
     bodyState,
-    clientMetadata: cleanMetadata(body.clientMetadata)
+    clientMetadata: cleanLooseRecord(body.clientMetadata)
   }
 
   const forwarded = await forwardRitualCompletion(payload)

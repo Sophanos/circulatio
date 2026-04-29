@@ -183,6 +183,12 @@ class RitualRenderer:
         )
         if provider_assets:
             render_mode = "render_static"
+        completion_prompt = str(
+            cast(dict[str, object], plan.get("interactionSpec") or {}).get(
+                "finishPrompt",
+                "Notice one body detail or leave this empty and simply mark the ritual complete.",
+            )
+        )
         sections = self._sections(
             plan=plan,
             surfaces=surfaces,
@@ -206,15 +212,14 @@ class RitualRenderer:
             "surfaces": surfaces,
             "timeline": self._timeline(plan=plan, captions=captions),
             "interaction": {
-                "finishPrompt": cast(dict[str, object], plan.get("interactionSpec") or {}).get(
-                    "finishPrompt", "What did you notice?"
-                ),
+                "finishPrompt": completion_prompt,
                 "captureBodyResponse": True,
                 "completionEndpoint": f"/api/artifacts/{artifact_id}/complete",
                 "returnCommand": f"/circulation ritual complete {artifact_id}",
                 "completion": {
                     "enabled": True,
                     "endpoint": f"/api/artifacts/{artifact_id}/complete",
+                    "prompt": completion_prompt,
                     "idempotencyRequired": True,
                     "captureReflection": True,
                     "capturePracticeFeedback": True,

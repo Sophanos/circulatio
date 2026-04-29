@@ -43,6 +43,8 @@ export const BLOCKED_RAW_PAYLOAD_KEYS = [
   "audioBase64",
   "audioBlob",
   "videoFrame",
+  "poseLandmarks",
+  "sensorTelemetry",
   "promptText"
 ] as const
 

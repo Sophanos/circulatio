@@ -133,8 +133,18 @@
   ],
   "interaction": {
     "finishPrompt": "What changed when you did not advance?",
-    "captureBodyResponse": false,
-    "returnCommand": "/circulation ritual complete ritual-river-gate"
+    "captureBodyResponse": true,
+    "completionEndpoint": "/api/artifacts/ritual-river-gate/complete",
+    "returnCommand": "/circulation ritual complete ritual-river-gate",
+    "completion": {
+      "enabled": true,
+      "endpoint": "/api/artifacts/ritual-river-gate/complete",
+      "prompt": "Notice one body detail or leave this empty and simply mark the ritual complete.",
+      "idempotencyRequired": true,
+      "captureReflection": true,
+      "capturePracticeFeedback": true,
+      "completionIdStrategy": "client_uuid"
+    }
   },
   "safety": {
     "stopInstruction": "Stop if this increases activation; orient to the room.",

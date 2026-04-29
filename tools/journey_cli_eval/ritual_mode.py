@@ -26,6 +26,12 @@ from circulatio_hermes_plugin.tools import (
     store_dream_tool,
     store_reflection_tool,
 )
+from tools.journey_cli_eval.browser_driver import (
+    BrowserDriverConfig,
+    BrowserDriverResult,
+    BrowserDriverTask,
+    run_browser_driver_task,
+)
 from tools.self_evolution.artifacts import current_git_sha, default_run_id
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -193,6 +199,10 @@ class RitualJourneyConfig:
     openai_transcription_model: str
     http_check: bool
     request_timeout_seconds: int
+    browser_driver: str
+    browser_driver_command: str
+    require_browser_driver: bool
+    browser_timeout_seconds: int
 
 
 @dataclass
@@ -279,6 +289,10 @@ def run_ritual_journey_eval(
     openai_transcription_model: str = "whisper-1",
     http_check: bool = False,
     request_timeout_seconds: int = 180,
+    browser_driver: str = "agent-browser",
+    browser_driver_command: str = "agent-browser",
+    require_browser_driver: bool = False,
+    browser_timeout_seconds: int = 180,
     run_id: str | None = None,
 ) -> _JSON:
     """Run the ritual journey simulator/evaluator and write the report bundle."""
@@ -303,6 +317,10 @@ def run_ritual_journey_eval(
         openai_transcription_model=openai_transcription_model,
         http_check=http_check,
         request_timeout_seconds=request_timeout_seconds,
+        browser_driver=browser_driver,
+        browser_driver_command=browser_driver_command,
+        require_browser_driver=require_browser_driver,
+        browser_timeout_seconds=browser_timeout_seconds,
     )
     (config.run_dir / "screenshots").mkdir(parents=True, exist_ok=True)
     payload = asyncio.run(_run_ritual_journey_eval(config))
@@ -323,6 +341,7 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
     timeline: list[_JSON] = []
     artifacts: list[_JSON] = []
     browser_checks: list[_JSON] = []
+    browser_driver_results: list[_JSON] = []
     negative_results: list[_JSON] = []
 
     with _patched_env(_handoff_env(config)):
@@ -334,6 +353,7 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
                 timeline=timeline,
                 artifacts=artifacts,
                 browser_checks=browser_checks,
+                browser_driver_results=browser_driver_results,
             )
             weekly = await _run_weekly_scenario(
                 config=config,
@@ -342,6 +362,7 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
                 timeline=timeline,
                 artifacts=artifacts,
                 browser_checks=browser_checks,
+                browser_driver_results=browser_driver_results,
             )
             negative_results = await _run_negative_scenarios(
                 config=config,
@@ -361,6 +382,7 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
         browser_checks=browser_checks,
         negative_results=negative_results,
         llm=llm,
+        config=config,
     )
     findings = _findings(scorecard=scorecard, browser_checks=browser_checks, artifacts=artifacts)
     report: _JSON = {
@@ -388,6 +410,10 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
                 "openaiApiKeyEnv": config.openai_api_key_env,
                 "openaiTranscriptionModel": config.openai_transcription_model,
                 "httpCheck": config.http_check,
+                "browserDriver": config.browser_driver,
+                "browserDriverCommand": config.browser_driver_command,
+                "requireBrowserDriver": config.require_browser_driver,
+                "browserTimeoutSeconds": config.browser_timeout_seconds,
             }
         ),
         "scenarios": [daily.__dict__, weekly.__dict__, *negative_results],
@@ -396,10 +422,10 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
         "renderPolicies": _render_policies(recorder.calls),
         "artifactUrls": [str(item.get("url") or "") for item in artifacts],
         "manifestSurfaces": {
-            str(item.get("artifactId") or ""): item.get("manifestSummary", {})
-            for item in artifacts
+            str(item.get("artifactId") or ""): item.get("manifestSummary", {}) for item in artifacts
         },
         "browserCheckSummary": _browser_check_summary(browser_checks),
+        "browserDriver": _browser_driver_report(config, browser_driver_results),
         "scorecard": scorecard,
         "passed": not _has_failed(scorecard),
         "findings": findings,
@@ -412,6 +438,7 @@ async def _run_ritual_journey_eval(config: RitualJourneyConfig) -> _JSON:
         "timeline": timeline,
         "tool_calls": recorder.calls,
         "browser_checks": browser_checks,
+        "browser_driver_results": browser_driver_results,
         "artifacts_checked": artifacts,
     }
 
@@ -424,6 +451,7 @@ async def _run_daily_scenario(
     timeline: list[_JSON],
     artifacts: list[_JSON],
     browser_checks: list[_JSON],
+    browser_driver_results: list[_JSON],
 ) -> ScenarioState:
     del runtime
     scenario = ScenarioState("daily", recorder.user_id, [], [], [])
@@ -503,6 +531,13 @@ async def _run_daily_scenario(
         )
         scenario.completion_ids.append(str(completion.get("completionId") or ""))
         _mark_completion_submitted(browser_checks[-1], ok=bool(completion.get("ok")))
+        driver_result = _run_browser_driver_for_artifact(
+            config=config,
+            artifact=artifact,
+            idempotency_key=str(completion.get("completionId") or ""),
+        )
+        browser_driver_results.append(driver_result)
+        _merge_browser_driver_result(browser_checks[-1], artifact, driver_result, config=config)
         artifact["browserCheckResult"] = "pass" if browser_checks[-1].get("passed") else "fail"
         artifact["browserCheckPassed"] = bool(browser_checks[-1].get("passed"))
         _event(
@@ -523,6 +558,7 @@ async def _run_weekly_scenario(
     timeline: list[_JSON],
     artifacts: list[_JSON],
     browser_checks: list[_JSON],
+    browser_driver_results: list[_JSON],
 ) -> ScenarioState:
     scenario = ScenarioState("weekly", recorder.user_id, [], [], [])
     await runtime.service.set_consent_preference(
@@ -601,6 +637,13 @@ async def _run_weekly_scenario(
         )
         scenario.completion_ids.append(str(completion.get("completionId") or ""))
         _mark_completion_submitted(browser_checks[-1], ok=bool(completion.get("ok")))
+        driver_result = _run_browser_driver_for_artifact(
+            config=config,
+            artifact=artifact,
+            idempotency_key=str(completion.get("completionId") or ""),
+        )
+        browser_driver_results.append(driver_result)
+        _merge_browser_driver_result(browser_checks[-1], artifact, driver_result, config=config)
         artifact["browserCheckResult"] = "pass" if browser_checks[-1].get("passed") else "fail"
         artifact["browserCheckPassed"] = bool(browser_checks[-1].get("passed"))
         _event(
@@ -914,8 +957,8 @@ def _weekly_acceptance_payload(*, invitation: _JSON | None, config: RitualJourne
     )
     requested = payload.get("requestedSurfaces")
     if isinstance(requested, dict):
-        requested.setdefault("audio", {"enabled": True, "tone": "gentle"})
-        requested.setdefault("captions", {"enabled": True, "format": "webvtt"})
+        requested["audio"] = {"enabled": True, "tone": "gentle", "pace": "slow"}
+        requested["captions"] = {"enabled": True, "format": "webvtt"}
         requested["image"] = {"enabled": bool(config.live_providers)}
         requested["cinema"] = {"enabled": bool(config.include_video), "maxDurationSeconds": 8}
         requested["music"] = {
@@ -1026,6 +1069,126 @@ async def _record_completion(
     return {"ok": str(response.get("status")) == "ok", "completionId": completion_id}
 
 
+def _browser_driver_config(config: RitualJourneyConfig) -> BrowserDriverConfig:
+    return BrowserDriverConfig(
+        enabled=config.browser_driver != "off",
+        driver="agent-browser",
+        command=config.browser_driver_command,
+        required=config.require_browser_driver,
+        base_url=config.base_url,
+        timeout_seconds=config.browser_timeout_seconds,
+        screenshots_dir=config.run_dir / "screenshots",
+        run_dir=config.run_dir,
+    )
+
+
+def _run_browser_driver_for_artifact(
+    *, config: RitualJourneyConfig, artifact: _JSON, idempotency_key: str
+) -> _JSON:
+    manifest = _read_manifest_for_artifact(artifact, config=config)
+    interaction = (
+        manifest.get("interaction") if isinstance(manifest.get("interaction"), dict) else {}
+    )
+    completion = (
+        interaction.get("completion") if isinstance(interaction.get("completion"), dict) else {}
+    )
+    artifact_id = str(artifact.get("artifactId") or manifest.get("artifactId") or "")
+    completion_endpoint = str(
+        completion.get("endpoint")
+        or interaction.get("completionEndpoint")
+        or f"/api/artifacts/{artifact_id}/complete"
+    )
+    task = BrowserDriverTask(
+        artifact_id=artifact_id,
+        artifact_url=str(artifact.get("url") or f"{config.base_url}/artifacts/{artifact_id}"),
+        live_url=str(artifact.get("liveUrl") or ""),
+        completion_endpoint=completion_endpoint,
+        idempotency_key=idempotency_key or f"browser_{artifact_id[-8:]}",
+        guidance_session_id=str(artifact.get("expectedGuidanceSessionId") or ""),
+    )
+    result: BrowserDriverResult = run_browser_driver_task(_browser_driver_config(config), task)
+    return result.to_json()
+
+
+def _merge_browser_driver_result(
+    audit: _JSON, artifact: _JSON, result: _JSON, *, config: RitualJourneyConfig
+) -> None:
+    checks = audit.setdefault("checks", [])
+    if not isinstance(checks, list):
+        return
+    result_status = str(result.get("status") or "skip")
+    skip_detail = str(result.get("reason") or "") if result_status == "skip" else ""
+    step_by_name = {
+        str(step.get("name")): step for step in result.get("steps", []) if isinstance(step, dict)
+    }
+
+    def add_from_step(check_name: str, *step_names: str) -> None:
+        if result_status == "skip":
+            checks.append({"name": check_name, "status": "skip", "detail": skip_detail})
+            return
+        selected = [step_by_name[name] for name in step_names if name in step_by_name]
+        if not selected:
+            checks.append({"name": check_name, "status": "skip", "detail": "step not run"})
+            return
+        failed = [step for step in selected if step.get("status") == "fail"]
+        status = "fail" if failed else "pass"
+        detail = str((failed[0] if failed else selected[-1]).get("detail") or "")
+        checks.append({"name": check_name, "status": status, "detail": detail})
+
+    add_from_step(
+        "browser_driver_available", "browser_driver_available", "browser_base_url_reachable"
+    )
+    add_from_step("browser_artifact_shell_visible", "browser_artifact_shell_visible")
+    completion_post = (
+        result.get("completion_post") if isinstance(result.get("completion_post"), dict) else {}
+    )
+    completion_ok = bool(completion_post.get("firstOk") and completion_post.get("secondOk"))
+    checks.append(
+        {
+            "name": "browser_completion_post_idempotent",
+            "status": "skip" if result_status == "skip" else "pass" if completion_ok else "fail",
+            "detail": skip_detail if result_status == "skip" else str(completion_post),
+        }
+    )
+    add_from_step(
+        "browser_companion_local_preview_action_visible",
+        "browser_companion_local_preview_action_visible",
+    )
+    add_from_step(
+        "browser_companion_approve_local_non_durable",
+        "browser_approve_action",
+        "browser_wait_local_preview",
+    )
+    add_from_step("browser_live_route_handoff", "browser_live_route_handoff")
+    add_from_step(
+        "browser_live_focus_modes", "browser_live_focus_movement", "browser_wait_movement"
+    )
+    add_from_step("browser_camera_preflight_explicit", "browser_camera_preflight_explicit")
+    add_from_step(
+        "browser_live_pause_complete_states",
+        "browser_pause_live",
+        "browser_wait_paused",
+        "browser_complete_live",
+        "browser_wait_completed",
+    )
+
+    audit["browserDriverStatus"] = result_status
+    audit["liveUrl"] = result.get("live_url") or artifact.get("liveUrl")
+    audit["screenshots"] = result.get("screenshots", [])
+    audit["skippedReasons"] = [
+        str(check.get("detail") or "")
+        for check in checks
+        if isinstance(check, dict) and check.get("status") == "skip" and check.get("detail")
+    ]
+    audit["passed"] = not any(
+        isinstance(check, dict) and check.get("status") == "fail" for check in checks
+    )
+    artifact["browserDriverResult"] = result_status
+    artifact["browserDriverPassed"] = result_status == "pass"
+    artifact["browserDriverRequired"] = config.require_browser_driver
+    artifact["browserDriverScreenshots"] = result.get("screenshots", [])
+
+
 def _artifact_from_response(
     response: _JSON, *, config: RitualJourneyConfig, scenario: str
 ) -> _JSON | None:
@@ -1039,11 +1202,24 @@ def _artifact_from_response(
     warnings = []
     warnings.extend(str(item) for item in result.get("warnings", []) if str(item))
     warnings.extend(str(item) for item in artifact.get("renderWarnings", []) if str(item))
+    host_session_id = str(
+        manifest.get("sessionId") or artifact.get("sessionId") or f"artifact:{artifact_id}"
+    )
+    expected_guidance_session_id = _stable_guidance_session_id(
+        host_session_id=host_session_id,
+        artifact_id=artifact_id,
+        user_id="local-user",
+    )
     return {
         "scenario": scenario,
         "artifactId": artifact_id,
         "url": str(artifact.get("url") or f"{config.base_url}/artifacts/{artifact_id}"),
         "route": str(artifact.get("route") or f"/artifacts/{artifact_id}"),
+        "hostSessionId": host_session_id,
+        "expectedGuidanceSessionId": expected_guidance_session_id,
+        "liveUrl": (
+            f"{config.base_url}/live/{expected_guidance_session_id}?artifactId={artifact_id}"
+        ),
         "manifestPath": str(manifest_path),
         "planPath": str(artifact.get("planPath") or ""),
         "planId": str(manifest.get("planId") or result.get("planId") or ""),
@@ -1054,6 +1230,8 @@ def _artifact_from_response(
         "manifestSurfaces": _manifest_summary(manifest),
         "browserCheckResult": "pending",
         "browserCheckPassed": False,
+        "browserDriverResult": "pending",
+        "browserDriverPassed": False,
     }
 
 
@@ -1243,9 +1421,34 @@ def _browser_check_summary(browser_checks: list[_JSON]) -> list[_JSON]:
                 "passed": bool(audit.get("passed")),
                 "failedChecks": failed,
                 "skippedChecks": skipped,
+                "browserDriverStatus": audit.get("browserDriverStatus", "not_run"),
+                "liveUrl": audit.get("liveUrl", ""),
+                "screenshots": audit.get("screenshots", []),
+                "skippedReasons": audit.get("skippedReasons", []),
             }
         )
     return summary
+
+
+def _browser_driver_report(config: RitualJourneyConfig, results: list[_JSON]) -> _JSON:
+    enabled = config.browser_driver != "off"
+    return {
+        "enabled": enabled,
+        "driver": "agent-browser" if enabled else "off",
+        "command": config.browser_driver_command,
+        "required": config.require_browser_driver,
+        "summary": [
+            {
+                "artifactId": result.get("artifact_id"),
+                "status": result.get("status"),
+                "reason": result.get("reason"),
+                "artifactUrl": result.get("artifact_url"),
+                "liveUrl": result.get("live_url"),
+                "screenshots": result.get("screenshots", []),
+            }
+            for result in results
+        ],
+    }
 
 
 def _scorecard(
@@ -1256,6 +1459,7 @@ def _scorecard(
     browser_checks: list[_JSON],
     negative_results: list[_JSON],
     llm: JourneyRitualLlm,
+    config: RitualJourneyConfig,
 ) -> _JSON:
     negative_by_name = {str(item.get("name")): item for item in negative_results}
     plan_calls = [call for call in tool_calls if call.get("tool") == "circulatio_plan_ritual"]
@@ -1335,6 +1539,23 @@ def _scorecard(
         "negative_cases": {
             str(item.get("name")): _passfail(bool(item.get("passed"))) for item in negative_results
         },
+        "e2e": {
+            "browser_driver_ran": _browser_e2e_status(
+                browser_checks, "browser_driver_available", config=config
+            ),
+            "completion_post_idempotent": _browser_e2e_status(
+                browser_checks, "browser_completion_post_idempotent", config=config
+            ),
+            "local_preview_action_approval": _browser_e2e_status(
+                browser_checks, "browser_companion_approve_local_non_durable", config=config
+            ),
+            "live_handoff": _browser_e2e_status(
+                browser_checks, "browser_live_route_handoff", config=config
+            ),
+            "camera_preflight": _browser_e2e_status(
+                browser_checks, "browser_camera_preflight_explicit", config=config
+            ),
+        },
         "llm_guardrails": {
             "no_interpretation_calls": _passfail(not llm.interpret_calls),
         },
@@ -1382,14 +1603,24 @@ def _next_enhancements(*, config: RitualJourneyConfig, browser_checks: list[_JSO
             "Run with --ritual-http-check while Hermes Rituals is serving the artifact "
             "root to capture page/network status."
         )
-    if any(
+    agent_browser_missing = any(
+        audit.get("browserDriverStatus") == "skip"
+        and "agent_browser_not_found" in audit.get("skippedReasons", [])
+        for audit in browser_checks
+    )
+    if agent_browser_missing:
+        items.append(
+            "Install agent-browser and run agent-browser install, then rerun with "
+            "--require-ritual-browser-driver."
+        )
+    elif config.browser_driver == "off" and any(
         check.get("status") == "skip"
         for audit in browser_checks
         for check in audit.get("checks", [])
         if isinstance(check, dict)
     ):
         items.append(
-            "Layer a browser driver over this report to turn skipped playback/console "
+            "Run with --ritual-browser-driver agent-browser to turn skipped playback/console "
             "checks into click-level checks."
         )
     return items
@@ -1400,18 +1631,22 @@ def _write_bundle(config: RitualJourneyConfig, payload: _JSON) -> None:
     _write_json(config.run_dir / "timeline.json", payload["timeline"])
     _write_json(config.run_dir / "tool_calls.json", payload["tool_calls"])
     _write_json(config.run_dir / "browser_checks.json", payload["browser_checks"])
+    _write_json(config.run_dir / "browser_driver_results.json", payload["browser_driver_results"])
     _write_json(config.run_dir / "artifacts_checked.json", payload["artifacts_checked"])
     (config.run_dir / "report.md").write_text(
         _render_markdown(
             report=payload["report"],
             artifacts=payload["artifacts_checked"],
             browser_checks=payload["browser_checks"],
+            browser_driver_results=payload["browser_driver_results"],
         ),
         encoding="utf-8",
     )
 
 
-def _render_markdown(*, report: _JSON, artifacts: object, browser_checks: object) -> str:
+def _render_markdown(
+    *, report: _JSON, artifacts: object, browser_checks: object, browser_driver_results: object
+) -> str:
     lines = [
         "# Ritual Journey CLI Eval",
         "",
@@ -1448,6 +1683,27 @@ def _render_markdown(*, report: _JSON, artifacts: object, browser_checks: object
                 f"- `{artifact.get('artifactId')}` - {artifact.get('url')} - "
                 f"browser: `{artifact.get('browserCheckResult')}` - surfaces: `{surfaces}`"
             )
+    lines.extend(["", "## Browser Driver"])
+    driver_report = (
+        report.get("browserDriver") if isinstance(report.get("browserDriver"), dict) else {}
+    )
+    driver_name = driver_report.get("driver", "off")
+    driver_required = driver_report.get("required", False)
+    lines.append(f"Driver: `{driver_name}` required: `{driver_required}`")
+    for result in browser_driver_results if isinstance(browser_driver_results, list) else []:
+        if not isinstance(result, dict):
+            continue
+        completion = result.get("completion_post")
+        if not isinstance(completion, dict):
+            completion = {}
+        lines.append(f"\n### {result.get('artifact_id')}")
+        lines.append(f"- status: `{result.get('status')}` ({result.get('reason')})")
+        lines.append(f"- artifact: {result.get('artifact_url')}")
+        lines.append(f"- live: {result.get('live_url')}")
+        lines.append(f"- completion idempotency: `{completion}`")
+        screenshots = result.get("screenshots", [])
+        lines.append(f"- screenshots: `{screenshots}`")
+
     lines.extend(["", "## Browser Checks"])
     for audit in browser_checks if isinstance(browser_checks, list) else []:
         if not isinstance(audit, dict):
@@ -1643,6 +1899,30 @@ def _audit_status_ok(browser_checks: list[_JSON], check_name: str) -> bool:
     return bool(relevant) and all(status != "fail" for status in relevant)
 
 
+def _browser_e2e_status(
+    browser_checks: list[_JSON], check_name: str, *, config: RitualJourneyConfig
+) -> _JSON:
+    if config.browser_driver == "off":
+        return {"status": "skip", "detail": "browser driver disabled"}
+    statuses: list[str] = []
+    details: list[str] = []
+    for audit in browser_checks:
+        for check in audit.get("checks", []):
+            if isinstance(check, dict) and check.get("name") == check_name:
+                statuses.append(str(check.get("status") or ""))
+                if check.get("detail"):
+                    details.append(str(check.get("detail")))
+    if not statuses:
+        status = "fail" if config.require_browser_driver else "skip"
+        return {"status": status, "detail": "browser driver check not run"}
+    if any(status == "fail" for status in statuses):
+        return {"status": "fail", "detail": "; ".join(details)}
+    if all(status == "skip" for status in statuses):
+        status = "fail" if config.require_browser_driver else "skip"
+        return {"status": status, "detail": "; ".join(details)}
+    return {"status": "pass", "detail": "; ".join(details)}
+
+
 def _has_failed(scorecard: _JSON) -> bool:
     for values in scorecard.values():
         if not isinstance(values, dict):
@@ -1682,6 +1962,29 @@ def _http_status(url: str) -> tuple[int | None, str]:
 
 def _asset_url(base_url: str, src: str) -> str:
     return urljoin(base_url.rstrip("/") + "/", src.lstrip("/"))
+
+
+def _stable_guidance_session_id(
+    *, host_session_id: str, artifact_id: str, user_id: str | None
+) -> str:
+    seed = f"{host_session_id}:{artifact_id}:{user_id or 'anonymous'}"
+    hash_value = 2166136261
+    for char in seed:
+        hash_value ^= ord(char)
+        hash_value = (hash_value * 16777619) & 0xFFFFFFFF
+    return f"guidance_{_base36(hash_value)}"
+
+
+def _base36(value: int) -> str:
+    if value == 0:
+        return "0"
+    alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+    digits: list[str] = []
+    current = value
+    while current:
+        current, remainder = divmod(current, 36)
+        digits.append(alphabet[remainder])
+    return "".join(reversed(digits))
 
 
 def _response_summary(response: _JSON) -> _JSON:

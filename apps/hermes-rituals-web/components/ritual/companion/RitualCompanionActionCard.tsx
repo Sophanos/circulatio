@@ -74,8 +74,14 @@ export function RitualCompanionActionCard({
   const busy = action.approvalState === "executing"
 
   return (
-    <Tool title={actionLabel(action.type)}>
-      <div className="flex flex-col gap-3">
+    <div
+      data-testid="ritual-companion-action-card"
+      data-action-id={action.actionId}
+      data-action-type={action.type}
+      data-approval-state={action.approvalState}
+    >
+      <Tool title={actionLabel(action.type)}>
+        <div className="flex flex-col gap-3">
         <div className="flex items-start gap-3 text-sm leading-6 text-silver-200">
           <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-silver-100">
             <ShieldCheck className="size-4" />
@@ -95,12 +101,15 @@ export function RitualCompanionActionCard({
           <Confirmation
             approveLabel={busy ? "Sending" : "Approve"}
             rejectLabel="Reject"
+            approveTestId="ritual-companion-action-approve"
+            rejectTestId="ritual-companion-action-reject"
             disabled={busy}
             onApprove={() => onApprove(action)}
             onReject={() => onReject(action)}
           />
         )}
-      </div>
-    </Tool>
+        </div>
+      </Tool>
+    </div>
   )
 }

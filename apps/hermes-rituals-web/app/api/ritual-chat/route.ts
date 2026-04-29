@@ -4,10 +4,22 @@ import {
   forwardRitualChatStream,
   safeStreamingHeaders
 } from "@/lib/hermes-guidance-adapter"
-import type { RitualCompanionUIMessage } from "@/lib/ritual-guidance-contract"
+import type {
+  RitualCompanionAction,
+  RitualCompanionUIMessage
+} from "@/lib/ritual-guidance-contract"
+import { buildLocalPreviewCompanionAction } from "@/lib/ritual-guidance-local-preview"
 import { sanitizeRitualChatRequest } from "@/lib/ritual-guidance-safety"
 
-function localPreviewStream(message: string, originalMessages: RitualCompanionUIMessage[] = []) {
+function localPreviewStream({
+  message,
+  originalMessages = [],
+  action
+}: {
+  message: string
+  originalMessages?: RitualCompanionUIMessage[]
+  action?: RitualCompanionAction | null
+}) {
   const textId = "local-preview-text"
   const stream = createUIMessageStream<RitualCompanionUIMessage>({
     originalMessages,
@@ -26,6 +38,13 @@ function localPreviewStream(message: string, originalMessages: RitualCompanionUI
       writer.write({ type: "text-start", id: textId })
       writer.write({ type: "text-delta", id: textId, delta: message })
       writer.write({ type: "text-end", id: textId })
+      if (action) {
+        writer.write({
+          type: "data-ritual-companion-action",
+          id: action.actionId,
+          data: action
+        })
+      }
       writer.write({ type: "finish", finishReason: "stop" })
     }
   })
@@ -37,16 +56,20 @@ export async function POST(request: Request) {
   const chatRequest = sanitizeRitualChatRequest(body)
 
   if (!chatRequest) {
-    return localPreviewStream(
-      "Companion unavailable in local preview. I can show the ritual frame, but no durable writes will be made."
-    )
+    return localPreviewStream({
+      message:
+        "Companion unavailable in local preview. I can show the ritual frame, but no durable writes will be made."
+    })
   }
 
   if (!process.env.HERMES_RITUAL_CHAT_URL) {
-    return localPreviewStream(
-      "Companion unavailable in local preview. I can show the ritual frame, but no durable writes will be made.",
-      chatRequest.messages
-    )
+    const localAction = buildLocalPreviewCompanionAction(chatRequest).action
+    return localPreviewStream({
+      message:
+        "Companion unavailable in local preview. I can show the ritual frame, but no durable writes will be made.",
+      originalMessages: chatRequest.messages,
+      action: localAction
+    })
   }
 
   try {
@@ -61,8 +84,8 @@ export async function POST(request: Request) {
     // Fall through to the bounded local stream below.
   }
 
-  return localPreviewStream(
-    "Companion stream is unavailable in local preview. No durable writes will be made.",
-    chatRequest.messages
-  )
+  return localPreviewStream({
+    message: "Companion stream is unavailable in local preview. No durable writes will be made.",
+    originalMessages: chatRequest.messages
+  })
 }

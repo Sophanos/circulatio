@@ -11,6 +11,8 @@ export function Confirmation({
   children,
   approveLabel = "Approve",
   rejectLabel = "Reject",
+  approveTestId,
+  rejectTestId,
   disabled,
   onApprove,
   onReject
@@ -18,6 +20,8 @@ export function Confirmation({
   children?: ReactNode
   approveLabel?: string
   rejectLabel?: string
+  approveTestId?: string
+  rejectTestId?: string
   disabled?: boolean
   onApprove: () => void
   onReject: () => void
@@ -26,11 +30,21 @@ export function Confirmation({
     <div className="flex flex-col gap-3">
       {children}
       <div className="flex flex-wrap items-center gap-2">
-        <ConfirmationButton tone="approve" disabled={disabled} onClick={onApprove}>
+        <ConfirmationButton
+          tone="approve"
+          testId={approveTestId}
+          disabled={disabled}
+          onClick={onApprove}
+        >
           <Check className="size-4" />
           <span>{approveLabel}</span>
         </ConfirmationButton>
-        <ConfirmationButton tone="reject" disabled={disabled} onClick={onReject}>
+        <ConfirmationButton
+          tone="reject"
+          testId={rejectTestId}
+          disabled={disabled}
+          onClick={onReject}
+        >
           <X className="size-4" />
           <span>{rejectLabel}</span>
         </ConfirmationButton>
@@ -41,11 +55,13 @@ export function Confirmation({
 
 function ConfirmationButton({
   tone,
+  testId,
   disabled,
   onClick,
   children
 }: {
   tone: "approve" | "reject"
+  testId?: string
   disabled?: boolean
   onClick: () => void
   children: ReactNode
@@ -53,6 +69,7 @@ function ConfirmationButton({
   return (
     <motion.button
       type="button"
+      data-testid={testId}
       disabled={disabled}
       onClick={onClick}
       className={cn(
