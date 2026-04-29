@@ -79,8 +79,11 @@ bun run typecheck
 # lint
 bun run lint
 
-# browser E2E artifact playback checks
-bun run test:e2e
+# browser artifact playback checks
+# start the app, then drive it with agent-browser
+bun run dev
+agent-browser open http://127.0.0.1:3000/artifacts/{artifactId}
+agent-browser snapshot -i
 ```
 
 ## Ports
@@ -135,7 +138,7 @@ npx ai-elements@1.9.0 add message prompt-input conversation tool confirmation
 - Image-backed artifacts should enter the Photo lens by default when no cinema video is present. The Photo lens renders the manifest image through `coverImageUrl` / `scenes`.
 - Caption segments are first-class: they drive `CaptionStack`, transcript grouping, section rows, and ElevenLabs-style character alignment. Chutes/OpenAI transcription failures should still leave fallback caption segments plus a warning.
 - Browser verification should check `manifest.json`, `audio.wav`, `image.png`, `music.wav`, `cinema.mp4`, and `captions.vtt` when those sources exist; wait for audio metadata before asserting duration, because the slider may start from planned manifest duration and then switch to actual audio duration.
-- Playwright E2E starts the local app, loads `/artifacts/{artifactId}`, verifies narration/music/cinema/breath/body completion behavior, and confirms a narrow breath+music artifact does not show narration, transcript, or cinema UI.
+- Browser verification uses `agent-browser` only (https://github.com/vercel-labs/agent-browser). Start the local app, open `/artifacts/{artifactId}`, verify narration/music/cinema/breath/body completion behavior, and confirm a narrow breath+music artifact does not show narration, transcript, or cinema UI.
 - In dev, ignore stale hot-reload errors from before a rebuild only if a fresh tab after the check start has no new console errors.
 
 ## Notes

@@ -115,6 +115,7 @@ Routing is LLM-driven at the host layer. Hermes-agent and future OpenClaw/MCP ho
 - `tests/_helpers.py` has `FakeCirculatioLlm` — standard LLM test double.
 - Integration tests: Hermes bridge plugin (`test_hermes_bridge_plugin.py`).
 - Durability tests: SQLite idempotency, corrupt-bucket isolation (`test_hermes_runtime_durability.py`).
+- Browser/UI verification must use `agent-browser` only: https://github.com/vercel-labs/agent-browser. Do not add Playwright browser tests, Playwright config, or Playwright package dependencies to this repo.
 
 ## Mistakes to Avoid
 

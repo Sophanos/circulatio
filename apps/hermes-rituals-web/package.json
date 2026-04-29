@@ -8,8 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "bun test",
-    "test:e2e": "playwright test"
+    "test": "bun test"
   },
   "dependencies": {
     "@ai-sdk/react": "3.0.170",
@@ -36,7 +35,6 @@
   },
   "devDependencies": {
     "@elevenlabs/elevenlabs-js": "^2.44.0",
-    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
     "@types/react": "latest",

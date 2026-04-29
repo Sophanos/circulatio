@@ -372,12 +372,12 @@ Required work:
 
 - Add Hermes-agent routing evals that prove user message plus memory context becomes the correct `circulatio_plan_ritual` call and surface mix.
 - Add scheduled ritual E2E coverage for `ritual_invitation -> user acceptance -> plan -> renderer -> artifact URL`; skip/dismiss/expired invitations must not plan or render.
-- Add browser E2E checks over `/artifacts/{artifactId}` for narration, music, captions, breath, meditation, image/photo, cinema when enabled, companion rail, and completion POST.
+- Add `agent-browser` checks over `/artifacts/{artifactId}` for narration, music, captions, breath, meditation, image/photo, cinema when enabled, companion rail, and completion POST.
 - Keep Chutes provider calls renderer-owned and opt-in. Kokoro, DiffRhythm, and WAN are live-smoke-tested contracts, not proof of full playback.
 - Treat Whisper as unresolved. Plan-derived or fallback caption segments remain the required caption baseline.
 - Attach live guidance through `guidanceSessionId`. The first no-camera shell exists; the planner must not become camera-aware, pose-aware, or live-coaching-aware.
 
-**Status:** Partially implemented. Backend planning, renderer contracts, provider smoke, local handoff, fixture browser playback, quiet completion capture, companion scaffolding, and a no-camera live shell exist; production Hermes-agent routing/subscription, scheduled acceptance E2E, provider-backed browser checks, and sensor guidance remain open.
+**Status:** Partially implemented. Backend planning, renderer contracts, provider smoke, local handoff, fixture `agent-browser` playback, quiet completion capture, companion scaffolding, and a no-camera live shell exist; production Hermes-agent routing/subscription, scheduled acceptance E2E, provider-backed `agent-browser` checks, and sensor guidance remain open.
 
 ### 2. Practice Delivery
 

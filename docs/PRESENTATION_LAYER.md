@@ -55,8 +55,8 @@ The E2E seams now have explicit tests and eval cases rather than being left to t
 
 - Hermes-agent routing evals cover `dream + body state -> breath + music`, `only breath`, `music but no narration`, full voice/music/image, cinema, scheduled cron, acceptance, decline, and completion.
 - Scheduled `ritual_invitation -> user acceptance -> circulatio_plan_ritual -> renderer -> artifact URL` is represented as an acceptance-gated path; decline stays response-only.
-- Browser playback E2E covers narration, ambient music, captions, breath pacer, cinema, completion sync, and narrow breath+music artifacts.
-- Journey CLI reports now expose selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, and browser check result.
+- `agent-browser` playback checks cover narration, ambient music, captions, breath pacer, cinema, completion sync, and narrow breath+music artifacts.
+- Journey CLI reports now expose selected tool sequence, requested surfaces, render policy, artifact URL, manifest surfaces, and `agent-browser` check result.
 - Whisper through Chutes remains unresolved; fallback captions are canonical and official OpenAI transcription is optional provider-backed caption refinement.
 
 Hermes-agent may decide to deploy only the surfaces the user/context calls for. Examples:
